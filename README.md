@@ -60,8 +60,29 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 ### Screenshots
 
-> 📸 Add a screenshot to `docs/screenshot.png` and it will show here.
-> A ready-made landing page lives at [`docs/index.html`](docs/index.html) — open it in a browser or publish it via GitHub Pages.
+![NebuShell AI agent plan and confirm workflow](docs/screenshot-Agent-Plan-3.png)
+
+A ready-made landing page lives at [`docs/index.html`](docs/index.html) — open it in a browser or publish it via GitHub Pages.
+
+| Vault setup                                                               | Add a host                                                               | Host management                                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| <img src="docs/screenshot.png" alt="NebuShell vault setup" width="360" /> | <img src="docs/screenshot-ssh1.png" alt="Create SSH host" width="360" /> | <img src="docs/screenshot-ssh2.png" alt="Host list and details" width="360" /> |
+
+| SSH terminal                                                                    | Agent workspace                                                                          | Agent mode control                                                                             |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| <img src="docs/screenshot-ssh3.png" alt="Connected SSH terminal" width="360" /> | <img src="docs/screenshot-Agent-2.png" alt="Terminal with AI agent panel" width="360" /> | <img src="docs/screenshot-Agent-Plan.png" alt="AI agent approval mode selector" width="360" /> |
+
+| Plan and confirm                                                                                | System checks                                                                           | Execution plan                                                                                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| <img src="docs/screenshot-Agent-Plan-1.png" alt="AI agent asks for confirmation" width="360" /> | <img src="docs/screenshot-Agent-Plan-2.png" alt="AI agent system checks" width="360" /> | <img src="docs/screenshot-Agent-Plan-3.png" alt="AI agent generated execution plan" width="360" /> |
+
+| Model provider                                                                      | SFTP browser                                                                               | Multi-pane SFTP                                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| <img src="docs/screenshot-model-1.png" alt="Model provider settings" width="360" /> | <img src="docs/screenshot-sftp.png" alt="SFTP file browser beside terminal" width="360" /> | <img src="docs/screenshot-split-sftp.png" alt="Local and remote SFTP panes" width="360" /> |
+
+| Remote editor                                                                                     |
+| ------------------------------------------------------------------------------------------------- |
+| <img src="docs/screenshot-split-sftp1.png" alt="Remote file editor and SFTP panes" width="720" /> |
 
 ### Tech Stack
 
@@ -171,8 +192,13 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 ### 界面预览
 
-> 📸 把截图放到 `docs/screenshot.png` 即可在此显示。
-> 项目自带一个介绍页 [`docs/index.html`](docs/index.html) —— 用浏览器打开,或通过 GitHub Pages 发布即可。
+![NebuShell AI 智能体计划与确认流程](docs/screenshot-Agent-Plan-3.png)
+
+项目自带一个介绍页 [`docs/index.html`](docs/index.html) —— 用浏览器打开,或通过 GitHub Pages 发布即可。
+
+| 主机与终端                                                        | AI 智能体                                                                          | SFTP 与编辑器                                                                     |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| <img src="docs/screenshot-ssh2.png" alt="主机管理" width="360" /> | <img src="docs/screenshot-Agent-Plan-1.png" alt="AI 智能体确认操作" width="360" /> | <img src="docs/screenshot-split-sftp1.png" alt="SFTP 与远程编辑器" width="360" /> |
 
 ### 技术栈
 

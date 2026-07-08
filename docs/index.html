@@ -249,157 +249,58 @@
         border-color: var(--border);
       }
 
-      /* ===== App mockup ===== */
-      .mock {
-        border: 1px solid var(--border);
-        border-radius: 14px;
+      /* ===== Screenshots ===== */
+      .hero-shot,
+      .shot-card {
         overflow: hidden;
-        background: var(--bg-soft);
+        background: var(--panel);
+        border: 1px solid var(--border);
         box-shadow: 0 40px 120px -40px rgba(0, 0, 0, 0.9);
       }
-      .mock-bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 14px;
-        background: var(--panel);
-        border-bottom: 1px solid var(--border);
-        font-size: 13px;
+      .hero-shot {
+        margin: 0;
+        border-radius: 16px;
       }
-      .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-      }
-      .dot.r {
-        background: #ff5f57;
-      }
-      .dot.y {
-        background: #febc2e;
-      }
-      .dot.g {
-        background: #28c840;
-      }
-      .mock-brand {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-left: 8px;
-        color: var(--text);
-        font-weight: 600;
-      }
-      .mock-brand svg {
-        width: 16px;
-        height: 16px;
-      }
-      .mtab {
-        margin-left: 10px;
-        padding: 5px 12px;
-        border-radius: 8px;
-        color: var(--muted);
-        background: var(--panel-2);
-        font-size: 12.5px;
-      }
-      .mtab.active {
-        color: var(--text);
-        background: var(--bg-soft);
-        border: 1px solid var(--border);
-      }
-      .mock-body {
-        display: grid;
-        grid-template-columns: 210px 1fr 240px;
-        min-height: 360px;
-        font-size: 13px;
-      }
-      .m-side {
-        border-right: 1px solid var(--border);
-        padding: 14px 12px;
-        color: var(--muted);
-      }
-      .m-side .row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 8px;
-        border-radius: 8px;
-      }
-      .m-side .row.sel {
-        background: var(--panel);
-        color: var(--text);
-      }
-      .m-side .grp {
-        color: var(--dim);
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin: 16px 0 6px 8px;
-      }
-      .term {
-        padding: 16px 18px;
-        font-family: var(--mono);
-        font-size: 12.5px;
-        line-height: 1.7;
-        border-right: 1px solid var(--border);
-        overflow: hidden;
-      }
-      .term .p {
-        color: var(--green);
-      }
-      .term .c {
-        color: var(--accent-2);
-      }
-      .term .d {
-        color: var(--muted);
-      }
-      .term .k {
-        color: var(--blue);
-      }
-      .term .w {
-        color: var(--accent);
-      }
-      .agent {
-        padding: 16px 14px;
-        color: var(--muted);
-      }
-      .agent .a-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--text);
-        font-weight: 600;
-        margin-bottom: 12px;
-      }
-      .bubble {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin-bottom: 10px;
-        color: var(--text);
-        font-size: 12.5px;
-      }
-      .bubble .lbl {
-        color: var(--accent);
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
+      .hero-shot img,
+      .shot-card img {
         display: block;
+        width: 100%;
+        background: #f4f1ec;
+      }
+      .hero-shot figcaption,
+      .shot-card figcaption {
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .hero-shot figcaption {
+        padding: 14px 18px;
+      }
+      .shot-card {
+        margin: 0;
+        border-radius: 14px;
+      }
+      .shot-card figcaption {
+        padding: 14px 16px 16px;
+      }
+      .shot-card strong {
+        display: block;
+        color: var(--text);
+        font-size: 15px;
         margin-bottom: 4px;
       }
-      .ok {
-        color: var(--green);
+      .shot-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
       }
-      @media (max-width: 900px) {
-        .mock-body {
+      .shot-wide {
+        grid-column: 1 / -1;
+      }
+      @media (max-width: 760px) {
+        .shot-grid {
           grid-template-columns: 1fr;
-        }
-        .m-side,
-        .agent {
-          display: none;
-        }
-        .term {
-          border-right: none;
         }
       }
 
@@ -519,6 +420,7 @@
         </a>
         <div class="nav-links">
           <a href="#features">Features</a>
+          <a href="#screenshots">Screenshots</a>
           <a href="#download">Download</a>
           <a href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener"
             >GitHub</a
@@ -576,84 +478,16 @@
         <div class="tab">Encrypted vault</div>
       </div>
 
-      <!-- App mockup -->
-      <div class="mock">
-        <div class="mock-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="mock-brand"
-            ><span style="color: var(--accent-2)"
-              ><svg viewBox="0 0 32 32" width="16" height="16" fill="none">
-                <path
-                  d="M6 8l7 8-7 8"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <path
-                  d="M16 24h10"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                /></svg></span
-            >NebuShell</span
-          >
-          <span class="mtab active">DGX-2</span>
-          <span class="mtab">web-01</span>
-          <span class="mtab">＋</span>
-        </div>
-        <div class="mock-body">
-          <div class="m-side">
-            <div class="row sel">🖥️ Hosts</div>
-            <div class="row">🔑 Keychain</div>
-            <div class="row">🕘 History</div>
-            <div class="grp">Hosts</div>
-            <div class="row">● DGX-2 · 192.168.0.108</div>
-            <div class="row">● web-01 · 10.0.0.5</div>
-            <div class="row">● db-primary</div>
-          </div>
-          <div class="term">
-            <div><span class="d">Welcome to NVIDIA DGX Spark 7.5.0 (aarch64)</span></div>
-            <div>&nbsp;</div>
-            <div>
-              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
-              <span class="c">df -h /</span>
-            </div>
-            <div><span class="d">Filesystem Size Used Avail Use% Mounted on</span></div>
-            <div><span class="d">/dev/nvme0n1p2 3.7T 226G 3.5T 6% /</span></div>
-            <div>&nbsp;</div>
-            <div>
-              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
-              <span class="c">systemctl status nginx</span>
-            </div>
-            <div><span class="w">●</span> nginx.service - A high performance web server</div>
-            <div>
-              &nbsp;&nbsp;&nbsp;Active: <span class="ok">active (running)</span> since Wed 11:23
-            </div>
-            <div>&nbsp;</div>
-            <div>
-              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
-              <span style="opacity: 0.6">▋</span>
-            </div>
-          </div>
-          <div class="agent">
-            <div class="a-head">🤖 Ops Agent</div>
-            <div class="bubble">
-              <span class="lbl">Plan</span>
-              1. Check disk on DGX-2 · 2. Verify nginx is up · 3. Report status
-            </div>
-            <div class="bubble">
-              <span class="lbl">run_command</span>
-              <code style="font-family: var(--mono)">df -h /</code>
-              <div class="ok" style="margin-top: 6px">✓ exit 0 · 6% used</div>
-            </div>
-            <div class="bubble" style="border-color: #3a2f12">
-              <span class="lbl">Confirm?</span>
-              Run <code style="font-family: var(--mono)">systemctl reload nginx</code> on DGX-2?
-            </div>
-          </div>
-        </div>
-      </div>
+      <figure class="hero-shot">
+        <img
+          src="./screenshot-Agent-Plan-3.png"
+          alt="NebuShell AI agent generated execution plan and confirmation controls"
+        />
+        <figcaption>
+          The AI ops agent reads terminal output, proposes an execution plan, and waits for explicit
+          confirmation before touching your server.
+        </figcaption>
+      </figure>
     </div>
 
     <section id="features">
@@ -708,6 +542,163 @@
             <h3>System monitor</h3>
             <p>Glance at load, memory, and other host vitals without leaving your terminal.</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="wrap">
+        <h2 class="sec-title">Product screenshots</h2>
+        <p class="sec-sub">
+          Real screens from the current NebuShell workflow: setup, SSH, AI-assisted operations,
+          model settings, SFTP, and remote editing.
+        </p>
+        <div class="shot-grid">
+          <figure class="shot-card">
+            <img
+              src="./screenshot.png"
+              alt="Create the local encrypted NebuShell vault"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Encrypted vault setup</strong>
+              Create the local master-password vault before storing hosts, passwords, and keys.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-ssh1.png"
+              alt="Create a new SSH host in NebuShell"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Create SSH hosts</strong>
+              Add address, port, user, group, and authentication details in a focused dialog.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-ssh2.png"
+              alt="NebuShell host list and host details"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Host management</strong>
+              Organize hosts by group, inspect connection details, and connect or open SFTP quickly.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-ssh3.png"
+              alt="NebuShell connected SSH terminal"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>SSH terminal</strong>
+              Open a tabbed SSH terminal with server login output and persistent side tools.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-Agent-2.png"
+              alt="NebuShell terminal with AI agent panel"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Agent workspace</strong>
+              Keep the terminal and AI ops panel side by side while the agent tracks session
+              context.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-Agent-Plan.png"
+              alt="NebuShell AI agent approval mode selector"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Execution modes</strong>
+              Choose plan-only, approval-required, semi-approved, or full-access behavior.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-Agent-Plan-1.png"
+              alt="NebuShell AI agent asks for confirmation"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Plan and confirm</strong>
+              The agent can run safe checks and ask for human confirmation before operational steps.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-Agent-Plan-2.png"
+              alt="NebuShell AI agent summarizes system checks"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>System checks</strong>
+              Command results are summarized into practical decisions before deployment actions.
+            </figcaption>
+          </figure>
+          <figure class="shot-card shot-wide">
+            <img
+              src="./screenshot-Agent-Plan-3.png"
+              alt="NebuShell AI agent generated K3s execution plan"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Generated execution plan</strong>
+              The agent turns terminal inspection into a step-by-step plan with a visible start
+              control.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-model-1.png"
+              alt="NebuShell model provider settings"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Model provider settings</strong>
+              Configure MrToken-compatible model providers, base URLs, API keys, and model names.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-sftp.png"
+              alt="NebuShell SFTP browser beside terminal"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>SFTP browser</strong>
+              Browse remote files beside the active terminal without leaving the SSH workspace.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-split-sftp.png"
+              alt="NebuShell local and remote multi-pane SFTP browser"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Multi-pane file manager</strong>
+              Work across local files and multiple remote hosts in one SFTP workspace.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="./screenshot-split-sftp1.png"
+              alt="NebuShell remote file editor with SFTP panes"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Remote editor</strong>
+              Open remote scripts in the built-in editor and save changes back to the server.
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
