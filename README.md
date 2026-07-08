@@ -11,12 +11,14 @@ _A Termius‑style SSH client with a built‑in AI ops agent that can run, diagn
 <sub>Powered by Mrtoken</sub>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/SoySauceJYZ/NebuShell?style=flat&logo=github)](https://github.com/SoySauceJYZ/NebuShell/stargazers)
+[![Release](https://img.shields.io/github/v/release/SoySauceJYZ/NebuShell?include_prereleases&sort=semver)](https://github.com/SoySauceJYZ/NebuShell/releases)
 [![Electron](https://img.shields.io/badge/Electron-2b2e3b?logo=electron&logoColor=9feaf9)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-20232a?logo=react&logoColor=61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-646cff?logo=vite&logoColor=white)](https://electron-vite.org/)
 
-[English](#english) · [中文](#中文)
+[English](#english) · [中文](#中文) · [Download](https://github.com/SoySauceJYZ/NebuShell/releases) · [GitHub](https://github.com/SoySauceJYZ/NebuShell)
 
 </div>
 
@@ -66,12 +68,19 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 **Prerequisites:** [Node.js](https://nodejs.org/) 18+ and npm.
 
 ```bash
+# Clone the repo
+git clone https://github.com/SoySauceJYZ/NebuShell.git
+cd NebuShell
+
 # Install dependencies
 npm install
 
 # Start in development mode
 npm run dev
 ```
+
+> Prefer a prebuilt binary? Grab the latest from the
+> [Releases page](https://github.com/SoySauceJYZ/NebuShell/releases).
 
 ### Build
 
@@ -170,12 +179,19 @@ Released under the [MIT License](LICENSE). © 2026 Mrtoken.
 **环境要求:** [Node.js](https://nodejs.org/) 18+ 及 npm。
 
 ```bash
+# 克隆仓库
+git clone https://github.com/SoySauceJYZ/NebuShell.git
+cd NebuShell
+
 # 安装依赖
 npm install
 
 # 开发模式启动
 npm run dev
 ```
+
+> 想直接用安装包?到
+> [Releases 页面](https://github.com/SoySauceJYZ/NebuShell/releases) 下载最新版本。
 
 ### 打包构建
 

@@ -1,5 +1,5 @@
 {
-  "name": "ssh-client-1",
+  "name": "NebuShell",
   "version": "1.0.0",
   "description": "NebuShell - a Termius-style SSH client with a built-in AI ops agent",
   "main": "./out/main/index.js",
