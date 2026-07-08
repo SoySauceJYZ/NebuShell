@@ -232,7 +232,10 @@
         margin: 56px 0 24px;
       }
       .tab {
+        appearance: none;
+        background: transparent;
         font-size: 14px;
+        font-family: inherit;
         color: var(--muted);
         padding: 9px 16px;
         border-radius: 10px;
@@ -250,57 +253,69 @@
       }
 
       /* ===== Screenshots ===== */
-      .hero-shot,
-      .shot-card {
+      .screenshot-stage {
+        position: relative;
+      }
+      .shot-panel {
+        display: none;
+      }
+      .shot-panel.active {
+        display: block;
+      }
+      .shot-track {
+        display: flex;
+        gap: 18px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x mandatory;
+        scrollbar-color: var(--border) transparent;
+        padding: 0 0 12px;
+      }
+      .shot-track::-webkit-scrollbar {
+        height: 10px;
+      }
+      .shot-track::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 999px;
+      }
+      .shot-track::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .shot-slide {
+        flex: 0 0 100%;
+        scroll-snap-align: center;
         overflow: hidden;
         background: var(--panel);
         border: 1px solid var(--border);
         box-shadow: 0 40px 120px -40px rgba(0, 0, 0, 0.9);
       }
-      .hero-shot {
+      .shot-slide {
         margin: 0;
         border-radius: 16px;
       }
-      .hero-shot img,
-      .shot-card img {
+      .shot-slide img {
         display: block;
         width: 100%;
         background: #f4f1ec;
       }
-      .hero-shot figcaption,
-      .shot-card figcaption {
+      .shot-slide figcaption {
         border-top: 1px solid var(--border);
         color: var(--muted);
         font-size: 13px;
         line-height: 1.5;
       }
-      .hero-shot figcaption {
+      .shot-slide figcaption {
         padding: 14px 18px;
       }
-      .shot-card {
-        margin: 0;
-        border-radius: 14px;
-      }
-      .shot-card figcaption {
-        padding: 14px 16px 16px;
-      }
-      .shot-card strong {
+      .shot-slide strong {
         display: block;
         color: var(--text);
         font-size: 15px;
         margin-bottom: 4px;
       }
-      .shot-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 18px;
-      }
-      .shot-wide {
-        grid-column: 1 / -1;
-      }
-      @media (max-width: 760px) {
-        .shot-grid {
-          grid-template-columns: 1fr;
+      @media (min-width: 900px) {
+        .shot-slide {
+          flex-basis: 86%;
         }
       }
 
@@ -470,24 +485,195 @@
       </div>
     </header>
 
-    <div class="wrap">
-      <div class="tabs">
-        <div class="tab active">Run an ops agent</div>
-        <div class="tab">Multi-tab terminals</div>
-        <div class="tab">SFTP &amp; editor</div>
-        <div class="tab">Encrypted vault</div>
+    <div id="screenshots" class="wrap">
+      <div class="tabs" role="tablist" aria-label="NebuShell screenshot categories">
+        <button
+          class="tab active"
+          type="button"
+          data-shot-tab="agent"
+          role="tab"
+          aria-selected="true"
+        >
+          Run an ops agent
+        </button>
+        <button class="tab" type="button" data-shot-tab="terminal" role="tab" aria-selected="false">
+          Multi-tab terminals
+        </button>
+        <button class="tab" type="button" data-shot-tab="sftp" role="tab" aria-selected="false">
+          SFTP &amp; editor
+        </button>
+        <button class="tab" type="button" data-shot-tab="vault" role="tab" aria-selected="false">
+          Encrypted vault
+        </button>
       </div>
 
-      <figure class="hero-shot">
-        <img
-          src="./screenshot-Agent-Plan-3.png"
-          alt="NebuShell AI agent generated execution plan and confirmation controls"
-        />
-        <figcaption>
-          The AI ops agent reads terminal output, proposes an execution plan, and waits for explicit
-          confirmation before touching your server.
-        </figcaption>
-      </figure>
+      <div class="screenshot-stage">
+        <div class="shot-panel active" data-shot-panel="agent">
+          <div class="shot-track" aria-label="AI ops agent screenshots">
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-Agent-Plan-3.png"
+                alt="NebuShell AI agent generated K3s execution plan"
+              />
+              <figcaption>
+                <strong>Generated execution plan</strong>
+                The AI ops agent reads terminal output, proposes an execution plan, and waits for
+                explicit confirmation before touching your server.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-Agent-Plan-1.png"
+                alt="NebuShell AI agent asks for confirmation"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Plan and confirm</strong>
+                The agent can run safe checks and ask for human confirmation before operational
+                steps.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-Agent-Plan-2.png"
+                alt="NebuShell AI agent summarizes system checks"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>System checks</strong>
+                Command results are summarized into practical decisions before deployment actions.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-Agent-Plan.png"
+                alt="NebuShell AI agent approval mode selector"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Execution modes</strong>
+                Choose plan-only, approval-required, semi-approved, or full-access behavior.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-Agent-2.png"
+                alt="NebuShell terminal with AI agent panel"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Agent workspace</strong>
+                Keep the terminal and AI ops panel side by side while the agent tracks session
+                context.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-model-1.png"
+                alt="NebuShell model provider settings"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Model provider settings</strong>
+                Configure MrToken-compatible model providers, base URLs, API keys, and model names.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="shot-panel" data-shot-panel="terminal">
+          <div class="shot-track" aria-label="SSH terminal screenshots">
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-ssh3.png"
+                alt="NebuShell connected SSH terminal"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>SSH terminal</strong>
+                Open a tabbed SSH terminal with server login output and persistent side tools.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-ssh2.png"
+                alt="NebuShell host list and host details"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Host management</strong>
+                Organize hosts by group, inspect connection details, and connect or open SFTP
+                quickly.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-ssh1.png"
+                alt="Create a new SSH host in NebuShell"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Create SSH hosts</strong>
+                Add address, port, user, group, and authentication details in a focused dialog.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="shot-panel" data-shot-panel="sftp">
+          <div class="shot-track" aria-label="SFTP and editor screenshots">
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-split-sftp1.png"
+                alt="NebuShell remote file editor with SFTP panes"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Remote editor</strong>
+                Open remote scripts in the built-in editor and save changes back to the server.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-split-sftp.png"
+                alt="NebuShell local and remote multi-pane SFTP browser"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Multi-pane file manager</strong>
+                Work across local files and multiple remote hosts in one SFTP workspace.
+              </figcaption>
+            </figure>
+            <figure class="shot-slide">
+              <img
+                src="./screenshot-sftp.png"
+                alt="NebuShell SFTP browser beside terminal"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>SFTP browser</strong>
+                Browse remote files beside the active terminal without leaving the SSH workspace.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="shot-panel" data-shot-panel="vault">
+          <div class="shot-track" aria-label="Encrypted vault screenshots">
+            <figure class="shot-slide">
+              <img
+                src="./screenshot.png"
+                alt="Create the local encrypted NebuShell vault"
+                loading="lazy"
+              />
+              <figcaption>
+                <strong>Encrypted vault setup</strong>
+                Create the local master-password vault before storing hosts, passwords, and keys.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
     </div>
 
     <section id="features">
@@ -542,163 +728,6 @@
             <h3>System monitor</h3>
             <p>Glance at load, memory, and other host vitals without leaving your terminal.</p>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="screenshots">
-      <div class="wrap">
-        <h2 class="sec-title">Product screenshots</h2>
-        <p class="sec-sub">
-          Real screens from the current NebuShell workflow: setup, SSH, AI-assisted operations,
-          model settings, SFTP, and remote editing.
-        </p>
-        <div class="shot-grid">
-          <figure class="shot-card">
-            <img
-              src="./screenshot.png"
-              alt="Create the local encrypted NebuShell vault"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Encrypted vault setup</strong>
-              Create the local master-password vault before storing hosts, passwords, and keys.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-ssh1.png"
-              alt="Create a new SSH host in NebuShell"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Create SSH hosts</strong>
-              Add address, port, user, group, and authentication details in a focused dialog.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-ssh2.png"
-              alt="NebuShell host list and host details"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Host management</strong>
-              Organize hosts by group, inspect connection details, and connect or open SFTP quickly.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-ssh3.png"
-              alt="NebuShell connected SSH terminal"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>SSH terminal</strong>
-              Open a tabbed SSH terminal with server login output and persistent side tools.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-Agent-2.png"
-              alt="NebuShell terminal with AI agent panel"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Agent workspace</strong>
-              Keep the terminal and AI ops panel side by side while the agent tracks session
-              context.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-Agent-Plan.png"
-              alt="NebuShell AI agent approval mode selector"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Execution modes</strong>
-              Choose plan-only, approval-required, semi-approved, or full-access behavior.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-Agent-Plan-1.png"
-              alt="NebuShell AI agent asks for confirmation"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Plan and confirm</strong>
-              The agent can run safe checks and ask for human confirmation before operational steps.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-Agent-Plan-2.png"
-              alt="NebuShell AI agent summarizes system checks"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>System checks</strong>
-              Command results are summarized into practical decisions before deployment actions.
-            </figcaption>
-          </figure>
-          <figure class="shot-card shot-wide">
-            <img
-              src="./screenshot-Agent-Plan-3.png"
-              alt="NebuShell AI agent generated K3s execution plan"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Generated execution plan</strong>
-              The agent turns terminal inspection into a step-by-step plan with a visible start
-              control.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-model-1.png"
-              alt="NebuShell model provider settings"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Model provider settings</strong>
-              Configure MrToken-compatible model providers, base URLs, API keys, and model names.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-sftp.png"
-              alt="NebuShell SFTP browser beside terminal"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>SFTP browser</strong>
-              Browse remote files beside the active terminal without leaving the SSH workspace.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-split-sftp.png"
-              alt="NebuShell local and remote multi-pane SFTP browser"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Multi-pane file manager</strong>
-              Work across local files and multiple remote hosts in one SFTP workspace.
-            </figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img
-              src="./screenshot-split-sftp1.png"
-              alt="NebuShell remote file editor with SFTP panes"
-              loading="lazy"
-            />
-            <figcaption>
-              <strong>Remote editor</strong>
-              Open remote scripts in the built-in editor and save changes back to the server.
-            </figcaption>
-          </figure>
         </div>
       </div>
     </section>
@@ -764,11 +793,23 @@
     </footer>
 
     <script>
-      // Simple tab highlight (visual only)
-      document.querySelectorAll('.tab').forEach((t) => {
-        t.addEventListener('click', () => {
-          document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'))
-          t.classList.add('active')
+      document.querySelectorAll('[data-shot-tab]').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const target = tab.dataset.shotTab
+
+          document.querySelectorAll('[data-shot-tab]').forEach((item) => {
+            const isActive = item === tab
+            item.classList.toggle('active', isActive)
+            item.setAttribute('aria-selected', String(isActive))
+          })
+
+          document.querySelectorAll('[data-shot-panel]').forEach((panel) => {
+            const isActive = panel.dataset.shotPanel === target
+            panel.classList.toggle('active', isActive)
+            if (isActive) {
+              panel.querySelector('.shot-track')?.scrollTo({ left: 0, behavior: 'smooth' })
+            }
+          })
         })
       })
     </script>
