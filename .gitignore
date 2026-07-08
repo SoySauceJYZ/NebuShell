@@ -1,0 +1,29 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# env
+.env
+.env.*
+*.key
+*.pem
+
+# logs
+*.log
+logs/
+
+# node
+node_modules/
+dist/
+
+# java
+target/
+*.class
+
+# ide
+.idea/
+.vscode/
+.DS_Store
