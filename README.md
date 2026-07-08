@@ -4,11 +4,22 @@
 
 # NebuShell
 
+<p>
+  <strong>Creator / Owner: jiayizhen</strong><br />
+  <strong>Companies: MrToken &amp; Nebulaedata</strong>
+</p>
+
+<p>
+  <img alt="Creator: jiayizhen" src="https://img.shields.io/badge/Creator-jiayizhen-6ee7ff?style=for-the-badge" />
+  <img alt="Company: MrToken" src="https://img.shields.io/badge/Company-MrToken-f5a524?style=for-the-badge" />
+  <img alt="Company: Nebulaedata" src="https://img.shields.io/badge/Company-Nebulaedata-4ade80?style=for-the-badge" />
+</p>
+
 **An AI‑agent‑powered SSH client / 由 AI 智能体驱动的运维终端**
 
 _A Termius‑style SSH client with a built‑in AI ops agent that can run, diagnose, and operate your servers — with your confirmation._
 
-<sub>Powered by Mrtoken</sub>
+<sub>Powered by MrToken &amp; Nebulaedata · Created by jiayizhen</sub>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/SoySauceJYZ/NebuShell?style=flat&logo=github)](https://github.com/SoySauceJYZ/NebuShell/stargazers)
@@ -54,14 +65,14 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 ### Tech Stack
 
-| Layer      | Tech |
-| ---------- | ---- |
-| Shell      | [Electron](https://www.electronjs.org/) + [electron-vite](https://electron-vite.org/) |
+| Layer      | Tech                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| Shell      | [Electron](https://www.electronjs.org/) + [electron-vite](https://electron-vite.org/)      |
 | UI         | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + Tailwind CSS |
-| Terminal   | [@xterm/xterm](https://xtermjs.org/) |
-| Editor     | [Monaco Editor](https://microsoft.github.io/monaco-editor/) |
-| SSH / SFTP | [ssh2](https://github.com/mscdex/ssh2) |
-| State      | [Zustand](https://github.com/pmndrs/zustand) |
+| Terminal   | [@xterm/xterm](https://xtermjs.org/)                                                       |
+| Editor     | [Monaco Editor](https://microsoft.github.io/monaco-editor/)                                |
+| SSH / SFTP | [ssh2](https://github.com/mscdex/ssh2)                                                     |
+| State      | [Zustand](https://github.com/pmndrs/zustand)                                               |
 
 ### Getting Started
 
@@ -124,14 +135,14 @@ src/
 
 ### Credits
 
-- **Developer:** jiayizhen
-- **From:** Mrtoken
+- **Creator / Owner:** jiayizhen
+- **Companies:** MrToken & Nebulaedata
 - **Built with:** Claude & Codex
-- **AI compute:** provided by Mrtoken
+- **AI compute:** provided by MrToken & Nebulaedata
 
 ### License
 
-Released under the [MIT License](LICENSE). © 2026 Mrtoken.
+Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulaedata.
 
 ---
 
@@ -165,14 +176,14 @@ Released under the [MIT License](LICENSE). © 2026 Mrtoken.
 
 ### 技术栈
 
-| 层级      | 技术 |
-| --------- | ---- |
-| 外壳      | [Electron](https://www.electronjs.org/) + [electron-vite](https://electron-vite.org/) |
-| 界面      | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + Tailwind CSS |
-| 终端      | [@xterm/xterm](https://xtermjs.org/) |
-| 编辑器    | [Monaco Editor](https://microsoft.github.io/monaco-editor/) |
-| SSH/SFTP  | [ssh2](https://github.com/mscdex/ssh2) |
-| 状态管理  | [Zustand](https://github.com/pmndrs/zustand) |
+| 层级     | 技术                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------ |
+| 外壳     | [Electron](https://www.electronjs.org/) + [electron-vite](https://electron-vite.org/)      |
+| 界面     | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + Tailwind CSS |
+| 终端     | [@xterm/xterm](https://xtermjs.org/)                                                       |
+| 编辑器   | [Monaco Editor](https://microsoft.github.io/monaco-editor/)                                |
+| SSH/SFTP | [ssh2](https://github.com/mscdex/ssh2)                                                     |
+| 状态管理 | [Zustand](https://github.com/pmndrs/zustand)                                               |
 
 ### 快速开始
 
@@ -235,19 +246,19 @@ src/
 
 ### 致谢
 
-- **开发者:** jiayizhen
-- **来源:** Mrtoken
+- **开发者 / 所有者:** jiayizhen
+- **公司:** MrToken、Nebulaedata
 - **构建开发:** 由 Claude 与 Codex 构建开发
-- **AI 算力:** 由 Mrtoken 提供
+- **AI 算力:** 由 MrToken、Nebulaedata 提供
 
 ### 开源协议
 
-基于 [MIT 协议](LICENSE) 发布。© 2026 Mrtoken。
+基于 [MIT 协议](LICENSE) 发布。© 2026 jiayizhen / MrToken、Nebulaedata。
 
 ---
 
 <div align="center">
-<sub>开发者 jiayizhen · 来源 Mrtoken · 由 Claude 与 Codex 构建开发 · AI 算力由 Mrtoken 提供</sub>
+<sub>开发者 / 所有者 jiayizhen · 公司 MrToken、Nebulaedata · 由 Claude 与 Codex 构建开发 · AI 算力由 MrToken、Nebulaedata 提供</sub>
 <br />
-<sub>Made with ❤️ · Powered by <strong>Mrtoken</strong></sub>
+<sub>Made with ❤️ · Powered by <strong>MrToken</strong> &amp; <strong>Nebulaedata</strong></sub>
 </div>

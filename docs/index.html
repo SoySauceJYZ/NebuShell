@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NebuShell — The AI Ops Terminal</title>
+    <title>NebuShell — jiayizhen · MrToken · Nebulaedata</title>
     <meta
       name="description"
-      content="NebuShell — a Termius-style SSH client with a built-in AI ops agent. Run, diagnose, and operate your servers with plan-and-confirm safety."
+      content="NebuShell by jiayizhen, representing MrToken and Nebulaedata. A Termius-style SSH client with a built-in AI ops agent."
     />
     <style>
       :root {
@@ -22,10 +22,8 @@
         --accent-2: #6ee7ff;
         --green: #4ade80;
         --blue: #60a5fa;
-        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas,
-          monospace;
+        --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        --mono: 'SFMono-Regular', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
       }
       * {
         box-sizing: border-box;
@@ -37,8 +35,7 @@
       }
       body {
         background:
-          radial-gradient(1200px 600px at 50% -10%, #1a1a20 0%, transparent 60%),
-          var(--bg);
+          radial-gradient(1200px 600px at 50% -10%, #1a1a20 0%, transparent 60%), var(--bg);
         color: var(--text);
         font-family: var(--font);
         line-height: 1.55;
@@ -53,6 +50,29 @@
         max-width: 1200px;
         margin: 0 auto;
         padding: 0 24px;
+      }
+
+      .owner-strip {
+        background: linear-gradient(90deg, #6ee7ff 0%, #f5a524 52%, #4ade80 100%);
+        color: #0a0a0b;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      .owner-strip-inner {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .owner-strip span {
+        opacity: 0.86;
+      }
+      .owner-strip b {
+        color: #0a0a0b;
       }
 
       /* ===== Nav ===== */
@@ -150,6 +170,28 @@
       }
       .badge b {
         color: var(--accent);
+      }
+      .owner-hero {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 0 auto 18px;
+      }
+      .owner-hero span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 8px 14px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .owner-hero strong {
+        color: var(--text);
       }
       h1 {
         font-size: clamp(38px, 7vw, 84px);
@@ -414,8 +456,7 @@
         border-radius: 20px;
         padding: 64px 24px;
         background:
-          radial-gradient(600px 300px at 50% 0%, #1c1c22 0%, transparent 70%),
-          var(--bg-soft);
+          radial-gradient(600px 300px at 50% 0%, #1c1c22 0%, transparent 70%), var(--bg-soft);
       }
 
       footer {
@@ -444,14 +485,16 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         />
-        <path
-          d="M16 24h10"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-        />
+        <path d="M16 24h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
       </svg>
     </template>
+
+    <div class="owner-strip">
+      <div class="wrap owner-strip-inner">
+        <strong>Creator / Owner: jiayizhen</strong>
+        <span>Companies: <b>MrToken</b> + <b>Nebulaedata</b></span>
+      </div>
+    </div>
 
     <nav>
       <div class="wrap nav-inner">
@@ -477,8 +520,14 @@
         <div class="nav-links">
           <a href="#features">Features</a>
           <a href="#download">Download</a>
-          <a href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener">GitHub</a>
-          <a class="star" href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener"
+          <a href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener"
+            >GitHub</a
+          >
+          <a
+            class="star"
+            href="https://github.com/SoySauceJYZ/NebuShell"
+            target="_blank"
+            rel="noopener"
             >★ Star</a
           >
         </div>
@@ -488,13 +537,16 @@
 
     <header>
       <div class="wrap">
-        <div class="badge">Powered by <b>Mrtoken</b></div>
+        <div class="owner-hero" aria-label="Project ownership">
+          <span>Creator / Owner <strong>jiayizhen</strong></span>
+          <span>Companies <strong>MrToken</strong> &amp; <strong>Nebulaedata</strong></span>
+        </div>
+        <div class="badge">Powered by <b>MrToken &amp; Nebulaedata</b></div>
         <h1>Operate Your Servers With An AI Agent</h1>
         <p class="sub">
-          NebuShell is a Termius-style SSH client with a built-in AI ops agent.
-          Multi-tab terminals, SFTP, and a Monaco editor — the agent proposes a
-          plan, you confirm, it runs. Nothing touches your machines without your
-          say-so.
+          NebuShell is a Termius-style SSH client with a built-in AI ops agent. Multi-tab terminals,
+          SFTP, and a Monaco editor — the agent proposes a plan, you confirm, it runs. Nothing
+          touches your machines without your say-so.
         </p>
         <div class="cta">
           <a
@@ -527,8 +579,7 @@
       <!-- App mockup -->
       <div class="mock">
         <div class="mock-bar">
-          <span class="dot r"></span><span class="dot y"></span
-          ><span class="dot g"></span>
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="mock-brand"
             ><span style="color: var(--accent-2)"
               ><svg viewBox="0 0 32 32" width="16" height="16" fill="none">
@@ -537,11 +588,14 @@
                   stroke="currentColor"
                   stroke-width="3"
                   stroke-linecap="round"
-                  stroke-linejoin="round" /><path
+                  stroke-linejoin="round"
+                />
+                <path
                   d="M16 24h10"
                   stroke="currentColor"
                   stroke-width="3"
-                  stroke-linecap="round" /></svg></span
+                  stroke-linecap="round"
+                /></svg></span
             >NebuShell</span
           >
           <span class="mtab active">DGX-2</span>
@@ -561,15 +615,26 @@
           <div class="term">
             <div><span class="d">Welcome to NVIDIA DGX Spark 7.5.0 (aarch64)</span></div>
             <div>&nbsp;</div>
-            <div><span class="p">root@spark-nb2</span>:<span class="k">~</span># <span class="c">df -h /</span></div>
-            <div><span class="d">Filesystem      Size  Used Avail Use% Mounted on</span></div>
-            <div><span class="d">/dev/nvme0n1p2  3.7T  226G  3.5T   6% /</span></div>
+            <div>
+              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
+              <span class="c">df -h /</span>
+            </div>
+            <div><span class="d">Filesystem Size Used Avail Use% Mounted on</span></div>
+            <div><span class="d">/dev/nvme0n1p2 3.7T 226G 3.5T 6% /</span></div>
             <div>&nbsp;</div>
-            <div><span class="p">root@spark-nb2</span>:<span class="k">~</span># <span class="c">systemctl status nginx</span></div>
+            <div>
+              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
+              <span class="c">systemctl status nginx</span>
+            </div>
             <div><span class="w">●</span> nginx.service - A high performance web server</div>
-            <div>&nbsp;&nbsp;&nbsp;Active: <span class="ok">active (running)</span> since Wed 11:23</div>
+            <div>
+              &nbsp;&nbsp;&nbsp;Active: <span class="ok">active (running)</span> since Wed 11:23
+            </div>
             <div>&nbsp;</div>
-            <div><span class="p">root@spark-nb2</span>:<span class="k">~</span># <span style="opacity:.6">▋</span></div>
+            <div>
+              <span class="p">root@spark-nb2</span>:<span class="k">~</span>#
+              <span style="opacity: 0.6">▋</span>
+            </div>
           </div>
           <div class="agent">
             <div class="a-head">🤖 Ops Agent</div>
@@ -582,7 +647,7 @@
               <code style="font-family: var(--mono)">df -h /</code>
               <div class="ok" style="margin-top: 6px">✓ exit 0 · 6% used</div>
             </div>
-            <div class="bubble" style="border-color:#3a2f12">
+            <div class="bubble" style="border-color: #3a2f12">
               <span class="lbl">Confirm?</span>
               Run <code style="font-family: var(--mono)">systemctl reload nginx</code> on DGX-2?
             </div>
@@ -602,49 +667,46 @@
             <div class="ico">🤖</div>
             <h3>Built-in AI ops agent</h3>
             <p>
-              An OpenAI-compatible agent that runs commands, reads output, asks
-              questions, and presents plans — always plan-and-confirm.
+              An OpenAI-compatible agent that runs commands, reads output, asks questions, and
+              presents plans — always plan-and-confirm.
             </p>
           </div>
           <div class="card">
             <div class="ico">🖥️</div>
             <h3>Multi-tab terminals</h3>
             <p>
-              xterm.js terminals with fit, web links, and themes. Split the layout
-              to watch several sessions side by side.
+              xterm.js terminals with fit, web links, and themes. Split the layout to watch several
+              sessions side by side.
             </p>
           </div>
           <div class="card">
             <div class="ico">🔐</div>
             <h3>Encrypted vault</h3>
             <p>
-              Hosts, passwords, and SSH keys are protected by a master password.
-              Your keychain never leaves your machine.
+              Hosts, passwords, and SSH keys are protected by a master password. Your keychain never
+              leaves your machine.
             </p>
           </div>
           <div class="card">
             <div class="ico">📁</div>
             <h3>SFTP file browser</h3>
             <p>
-              Dual-pane remote/local management with drag-and-drop transfers and a
-              live transfer queue.
+              Dual-pane remote/local management with drag-and-drop transfers and a live transfer
+              queue.
             </p>
           </div>
           <div class="card">
             <div class="ico">📝</div>
             <h3>Monaco editor</h3>
             <p>
-              The VS Code editor built in — edit remote and local files with syntax
-              highlighting, right inside a tab.
+              The VS Code editor built in — edit remote and local files with syntax highlighting,
+              right inside a tab.
             </p>
           </div>
           <div class="card">
             <div class="ico">📊</div>
             <h3>System monitor</h3>
-            <p>
-              Glance at load, memory, and other host vitals without leaving your
-              terminal.
-            </p>
+            <p>Glance at load, memory, and other host vitals without leaving your terminal.</p>
           </div>
         </div>
       </div>
@@ -655,8 +717,8 @@
         <div class="final">
           <h2 class="sec-title">Ship faster from your terminal</h2>
           <p class="sec-sub">
-            Free and open source under the MIT license. Download for your platform
-            and connect your first host in seconds.
+            Free and open source under the MIT license. Download for your platform and connect your
+            first host in seconds.
           </p>
           <div class="cta">
             <a
@@ -681,34 +743,43 @@
 
     <footer>
       <div class="wrap foot-inner">
-        <span>© 2026 NebuShell · MIT License</span>
-        <span>Powered by <strong style="color: var(--muted)">Mrtoken</strong></span>
+        <span>© 2026 NebuShell · jiayizhen · MIT License</span>
+        <span
+          >Powered by <strong style="color: var(--muted)">MrToken</strong> &amp;
+          <strong style="color: var(--muted)">Nebulaedata</strong></span
+        >
       </div>
       <div
         class="wrap"
-        style="margin-top: 14px; text-align: center; color: var(--dim); font-size: 12.5px; line-height: 1.9"
+        style="
+          margin-top: 14px;
+          text-align: center;
+          color: var(--dim);
+          font-size: 12.5px;
+          line-height: 1.9;
+        "
       >
-        Developer <strong style="color: var(--muted)">jiayizhen</strong> · From
-        <strong style="color: var(--muted)">Mrtoken</strong> · Built with
+        Creator / Owner <strong style="color: var(--muted)">jiayizhen</strong> · Companies
+        <strong style="color: var(--muted)">MrToken</strong> &amp;
+        <strong style="color: var(--muted)">Nebulaedata</strong> · Built with
         <strong style="color: var(--muted)">Claude</strong> &amp;
         <strong style="color: var(--muted)">Codex</strong> · AI compute provided by
-        <strong style="color: var(--muted)">Mrtoken</strong>
+        <strong style="color: var(--muted)">MrToken</strong> &amp;
+        <strong style="color: var(--muted)">Nebulaedata</strong>
         <br />
-        开发者 jiayizhen · 来源 Mrtoken · 由 Claude 与 Codex 构建开发 · AI
-        算力由 Mrtoken 提供
+        开发者 / 所有者 jiayizhen · 公司 MrToken、Nebulaedata · 由 Claude 与 Codex 构建开发 · AI
+        算力由 MrToken、Nebulaedata 提供
       </div>
     </footer>
 
     <script>
       // Simple tab highlight (visual only)
-      document.querySelectorAll(".tab").forEach((t) => {
-        t.addEventListener("click", () => {
-          document
-            .querySelectorAll(".tab")
-            .forEach((x) => x.classList.remove("active"));
-          t.classList.add("active");
-        });
-      });
+      document.querySelectorAll('.tab').forEach((t) => {
+        t.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'))
+          t.classList.add('active')
+        })
+      })
     </script>
   </body>
 </html>
