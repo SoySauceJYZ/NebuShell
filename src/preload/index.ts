@@ -16,7 +16,8 @@ import type {
   RunShellResult,
   LlmSettings,
   LlmSettingsPublic,
-  AgentConversationMeta
+  AgentConversationMeta,
+  AppSettings
 } from '../shared/types'
 
 const api = {
@@ -174,7 +175,8 @@ const api = {
       ipcRenderer.invoke('local:readFileBase64', p),
     copy: (src: string, dstDir: string, transferId: string): Promise<void> =>
       ipcRenderer.invoke('local:copy', src, dstDir, transferId),
-    pickDir: (): Promise<string | null> => ipcRenderer.invoke('local:pickDir')
+    pickDir: (): Promise<string | null> => ipcRenderer.invoke('local:pickDir'),
+    pickFiles: (): Promise<string[]> => ipcRenderer.invoke('local:pickFiles')
   },
   transfers: {
     // Subscribe to progress for one transferId (covers both sftp:* and local:* streams).
@@ -189,6 +191,11 @@ const api = {
         ipcRenderer.removeListener(ch2, listener)
       }
     }
+  },
+  settings: {
+    get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
+    set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
+      ipcRenderer.invoke('settings:set', patch)
   },
   history: {
     save: (fileKey: string, content: string, fileName?: string): Promise<HistoryVersion> =>

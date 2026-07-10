@@ -20,6 +20,8 @@ export interface PaneDndContext {
   kind: PaneKind
   sessionId?: string
   hostId?: string
+  /** The tab/window that owns transfers initiated here (for the records panel). */
+  ownerId: string
   /** Current directory of this pane — the drop destination. */
   dir: string
   /** Reload this pane's listing after a transfer completes into it. */
@@ -55,9 +57,12 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
   const [isDragOver, setDragOver] = useState(false)
   const track = useTransfersStore((s) => s.track)
 
-  const runTransfer = async (label: string, run: (transferId: string) => Promise<void>): Promise<void> => {
+  const runTransfer = async (
+    label: string,
+    run: (transferId: string) => Promise<void>
+  ): Promise<void> => {
     const transferId = genId()
-    track(transferId, label)
+    track(transferId, label, ctx.ownerId)
     try {
       await run(transferId)
     } catch {
@@ -113,7 +118,13 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
           : '复制'
     void runTransfer(`${verb} ${src.name}`, async (transferId) => {
       if (src.sourceKind === 'remote' && ctx.kind === 'remote') {
-        await window.api.sftp.transfer(src.sessionId!, src.path, ctx.sessionId!, ctx.dir, transferId)
+        await window.api.sftp.transfer(
+          src.sessionId!,
+          src.path,
+          ctx.sessionId!,
+          ctx.dir,
+          transferId
+        )
       } else if (src.sourceKind === 'local' && ctx.kind === 'remote') {
         await window.api.sftp.uploadPaths(ctx.sessionId!, ctx.dir, [src.path], transferId)
       } else if (src.sourceKind === 'remote' && ctx.kind === 'local') {
@@ -128,10 +139,7 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
     isDragOver,
     dropZoneProps: {
       onDragOver: (e) => {
-        if (
-          e.dataTransfer.types.includes(MIME) ||
-          e.dataTransfer.types.includes('Files')
-        ) {
+        if (e.dataTransfer.types.includes(MIME) || e.dataTransfer.types.includes('Files')) {
           e.preventDefault()
           e.dataTransfer.dropEffect = 'copy'
           if (!isDragOver) setDragOver(true)

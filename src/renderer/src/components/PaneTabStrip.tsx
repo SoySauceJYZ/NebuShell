@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useSessionStore, type PaneNode } from '../store/useSessionStore'
 import { KIND_ICON } from '../lib/tabIcons'
+import { requestCloseTab } from '../lib/requestCloseTab'
 
 /** Compact tab strip rendered at the top of each pane when the view is split. */
 export function PaneTabStrip({
@@ -12,7 +13,6 @@ export function PaneTabStrip({
 }): React.ReactElement {
   const tabs = useSessionStore((s) => s.tabs)
   const setActiveTab = useSessionStore((s) => s.setActiveTab)
-  const closeTab = useSessionStore((s) => s.closeTab)
   const setDraggingTab = useSessionStore((s) => s.setDraggingTab)
 
   return (
@@ -42,7 +42,7 @@ export function PaneTabStrip({
             onMouseDown={(e) => {
               if (e.button === 1) {
                 e.preventDefault()
-                closeTab(tabId)
+                void requestCloseTab(tabId)
               }
             }}
             className={`group flex h-6 max-w-[160px] shrink-0 cursor-pointer items-center gap-1.5 rounded px-2 text-xs transition ${
@@ -57,7 +57,7 @@ export function PaneTabStrip({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  closeTab(tabId)
+                  void requestCloseTab(tabId)
                 }}
                 className="rounded p-0.5 opacity-0 hover:bg-black/5 group-hover:opacity-100"
               >

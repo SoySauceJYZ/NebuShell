@@ -4,15 +4,13 @@ import { Plus, X, HardDrive, Server } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { RemotePane } from './RemotePane'
 import { LocalPane } from './LocalPane'
-import { TransfersOverlay } from './TransfersOverlay'
+import { TransfersPanel } from './TransfersPanel'
 
 interface BasePane {
   paneId: string
   weight: number
 }
-type PaneState =
-  | (BasePane & { kind: 'remote'; hostId: string })
-  | (BasePane & { kind: 'local' })
+type PaneState = (BasePane & { kind: 'remote'; hostId: string }) | (BasePane & { kind: 'local' })
 
 function pid(): string {
   return crypto?.randomUUID ? crypto.randomUUID().slice(0, 8) : `p${Date.now()}${Math.random()}`
@@ -28,7 +26,8 @@ export function ExplorerTab({
   const hosts = useVaultStore((s) => s.hosts)
   const [panes, setPanes] = useState<PaneState[]>(() => {
     const init: PaneState[] = [{ paneId: pid(), kind: 'local', weight: 1 }]
-    if (initialHostId) init.push({ paneId: pid(), kind: 'remote', hostId: initialHostId, weight: 1 })
+    if (initialHostId)
+      init.push({ paneId: pid(), kind: 'remote', hostId: initialHostId, weight: 1 })
     return init
   })
   const containerRef = useRef<HTMLDivElement>(null)
@@ -37,33 +36,35 @@ export function ExplorerTab({
   const removePane = (paneId: string): void =>
     setPanes((ps) => (ps.length <= 1 ? ps : ps.filter((p) => p.paneId !== paneId)))
 
-  const startResize = (index: number) => (e: React.MouseEvent): void => {
-    e.preventDefault()
-    const container = containerRef.current
-    if (!container) return
-    const totalWidth = container.clientWidth
-    const startX = e.clientX
-    const startWeights = panes.map((p) => p.weight)
-    const sum = startWeights.reduce((a, b) => a + b, 0)
+  const startResize =
+    (index: number) =>
+    (e: React.MouseEvent): void => {
+      e.preventDefault()
+      const container = containerRef.current
+      if (!container) return
+      const totalWidth = container.clientWidth
+      const startX = e.clientX
+      const startWeights = panes.map((p) => p.weight)
+      const sum = startWeights.reduce((a, b) => a + b, 0)
 
-    const onMove = (ev: MouseEvent): void => {
-      const dx = ev.clientX - startX
-      const dw = (dx / totalWidth) * sum
-      setPanes((ps) =>
-        ps.map((p, i) => {
-          if (i === index) return { ...p, weight: Math.max(0.15, startWeights[i] + dw) }
-          if (i === index + 1) return { ...p, weight: Math.max(0.15, startWeights[i + 1] - dw) }
-          return p
-        })
-      )
+      const onMove = (ev: MouseEvent): void => {
+        const dx = ev.clientX - startX
+        const dw = (dx / totalWidth) * sum
+        setPanes((ps) =>
+          ps.map((p, i) => {
+            if (i === index) return { ...p, weight: Math.max(0.15, startWeights[i] + dw) }
+            if (i === index + 1) return { ...p, weight: Math.max(0.15, startWeights[i + 1] - dw) }
+            return p
+          })
+        )
+      }
+      const onUp = (): void => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
     }
-    const onUp = (): void => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
 
   return (
     <div className="relative flex h-full flex-col">
@@ -97,7 +98,9 @@ export function ExplorerTab({
               {hosts.map((h) => (
                 <DropdownMenu.Item
                   key={h.id}
-                  onSelect={() => addPane({ paneId: pid(), kind: 'remote', hostId: h.id, weight: 1 })}
+                  onSelect={() =>
+                    addPane({ paneId: pid(), kind: 'remote', hostId: h.id, weight: 1 })
+                  }
                   className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
                 >
                   <Server size={15} className="text-[var(--text-muted)]" />
@@ -140,9 +143,13 @@ export function ExplorerTab({
                 </div>
                 <div className="min-h-0 flex-1">
                   {pane.kind === 'local' ? (
-                    <LocalPane />
+                    <LocalPane ownerId={tabId} />
                   ) : (
-                    <RemotePane sessionId={`explorer-${tabId}-${pane.paneId}`} hostId={pane.hostId} />
+                    <RemotePane
+                      sessionId={`explorer-${tabId}-${pane.paneId}`}
+                      hostId={pane.hostId}
+                      ownerId={tabId}
+                    />
                   )}
                 </div>
               </div>
@@ -157,7 +164,7 @@ export function ExplorerTab({
         })}
       </div>
 
-      <TransfersOverlay />
+      <TransfersPanel ownerId={tabId} />
     </div>
   )
 }

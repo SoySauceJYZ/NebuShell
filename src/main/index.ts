@@ -11,6 +11,7 @@ import { registerFileIpc } from './ipc/fileIpc'
 import { registerHistoryIpc } from './ipc/historyIpc'
 import { registerLlmIpc } from './ipc/llmIpc'
 import { registerAgentChatIpc } from './ipc/agentChatIpc'
+import { registerSettingsIpc } from './ipc/settingsIpc'
 
 function createWindow(): void {
   const isMac = process.platform === 'darwin'
@@ -76,6 +77,7 @@ app.whenReady().then(() => {
   registerHistoryIpc()
   registerLlmIpc()
   registerAgentChatIpc()
+  registerSettingsIpc()
 
   createWindow()
 

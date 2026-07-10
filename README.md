@@ -58,6 +58,18 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 📊 **System monitor** — glance at load, memory, and other host vitals.
 - 🎨 **Light / dark themes** — a clean, modern UI that adapts to your OS.
 
+### What's New
+
+**Recent updates (July 2026)**
+
+- ⚡ **Faster SFTP transfers** — local↔remote uploads/downloads now use concurrent `fastPut` / `fastGet`, saturating high-latency links instead of sending one 32 KB chunk per round-trip. Large files move dramatically faster.
+- 📈 **Transfer speed & ETA** — the transfer UI shows live throughput (MB/s) and estimated time remaining, not just a percentage.
+- 🗂️ **Per-window transfer records** — transfers are grouped by the window that started them into a collapsible dock; finished transfers stay as browsable history until you clear them.
+- ⚠️ **Close-tab protection** — closing a tab with an in-progress transfer now asks for confirmation, since closing tears down the SFTP connection.
+- 📊 **Progress in the side-panel SFTP view** — the embedded SFTP panel shows transfer progress too, and the toolbar upload button supports multi-select with a progress bar.
+- ⚙️ **Configurable transfer concurrency** — a new **Settings** page lets you tune the SFTP concurrency (default 64, range 1–256); the value is persisted.
+- 🎨 **Terminal color fix** — the built-in themes now ship full 16-color ANSI palettes, fixing colored (especially white) text that was invisible on the light theme.
+
 ### Screenshots
 
 ![NebuShell AI agent plan and confirm workflow](docs/screenshot-Agent-Plan-3.png)
@@ -189,6 +201,18 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 📜 **历史文档** —— 记录过往会话与文档。
 - 📊 **系统监控** —— 一眼查看负载、内存等主机指标。
 - 🎨 **明暗主题** —— 简洁现代的界面,随系统自动切换。
+
+### 更新记录
+
+**近期更新(2026 年 7 月)**
+
+- ⚡ **SFTP 传输提速** —— 本地↔远端的上传/下载改用并发 `fastPut` / `fastGet`,填满高延迟链路,不再"一次一个 32KB 分块等往返"。大文件传输速度大幅提升。
+- 📈 **传输速度与剩余时间** —— 传输界面新增实时速度(MB/s)与预计剩余时间,不再只有百分比。
+- 🗂️ **按窗口保存的传输记录** —— 传输按所属窗口归集到可折叠的记录面板;完成后作为历史保留,可随时查看,直到手动清除。
+- ⚠️ **关闭页面保护** —— 关闭仍有传输进行中的标签页时会弹出确认(关闭会中断 SFTP 连接)。
+- 📊 **侧边栏 SFTP 也显示进度** —— 终端右侧内嵌 SFTP 面板同样显示传输进度,工具栏上传支持多选并带进度条。
+- ⚙️ **传输并发数可调** —— 新增「设置」页,可调节 SFTP 并发数(默认 64,范围 1–256),并持久化保存。
+- 🎨 **终端配色修复** —— 内置主题补全了 16 色 ANSI 调色板,修复浅色主题下彩色(尤其是白色)文字看不见的问题。
 
 ### 界面预览
 

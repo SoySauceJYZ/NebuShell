@@ -161,6 +161,20 @@ export interface TransferProgress {
   error?: string
 }
 
+/** Persisted, non-sensitive app preferences (stored unencrypted, outside the vault). */
+export interface AppSettings {
+  /** Concurrent in-flight SFTP packets per file for fastGet/fastPut transfers. */
+  transferConcurrency: number
+}
+
+export const DEFAULT_TRANSFER_CONCURRENCY = 64
+export const MIN_TRANSFER_CONCURRENCY = 1
+export const MAX_TRANSFER_CONCURRENCY = 256
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  transferConcurrency: DEFAULT_TRANSFER_CONCURRENCY
+}
+
 export interface HistoryVersion {
   id: string
   label: string

@@ -12,9 +12,12 @@ const TEXT_RE =
   /\.(txt|md|markdown|json|jsonc|ya?ml|toml|ini|conf|cfg|env|log|csv|tsv|xml|html?|css|scss|less|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sh|bash|zsh|ps1|sql|dockerfile|gitignore|properties)$/i
 
 export function LocalPane({
+  ownerId,
   initialCwd,
   onCwdChange
 }: {
+  /** Tab/window that owns transfers started here (scopes the records panel). */
+  ownerId: string
   initialCwd?: string
   onCwdChange?: (cwd: string) => void
 }): React.ReactElement {
@@ -69,7 +72,7 @@ export function LocalPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd])
 
-  const dnd = useFileDnd({ kind: 'local', dir: cwd, refresh: () => load(cwd) })
+  const dnd = useFileDnd({ kind: 'local', ownerId, dir: cwd, refresh: () => load(cwd) })
 
   const onOpen = (entry: FileEntry): void => {
     if (entry.type === 'directory') {

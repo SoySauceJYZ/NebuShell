@@ -95,7 +95,7 @@ export function TerminalRightPanel({
           {rightPanelTab === 'theme' && <ThemeSection sessionId={sessionId} />}
           {rightPanelTab === 'sftp' && (
             <div className="min-h-0 flex-1">
-              <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} />
+              <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
             </div>
           )}
         </div>
@@ -143,7 +143,7 @@ function SectionHeader({
 // Makes readline 8-bit clean and sets a UTF-8 locale so the shell accepts/echoes
 // multibyte (Chinese) input even when the SSH session's LANG is unset or C/POSIX.
 const ENABLE_CJK_COMMAND =
-  "export LANG=C.UTF-8 2>/dev/null; export LC_ALL=C.UTF-8 2>/dev/null; " +
+  'export LANG=C.UTF-8 2>/dev/null; export LC_ALL=C.UTF-8 2>/dev/null; ' +
   "bind 'set input-meta on' 2>/dev/null; bind 'set output-meta on' 2>/dev/null; " +
   "bind 'set convert-meta off' 2>/dev/null; clear"
 
@@ -202,7 +202,9 @@ function HistorySection({ sessionId }: { sessionId: string }): React.ReactElemen
   const clearHistory = useTerminalStore((s) => s.clearHistory)
   const [query, setQuery] = useState('')
 
-  const filtered = [...history].reverse().filter((c) => c.toLowerCase().includes(query.toLowerCase()))
+  const filtered = [...history]
+    .reverse()
+    .filter((c) => c.toLowerCase().includes(query.toLowerCase()))
 
   const run = (cmd: string): void => {
     window.api.ssh.write(sessionId, cmd + '\n')

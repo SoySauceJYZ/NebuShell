@@ -1,6 +1,7 @@
 import { HostsView } from './HostsView'
 import { KeychainView } from './KeychainView'
 import { HistoryDocsView } from './HistoryDocsView'
+import { SettingsView } from './SettingsView'
 import { TerminalTab } from './TerminalTab'
 import { SftpPanel } from './SftpPanel'
 import { ExplorerTab } from './sftp/ExplorerTab'
@@ -17,10 +18,14 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
       return <KeychainView />
     case 'history':
       return <HistoryDocsView />
+    case 'settings':
+      return <SettingsView />
     case 'terminal':
       return tab.hostId ? <TerminalTab sessionId={tab.id} hostId={tab.hostId} /> : null
     case 'sftp':
-      return tab.hostId ? <SftpPanel sessionId={tab.id} hostId={tab.hostId} /> : null
+      return tab.hostId ? (
+        <SftpPanel sessionId={tab.id} hostId={tab.hostId} ownerId={tab.id} />
+      ) : null
     case 'explorer':
       return <ExplorerTab tabId={tab.id} initialHostId={tab.hostId} />
     case 'editor':

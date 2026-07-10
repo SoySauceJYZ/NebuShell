@@ -1,8 +1,13 @@
 import { Client, type SFTPWrapper, type Stats } from 'ssh2'
-import { createWriteStream, createReadStream, promises as fsp } from 'fs'
+import { promises as fsp } from 'fs'
 import { basename as localBasename, join as localJoin } from 'path'
 import type { Readable, Writable } from 'stream'
 import type { SshConnectOptions, SftpListEntry, TransferProgress } from '../../shared/types'
+import {
+  DEFAULT_TRANSFER_CONCURRENCY,
+  MIN_TRANSFER_CONCURRENCY,
+  MAX_TRANSFER_CONCURRENCY
+} from '../../shared/types'
 import { SAFE_ALGORITHMS, SAFE_KEEPALIVE_INTERVAL } from '../ssh/algorithms'
 import { createNoDelaySocket } from '../ssh/createSocket'
 
@@ -130,14 +135,8 @@ export class SftpManager {
 
   download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
     const { sftp } = this.getSession(sessionId)
-    return new Promise((resolve, reject) => {
-      const readStream = sftp.createReadStream(remotePath)
-      const writeStream = createWriteStream(localPath)
-      readStream.on('error', reject)
-      writeStream.on('error', reject)
-      writeStream.on('close', () => resolve())
-      readStream.pipe(writeStream)
-    })
+    // fastGet (concurrent reads) is far faster than a serial piped stream on latency links.
+    return this.fastGetFile(sftp, remotePath, localPath, () => {})
   }
 
   private static readonly MAX_EDIT_BYTES = 2 * 1024 * 1024
@@ -173,14 +172,8 @@ export class SftpManager {
 
   upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
     const { sftp } = this.getSession(sessionId)
-    return new Promise((resolve, reject) => {
-      const readStream = createReadStream(localPath)
-      const writeStream = sftp.createWriteStream(remotePath)
-      readStream.on('error', reject)
-      writeStream.on('error', reject)
-      writeStream.on('close', () => resolve())
-      readStream.pipe(writeStream)
-    })
+    // fastPut (concurrent writes) is far faster than a serial piped stream on latency links.
+    return this.fastPutFile(sftp, localPath, remotePath, () => {})
   }
 
   // ---- Recursive transfers (upload / download / cross-host) with progress ----
@@ -198,7 +191,8 @@ export class SftpManager {
       onProgress,
       (add) => this.scanLocal(localPath, rootDst, add),
       (dst) => this.mkdirRemoteSafe(sftp, dst),
-      (e) => ({ read: createReadStream(e.srcPath), write: sftp.createWriteStream(e.dstPath) })
+      // fastPut pipelines many concurrent SFTP writes -> saturates high-latency links.
+      (e, onBytes) => this.fastPutFile(sftp, e.srcPath, e.dstPath, onBytes)
     )
   }
 
@@ -217,7 +211,8 @@ export class SftpManager {
       async (dst) => {
         await fsp.mkdir(dst, { recursive: true })
       },
-      (e) => ({ read: sftp.createReadStream(e.srcPath), write: createWriteStream(e.dstPath) })
+      // fastGet pipelines many concurrent SFTP reads -> saturates high-latency links.
+      (e, onBytes) => this.fastGetFile(sftp, e.srcPath, e.dstPath, onBytes)
     )
   }
 
@@ -236,8 +231,30 @@ export class SftpManager {
       onProgress,
       (add) => this.scanRemote(srcSftp, srcPath, rootDst, posixJoin, add),
       (dst) => this.mkdirRemoteSafe(dstSftp, dst),
-      (e) => ({ read: srcSftp.createReadStream(e.srcPath), write: dstSftp.createWriteStream(e.dstPath) })
+      // No fast path exists for remote->remote; stream A -> B (larger buffer to help throughput).
+      (e, onBytes) =>
+        this.streamCopy(
+          srcSftp.createReadStream(e.srcPath, { highWaterMark: SftpManager.STREAM_HWM }),
+          dstSftp.createWriteStream(e.dstPath, { highWaterMark: SftpManager.STREAM_HWM }),
+          onBytes
+        )
     )
+  }
+
+  // ---- Transfer tuning ----
+  // Concurrent outstanding SFTP packets per file for fastGet/fastPut. High concurrency
+  // is what fills a high-latency link; without it a single serial stream is RTT-bound.
+  // User-configurable via settings; see setConcurrency().
+  private concurrency = DEFAULT_TRANSFER_CONCURRENCY
+  private static readonly TRANSFER_CHUNK = 32768
+  // Buffer size for the remote->remote streaming fallback.
+  private static readonly STREAM_HWM = 1024 * 1024
+
+  /** Set the fastGet/fastPut concurrency (clamped to the allowed range). */
+  setConcurrency(n: number): void {
+    const v = Math.round(n)
+    if (!Number.isFinite(v)) return
+    this.concurrency = Math.min(MAX_TRANSFER_CONCURRENCY, Math.max(MIN_TRANSFER_CONCURRENCY, v))
   }
 
   /** Two-pass executor: scan builds the plan + totals, then transfer sequentially. */
@@ -245,7 +262,7 @@ export class SftpManager {
     onProgress: ProgressCb | undefined,
     scan: (add: (e: PlanEntry) => void) => Promise<void>,
     makeDir: (dstPath: string) => Promise<void>,
-    makeStreams: (e: PlanEntry) => { read: Readable; write: Writable }
+    copyFile: (e: PlanEntry, onBytes: (n: number) => void) => Promise<void>
   ): Promise<void> {
     const plan: PlanEntry[] = []
     let totalBytes = 0
@@ -276,8 +293,7 @@ export class SftpManager {
         if (item.isDir) {
           await makeDir(item.dstPath)
         } else {
-          const { read, write } = makeStreams(item)
-          await this.streamCopy(read, write, (n) => {
+          await copyFile(item, (n) => {
             doneBytes += n
             emit('transfer', item.dstPath)
           })
@@ -302,11 +318,7 @@ export class SftpManager {
   }
 
   /** Walk a local tree (skips symlinks to avoid loops). */
-  private async scanLocal(
-    src: string,
-    dst: string,
-    add: (e: PlanEntry) => void
-  ): Promise<void> {
+  private async scanLocal(src: string, dst: string, add: (e: PlanEntry) => void): Promise<void> {
     const st = await fsp.lstat(src)
     if (st.isSymbolicLink()) return
     if (st.isDirectory()) {
@@ -332,7 +344,13 @@ export class SftpManager {
     if (st.isDirectory()) {
       add({ srcPath: src, dstPath: dst, isDir: true, size: 0 })
       for (const child of await this.readdirRemote(sftp, src)) {
-        await this.scanRemote(sftp, posixJoin(src, child.name), joinDst(dst, child.name), joinDst, add)
+        await this.scanRemote(
+          sftp,
+          posixJoin(src, child.name),
+          joinDst(dst, child.name),
+          joinDst,
+          add
+        )
       }
     } else {
       add({ srcPath: src, dstPath: dst, isDir: false, size: st.size ?? 0 })
@@ -364,11 +382,58 @@ export class SftpManager {
     })
   }
 
-  private streamCopy(
-    read: Readable,
-    write: Writable,
+  /** Local -> remote single file via fastPut (concurrent SFTP writes). */
+  private fastPutFile(
+    sftp: SFTPWrapper,
+    localPath: string,
+    remotePath: string,
     onBytes: (n: number) => void
   ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let prev = 0
+      sftp.fastPut(
+        localPath,
+        remotePath,
+        {
+          concurrency: this.concurrency,
+          chunkSize: SftpManager.TRANSFER_CHUNK,
+          // step reports cumulative bytes for this file; convert to a delta.
+          step: (transferred) => {
+            onBytes(transferred - prev)
+            prev = transferred
+          }
+        },
+        (err) => (err ? reject(err) : resolve())
+      )
+    })
+  }
+
+  /** Remote -> local single file via fastGet (concurrent SFTP reads). */
+  private fastGetFile(
+    sftp: SFTPWrapper,
+    remotePath: string,
+    localPath: string,
+    onBytes: (n: number) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let prev = 0
+      sftp.fastGet(
+        remotePath,
+        localPath,
+        {
+          concurrency: this.concurrency,
+          chunkSize: SftpManager.TRANSFER_CHUNK,
+          step: (transferred) => {
+            onBytes(transferred - prev)
+            prev = transferred
+          }
+        },
+        (err) => (err ? reject(err) : resolve())
+      )
+    })
+  }
+
+  private streamCopy(read: Readable, write: Writable, onBytes: (n: number) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       const onErr = (e: Error): void => {
         read.destroy()

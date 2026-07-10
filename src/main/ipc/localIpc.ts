@@ -211,12 +211,9 @@ export function registerLocalIpc(): void {
     return { base64: buf.toString('base64'), mime }
   })
 
-  ipcMain.handle(
-    'local:copy',
-    async (e, src: string, dstDir: string, transferId: string) => {
-      await copyRecursive(src, dstDir, e.sender, transferId)
-    }
-  )
+  ipcMain.handle('local:copy', async (e, src: string, dstDir: string, transferId: string) => {
+    await copyRecursive(src, dstDir, e.sender, transferId)
+  })
 
   ipcMain.handle('local:pickDir', async (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
@@ -225,5 +222,15 @@ export function registerLocalIpc(): void {
     })
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
+  })
+
+  // Multi-select file picker for uploads; returns the chosen local paths ([] if cancelled).
+  ipcMain.handle('local:pickFiles', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const result = await dialog.showOpenDialog(win as BrowserWindow, {
+      properties: ['openFile', 'multiSelections']
+    })
+    if (result.canceled) return []
+    return result.filePaths
   })
 }

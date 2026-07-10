@@ -435,6 +435,7 @@
         </a>
         <div class="nav-links">
           <a href="#features">Features</a>
+          <a href="#whats-new">What's New</a>
           <a href="#screenshots">Screenshots</a>
           <a href="#download">Download</a>
           <a href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener"
@@ -727,6 +728,72 @@
             <div class="ico">📊</div>
             <h3>System monitor</h3>
             <p>Glance at load, memory, and other host vitals without leaving your terminal.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="whats-new">
+      <div class="wrap">
+        <h2 class="sec-title">What's New</h2>
+        <p class="sec-sub">Recent updates — July 2026.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="ico">⚡</div>
+            <h3>Faster SFTP transfers</h3>
+            <p>
+              Local↔remote transfers now use concurrent <code>fastPut</code> / <code>fastGet</code>,
+              saturating high-latency links instead of one 32&nbsp;KB chunk per round-trip. Large
+              files move dramatically faster.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📈</div>
+            <h3>Transfer speed &amp; ETA</h3>
+            <p>
+              The transfer UI shows live throughput (MB/s) and estimated time remaining — not just a
+              percentage.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🗂️</div>
+            <h3>Per-window transfer records</h3>
+            <p>
+              Transfers are grouped by the window that started them into a collapsible dock;
+              finished ones stay as browsable history until you clear them.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">⚠️</div>
+            <h3>Close-tab protection</h3>
+            <p>
+              Closing a tab with an in-progress transfer now asks for confirmation, since closing
+              tears down the SFTP connection.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📊</div>
+            <h3>Side-panel SFTP progress</h3>
+            <p>
+              The embedded SFTP panel shows transfer progress too, and the toolbar upload button
+              supports multi-select with a progress bar.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">⚙️</div>
+            <h3>Configurable concurrency</h3>
+            <p>
+              A new Settings page tunes SFTP transfer concurrency (default 64, range 1–256), and the
+              value is persisted.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🎨</div>
+            <h3>Terminal color fix</h3>
+            <p>
+              Built-in themes now ship full 16-color ANSI palettes, fixing colored (especially
+              white) text that was invisible on the light theme.
+            </p>
           </div>
         </div>
       </div>

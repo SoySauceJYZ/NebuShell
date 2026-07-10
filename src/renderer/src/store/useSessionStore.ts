@@ -17,6 +17,7 @@ export type TabKind =
   | 'hosts'
   | 'keychain'
   | 'history'
+  | 'settings'
   | 'terminal'
   | 'sftp'
   | 'explorer'

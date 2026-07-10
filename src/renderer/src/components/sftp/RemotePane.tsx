@@ -29,14 +29,23 @@ function genId(): string {
   return crypto?.randomUUID ? crypto.randomUUID() : `t-${Date.now()}-${Math.random()}`
 }
 
+/** Last path segment, tolerating both local ('\\') and posix ('/') separators. */
+function baseName(p: string): string {
+  const parts = p.replace(/\\/g, '/').replace(/\/+$/, '').split('/')
+  return parts[parts.length - 1] || p
+}
+
 export function RemotePane({
   sessionId,
   hostId,
+  ownerId,
   embedded,
   onExpand
 }: {
   sessionId: string
   hostId: string
+  /** Tab/window that owns transfers started here (scopes the records panel). */
+  ownerId: string
   embedded?: boolean
   onExpand?: () => void
 }): React.ReactElement {
@@ -109,6 +118,7 @@ export function RemotePane({
     kind: 'remote',
     sessionId,
     hostId,
+    ownerId,
     dir: path,
     refresh: () => load(path)
   })
@@ -130,8 +140,17 @@ export function RemotePane({
   }
 
   const handleUpload = async (): Promise<void> => {
-    const uploaded = await window.api.sftp.upload(sessionId, path)
-    if (uploaded) await load(path)
+    const files = await window.api.local.pickFiles()
+    if (files.length === 0) return
+    const transferId = genId()
+    const label = files.length === 1 ? `上传 ${baseName(files[0])}` : `上传 ${files.length} 个文件`
+    track(transferId, label, ownerId)
+    try {
+      await window.api.sftp.uploadPaths(sessionId, path, files, transferId)
+    } catch {
+      // surfaced via transfers overlay
+    }
+    await load(path)
   }
 
   const handleMkdir = async (): Promise<void> => {
@@ -149,7 +168,7 @@ export function RemotePane({
     const dir = await window.api.local.pickDir()
     if (!dir) return
     const transferId = genId()
-    track(transferId, `下载 ${entry.name}`)
+    track(transferId, `下载 ${entry.name}`, ownerId)
     try {
       await window.api.sftp.downloadTo(sessionId, entry.path, dir, transferId)
     } catch {
