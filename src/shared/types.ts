@@ -116,10 +116,21 @@ export interface AgentConversationMeta {
   messageCount: number
 }
 
+/**
+ * runInShell 的终局状态,取代过去仅有的 timedOut 布尔:
+ * - completed:   命令正常跑完,exitCode 有效。
+ * - interrupted: 命令超时/静默/疑似等待输入,系统已自动中断并夺回提示符(终端仍可用)。
+ * - stuck:       连按键升级(Ctrl-C/Ctrl-Z 等)都无法恢复,建议断开重连该终端。
+ */
+export type ShellRunState = 'completed' | 'interrupted' | 'stuck'
+
 export interface RunShellResult {
   output: string
   exitCode: number | null
   timedOut: boolean
+  state: ShellRunState
+  /** 面向模型的可读诊断/恢复说明(为何中断、如何恢复、是否疑似等待输入等)。 */
+  note?: string
 }
 
 export interface SshConnectOptions {

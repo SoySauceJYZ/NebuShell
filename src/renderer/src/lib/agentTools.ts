@@ -46,8 +46,14 @@ export const READ_COMMAND_OUTPUT_TOOL: ChatTool = {
     parameters: {
       type: 'object',
       properties: {
-        ref: { type: 'string', description: '要检索的输出标记(截断提示里的 #xxxxxx,只填 6 位字符)' },
-        grep: { type: 'string', description: '按关键字/正则(不区分大小写)过滤行,如 "error"、"fail"' },
+        ref: {
+          type: 'string',
+          description: '要检索的输出标记(截断提示里的 #xxxxxx,只填 6 位字符)'
+        },
+        grep: {
+          type: 'string',
+          description: '按关键字/正则(不区分大小写)过滤行,如 "error"、"fail"'
+        },
         head: { type: 'number', description: '只取前 N 行' },
         tail: { type: 'number', description: '只取后 N 行' },
         range: {
@@ -124,11 +130,19 @@ export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask
     MODE_HINT[mode],
     '规则:',
     '1. 需要获取服务器真实信息或执行操作时,调用 run_command,一次一条、尽量精简,并指明 target。',
-    '2. 破坏性或有风险的命令(删除、覆盖、重启服务、改配置等)务必先说明其作用与影响。',
-    '3. 遇到关键决策或信息不足时,调用 ask_user 向用户提问(尽量带选项),得到回答后再继续。',
-    '4. 若命令被拒绝或被拦截,请据此调整方案,不要重复强推。',
-    '5. 拿到命令输出后,用简洁中文解释结论,不要机械地照抄整段输出。',
-    '6. 命令输出过长时系统会自动截断,并给出 #xxxxxx 标记与总行数。若截断部分对判断很关键(例如要看完整报错),用 read_command_output 按需检索(优先 grep 关键字或取尾部),不要让用户重跑命令。',
-    '7. 回答使用 Markdown。'
+    '2. 不要执行会长期占用终端或持续输出的命令(会把终端卡住)。必须改成有界/非交互形式:' +
+      'tail -f→tail -n 200;journalctl -f→journalctl --no-pager -n 200;top→top -bn1;' +
+      'ping→ping -c 4;watch X→直接跑 X;交互式安装加 -y(如 apt-get install -y)或 yes | 前置;' +
+      '耗时不确定的命令用 timeout 包一层(如 timeout 30 <cmd>)。确需长时间运行的任务,用 ' +
+      'nohup <cmd> >/tmp/agent.log 2>&1 & 转后台,再按需 tail -n 查看日志。',
+    '3. 破坏性或有风险的命令(删除、覆盖、重启服务、改配置等)务必先说明其作用与影响。',
+    '4. 遇到关键决策或信息不足时,调用 ask_user 向用户提问(尽量带选项),得到回答后再继续。',
+    '5. 若命令被拒绝或被拦截,请据此调整方案,不要重复强推。',
+    '6. 命令结果可能带状态标记:「(已自动中断并恢复终端)」表示该命令超时/卡住/疑似等待输入、' +
+      '系统已自动中断并恢复终端——不要原样重试,应改成有界/非交互形式(见规则 2)或换思路;' +
+      '「(终端卡死,建议重连)」表示无法自动恢复,应提示用户断开重连该终端,不要再继续下发命令。',
+    '7. 拿到命令输出后,用简洁中文解释结论,不要机械地照抄整段输出。',
+    '8. 命令输出过长时系统会自动截断,并给出 #xxxxxx 标记与总行数。若截断部分对判断很关键(例如要看完整报错),用 read_command_output 按需检索(优先 grep 关键字或取尾部),不要让用户重跑命令。',
+    '9. 回答使用 Markdown。'
   ].join('\n')
 }

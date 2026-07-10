@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   History,
   Activity,
@@ -21,9 +21,9 @@ import {
   MAX_FONT_SIZE
 } from '../store/useTerminalStore'
 import { TERMINAL_THEMES, DEFAULT_THEME_ID } from '../lib/terminalThemes'
-import { MONITOR_COMMAND, parseMonitorOutput, type SystemStats } from '../lib/systemMonitor'
 import { SftpPanel } from './SftpPanel'
 import { AgentPanel } from './AgentPanel'
+import { MonitorPanel } from './MonitorPanel'
 
 // Stable empty reference so the zustand selector doesn't return a fresh array each
 // render (which would trigger an infinite re-render loop and blank the app).
@@ -90,7 +90,7 @@ export function TerminalRightPanel({
           )}
           {rightPanelTab === 'history' && <HistorySection sessionId={sessionId} />}
           {rightPanelTab === 'monitor' && (
-            <MonitorSection sessionId={sessionId} connected={connected} />
+            <MonitorPanel sessionId={sessionId} connected={connected} />
           )}
           {rightPanelTab === 'theme' && <ThemeSection sessionId={sessionId} />}
           {rightPanelTab === 'sftp' && (
@@ -254,123 +254,6 @@ function HistorySection({ sessionId }: { sessionId: string }): React.ReactElemen
           </button>
         ))}
       </div>
-    </div>
-  )
-}
-
-function MonitorSection({
-  sessionId,
-  connected
-}: {
-  sessionId: string
-  connected: boolean
-}): React.ReactElement {
-  const [stats, setStats] = useState<SystemStats | null>(null)
-  const [error, setError] = useState('')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    if (!connected) return
-    let cancelled = false
-
-    const poll = async (): Promise<void> => {
-      try {
-        const out = await window.api.ssh.exec(sessionId, MONITOR_COMMAND)
-        if (!cancelled) {
-          setStats(parseMonitorOutput(out))
-          setError('')
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      }
-    }
-
-    poll()
-    timerRef.current = setInterval(poll, 3000)
-    return () => {
-      cancelled = true
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [sessionId, connected])
-
-  return (
-    <div className="flex h-full flex-col">
-      <SectionHeader title="系统监控" />
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {!connected && <div className="text-xs text-[var(--text-muted)]">未连接</div>}
-        {connected && !stats && !error && (
-          <div className="text-xs text-[var(--text-muted)]">正在读取...</div>
-        )}
-        {error && <div className="text-xs text-[var(--danger)]">读取失败: {error}</div>}
-        {stats && (
-          <div className="flex flex-col gap-4">
-            <StatBar label="CPU" percent={stats.cpuPercent} detail={pct(stats.cpuPercent)} />
-            <StatBar
-              label="内存"
-              percent={stats.memPercent}
-              detail={
-                stats.memUsedMb != null && stats.memTotalMb != null
-                  ? `${fmtMb(stats.memUsedMb)} / ${fmtMb(stats.memTotalMb)}`
-                  : pct(stats.memPercent)
-              }
-            />
-            <StatBar
-              label="磁盘 /"
-              percent={stats.diskPercent}
-              detail={
-                stats.diskUsed && stats.diskTotal
-                  ? `${stats.diskUsed} / ${stats.diskTotal}`
-                  : pct(stats.diskPercent)
-              }
-            />
-            <InfoRow label="负载" value={stats.load ?? '-'} />
-            <InfoRow label="运行时间" value={stats.uptime ?? '-'} />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function pct(v: number | null): string {
-  return v == null ? '-' : `${v}%`
-}
-function fmtMb(mb: number): string {
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)}G` : `${mb}M`
-}
-
-function StatBar({
-  label,
-  percent,
-  detail
-}: {
-  label: string
-  percent: number | null
-  detail: string
-}): React.ReactElement {
-  const value = percent ?? 0
-  const color = value >= 85 ? '#c0392b' : value >= 60 ? '#d68a3d' : 'var(--accent)'
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="font-medium text-[var(--text-dark)]">{label}</span>
-        <span className="text-[var(--text-muted)]">{detail}</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--content-bg)]">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${Math.min(100, value)}%`, background: color }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function InfoRow({ label, value }: { label: string; value: string }): React.ReactElement {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="font-medium text-[var(--text-dark)]">{label}</span>
-      <span className="font-mono text-[var(--text-muted)]">{value}</span>
     </div>
   )
 }

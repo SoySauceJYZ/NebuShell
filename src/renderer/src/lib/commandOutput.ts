@@ -24,12 +24,16 @@ const STORE_CAP = 60
 /** 分页检索单次返回的硬上限,避免二次刷屏。 */
 const READ_MAX = 12000
 
+import type { ShellRunState } from '@shared/types'
+
 // ---- L4:完整输出的本地存储 --------------------------------------------------
 interface SavedOutput {
   output: string
   exitCode: number | null
   timedOut: boolean
   name: string
+  state?: ShellRunState
+  note?: string
 }
 
 // 完整输出只留在渲染进程内存里(不进模型、不进持久化),按 ref 索引,LRU 上限。
@@ -135,6 +139,10 @@ export interface ClampInput {
   name: string
   /** saveCommandOutput 返回的短标记,用于在截断提示里引导模型分页检索。 */
   ref: string
+  /** 终端执行终局状态;缺省视为 completed(向后兼容)。 */
+  state?: ShellRunState
+  /** 中断/卡死时的可读诊断,原样透给模型帮助其决策。 */
+  note?: string
 }
 
 function bytesLabel(n: number): string {
@@ -152,14 +160,25 @@ export function clampCommandOutput({
   exitCode,
   timedOut,
   name,
-  ref
+  ref,
+  state = 'completed',
+  note
 }: ClampInput): string {
   const rc = exitCode == null ? '未知' : String(exitCode)
-  const statusHead = `[终端: ${name}] 退出码: ${rc}${timedOut ? ' (超时)' : ''}`
+  const stateLabel =
+    state === 'interrupted'
+      ? ' (已自动中断并恢复终端)'
+      : state === 'stuck'
+        ? ' (终端卡死,建议重连)'
+        : timedOut
+          ? ' (超时)'
+          : ''
+  const noteLine = note ? `\n说明: ${note}` : ''
+  const statusHead = `[终端: ${name}] 退出码: ${rc}${stateLabel}${noteLine}`
   const raw = output ?? ''
   if (!raw.trim()) return `${statusHead}\n(无输出)`
 
-  const succeeded = exitCode === 0 && !timedOut
+  const succeeded = exitCode === 0 && state === 'completed'
   const budget = succeeded ? BUDGET_OK : BUDGET_FAIL
 
   const originalLines = raw.split('\n')

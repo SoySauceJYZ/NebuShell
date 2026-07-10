@@ -727,7 +727,10 @@
           <div class="card">
             <div class="ico">📊</div>
             <h3>System monitor</h3>
-            <p>Glance at load, memory, and other host vitals without leaving your terminal.</p>
+            <p>
+              Per-core CPU with a live sparkline, a memory donut, network up/down rates, per-mount
+              disk usage with read/write I/O, and a searchable process manager you can kill from.
+            </p>
           </div>
         </div>
       </div>
@@ -738,6 +741,26 @@
         <h2 class="sec-title">What's New</h2>
         <p class="sec-sub">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🛡️</div>
+            <h3>Agent terminal anti-jam</h3>
+            <p>
+              The agent no longer hangs on blocking commands (<code>tail -f</code>,
+              <code>top</code>, interactive prompts). It probes whether the shell is at a prompt and
+              runs a recovery ladder (Ctrl-C → Ctrl-Z + <code>kill</code> → pager/editor exit) to
+              take the prompt back, reporting a clear <em>interrupted / stuck</em> state instead of
+              silently timing out.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📊</div>
+            <h3>Rich system monitor</h3>
+            <p>
+              The monitor panel now shows system info, per-core CPU with a live sparkline, a memory
+              donut (used/cache/free), network up/down rates &amp; totals, per-mount disk usage with
+              read/write I/O, and a process manager with kill / force-kill — all theme-aware.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">⚡</div>
             <h3>Faster SFTP transfers</h3>

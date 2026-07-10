@@ -55,13 +55,15 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 🖼️ **Image preview** — open remote images directly in a tab.
 - 🗂️ **Host management** — organize connections, duplicate sessions, reconnect, and jump between them from the tab bar.
 - 📜 **History docs** — keep track of past sessions and documents.
-- 📊 **System monitor** — glance at load, memory, and other host vitals.
+- 📊 **System monitor** — per‑core CPU with a live sparkline, a memory donut, network up/down rates, per‑mount disk usage with read/write I/O, and a process manager you can search and kill from.
 - 🎨 **Light / dark themes** — a clean, modern UI that adapts to your OS.
 
 ### What's New
 
 **Recent updates (July 2026)**
 
+- 🛡️ **Agent terminal anti-jam** — the agent no longer hangs on blocking commands (`tail -f`, `top`, interactive `[Y/n]` prompts). It actively **probes whether the shell is at a prompt**, and when a command jams the terminal it runs a recovery ladder (Ctrl‑C → Ctrl‑C → pager `q` → editor `:q!` → Ctrl‑Z suspend + `kill %1`), reporting a clear **interrupted / stuck** state instead of silently timing out. Completion is judged by an idle+ceiling heartbeat, so long jobs (`apt`, `docker build`) run to the end while truly stuck ones are recovered — and the agent is guided to bound streaming commands (`tail -n`, `top -bn1`, `timeout N …`).
+- 📊 **Rich system monitor** — the monitor panel now covers system info (IP / OS / timezone / uptime), **per‑core CPU** with a live sparkline, a **memory donut** (used / cache / free), **network** up/down rates & cumulative traffic, **disk** usage per mount with read/write I/O, and a **process manager** (hotspot list plus a full searchable table with kill / force‑kill). All charts and colors adapt to the active theme.
 - ⚡ **Faster SFTP transfers** — local↔remote uploads/downloads now use concurrent `fastPut` / `fastGet`, saturating high-latency links instead of sending one 32 KB chunk per round-trip. Large files move dramatically faster.
 - 📈 **Transfer speed & ETA** — the transfer UI shows live throughput (MB/s) and estimated time remaining, not just a percentage.
 - 🗂️ **Per-window transfer records** — transfers are grouped by the window that started them into a collapsible dock; finished transfers stay as browsable history until you clear them.
@@ -199,13 +201,15 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
 - 🗂️ **主机管理** —— 整理连接、复制会话、一键重连,并可在标签栏之间快速切换。
 - 📜 **历史文档** —— 记录过往会话与文档。
-- 📊 **系统监控** —— 一眼查看负载、内存等主机指标。
+- 📊 **系统监控** —— 每核心 CPU 占用与实时折线、内存环形图、网络上下行速率、按挂载点的磁盘用量及读写 IO,以及可搜索、可结束进程的进程管理器。
 - 🎨 **明暗主题** —— 简洁现代的界面,随系统自动切换。
 
 ### 更新记录
 
 **近期更新(2026 年 7 月)**
 
+- 🛡️ **智能体终端防卡死** —— 智能体不再被 `tail -f`、`top`、交互式 `[Y/n]` 等阻塞命令卡住。它会**主动探测 shell 是否停在提示符**;当某条命令把终端卡死时,走恢复阶梯(Ctrl‑C → 再 Ctrl‑C → 分页器 `q` → 编辑器 `:q!` → Ctrl‑Z 挂起并 `kill %1`)夺回提示符,并明确回报「已中断 / 终端卡死」状态,而不是默默超时。完成判定改用「空闲 + 硬上限」心跳,`apt`、`docker build` 等长任务能跑到底,真正卡死的才被恢复;同时引导模型对持续输出型命令做有界化(`tail -n`、`top -bn1`、`timeout N …`)。
+- 📊 **系统监控大升级** —— 监控面板现覆盖:系统信息(IP / 系统 / 时区 / 运行时间)、**每核心 CPU** 占用与实时折线、**内存环形图**(已用 / 缓存 / 空闲)、**网络**上下行速率与累计流量、按挂载点的**磁盘**用量及读写 IO,以及**进程管理**(热点列表 + 可搜索全表,支持结束 / 强制结束进程)。所有图表与配色随当前主题自适应。
 - ⚡ **SFTP 传输提速** —— 本地↔远端的上传/下载改用并发 `fastPut` / `fastGet`,填满高延迟链路,不再"一次一个 32KB 分块等往返"。大文件传输速度大幅提升。
 - 📈 **传输速度与剩余时间** —— 传输界面新增实时速度(MB/s)与预计剩余时间,不再只有百分比。
 - 🗂️ **按窗口保存的传输记录** —— 传输按所属窗口归集到可折叠的记录面板;完成后作为历史保留,可随时查看,直到手动清除。

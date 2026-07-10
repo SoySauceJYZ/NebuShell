@@ -84,7 +84,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
 
   const patch = (id: string, p: Partial<AgentSession>): void =>
     set((state) => ({
-      sessions: { ...state.sessions, [id]: { ...(state.sessions[id] ?? EMPTY_AGENT_SESSION), ...p } }
+      sessions: {
+        ...state.sessions,
+        [id]: { ...(state.sessions[id] ?? EMPTY_AGENT_SESSION), ...p }
+      }
     }))
 
   const persist = (id: string): void => {
@@ -131,12 +134,16 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           output: res.output,
           exitCode: res.exitCode,
           timedOut: res.timedOut,
+          state: res.state,
+          note: res.note,
           name: resolved.name
         })
         content = clampCommandOutput({
           output: res.output,
           exitCode: res.exitCode,
           timedOut: res.timedOut,
+          state: res.state,
+          note: res.note,
           name: resolved.name,
           ref
         })
@@ -238,7 +245,12 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       const sys: ChatMessage = { role: 'system', content: buildSystemPrompt(targets, mode) }
       const tools =
         mode === 'plan'
-          ? [buildRunCommandTool(targets), READ_COMMAND_OUTPUT_TOOL, ASK_USER_TOOL, PRESENT_PLAN_TOOL]
+          ? [
+              buildRunCommandTool(targets),
+              READ_COMMAND_OUTPUT_TOOL,
+              ASK_USER_TOOL,
+              PRESENT_PLAN_TOOL
+            ]
           : [buildRunCommandTool(targets), READ_COMMAND_OUTPUT_TOOL, ASK_USER_TOOL]
       window.api.llm.chat(runId, {
         messages: [sys, ...cur(id).messages],
@@ -285,7 +297,8 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     setMode: (mode) => set({ mode }),
     activeProviderId: undefined,
     activeModel: undefined,
-    setActiveModel: (providerId, model) => set({ activeProviderId: providerId, activeModel: model }),
+    setActiveModel: (providerId, model) =>
+      set({ activeProviderId: providerId, activeModel: model }),
 
     hostBySession: {},
     convBySession: {},
