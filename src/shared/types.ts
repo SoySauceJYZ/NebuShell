@@ -116,6 +116,19 @@ export interface AgentConversationMeta {
   messageCount: number
 }
 
+/** 命令历史来源:用户手输 vs 智能体执行。 */
+export type CommandSource = 'user' | 'agent'
+
+/** 一条本地持久化的命令历史,按服务器(hostId)归档。 */
+export interface CommandHistoryEntry {
+  /** 稳定唯一键,供删除单条使用(时间戳可能碰撞,故不以它作删除键)。 */
+  id: string
+  command: string
+  /** Date.now() at capture。 */
+  timestamp: number
+  source: CommandSource
+}
+
 /**
  * runInShell 的终局状态,取代过去仅有的 timedOut 布尔:
  * - completed:   命令正常跑完,exitCode 有效。

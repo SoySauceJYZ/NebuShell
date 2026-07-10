@@ -17,6 +17,7 @@ import type {
   LlmSettings,
   LlmSettingsPublic,
   AgentConversationMeta,
+  CommandHistoryEntry,
   AppSettings
 } from '../shared/types'
 
@@ -223,6 +224,15 @@ const api = {
       ipcRenderer.invoke('agentChat:save', hostId, convId, title, messages),
     remove: (hostId: string, convId: string): Promise<void> =>
       ipcRenderer.invoke('agentChat:remove', hostId, convId)
+  },
+  cmdHistory: {
+    list: (hostId: string): Promise<CommandHistoryEntry[]> =>
+      ipcRenderer.invoke('cmdHistory:list', hostId),
+    append: (hostId: string, entries: CommandHistoryEntry[]): Promise<void> =>
+      ipcRenderer.invoke('cmdHistory:append', hostId, entries),
+    remove: (hostId: string, id: string): Promise<void> =>
+      ipcRenderer.invoke('cmdHistory:remove', hostId, id),
+    clear: (hostId: string): Promise<void> => ipcRenderer.invoke('cmdHistory:clear', hostId)
   },
   llm: {
     getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),

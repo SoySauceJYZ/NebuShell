@@ -10,6 +10,8 @@ import {
 } from '../lib/agentTools'
 import { type AgentMode, disposition, isRiskyCommand } from '../lib/agentPermissions'
 import { clampCommandOutput, saveCommandOutput, readSavedOutput } from '../lib/commandOutput'
+import { useSessionStore } from './useSessionStore'
+import { useCommandHistoryStore } from './useCommandHistoryStore'
 
 export type AgentStatus = 'idle' | 'streaming' | 'awaiting' | 'running'
 
@@ -127,6 +129,13 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     if (!resolved) {
       content = '执行出错: 没有可用的目标终端。请先在「目标终端」里附加一个已连接的终端。'
     } else {
+      // Record the agent command against the *target* terminal's host (the agent may
+      // target a terminal on a different host than its own panel). Record on attempt so
+      // failed/timed-out commands still leave a trace.
+      const targetHostId = useSessionStore
+        .getState()
+        .tabs.find((t) => t.id === resolved.sessionId)?.hostId
+      if (targetHostId) useCommandHistoryStore.getState().add(targetHostId, command, 'agent')
       try {
         const res = await window.api.ssh.runInShell(resolved.sessionId, command)
         // 完整输出留在本地(供 read_command_output 分页检索),喂给模型的是策略裁剪版。

@@ -54,6 +54,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting.
 - 🖼️ **Image preview** — open remote images directly in a tab.
 - 🗂️ **Host management** — organize connections, duplicate sessions, reconnect, and jump between them from the tab bar.
+- ⌨️ **Command history & command palette** — every command you type is saved locally per server (tagged **User** / **Agent**) and shared across that host's tabs; a history panel splits **Local** vs the server's own `~/.bash_history`. Triple‑tap **Ctrl** to open a tabbed palette that searches history and runs quick actions — picking a command drops it into the prompt **without executing**.
 - 📜 **History docs** — keep track of past sessions and documents.
 - 📊 **System monitor** — per‑core CPU with a live sparkline, a memory donut, network up/down rates, per‑mount disk usage with read/write I/O, and a process manager you can search and kill from.
 - 🎨 **Light / dark themes** — a clean, modern UI that adapts to your OS.
@@ -62,6 +63,8 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 **Recent updates (July 2026)**
 
+- 📜 **Persistent command history** — commands you type are now saved **locally per server** (surviving restarts) and shared across every tab of that host, each tagged **User** or **Agent** — agent‑run commands are captured too, not just what you type. The history panel gains a **Local / Server** split, where the Server tab reads the box's own `~/.bash_history` / `~/.zsh_history`. Click any command to drop it into the input line **without running it**, delete single entries, or clear a server's history.
+- ⌨️ **Triple‑Ctrl command palette** — tap **Ctrl three times** in a terminal to pop a tabbed palette: **历史记录 (History)** searches your merged local + server history, **快捷操作 (Quick actions)** fires common actions. **Tab / Shift+Tab** switch tabs, **↑/↓ + Enter** pick, and the chosen command is inserted into the prompt (never auto‑run).
 - 🛡️ **Agent terminal anti-jam** — the agent no longer hangs on blocking commands (`tail -f`, `top`, interactive `[Y/n]` prompts). It actively **probes whether the shell is at a prompt**, and when a command jams the terminal it runs a recovery ladder (Ctrl‑C → Ctrl‑C → pager `q` → editor `:q!` → Ctrl‑Z suspend + `kill %1`), reporting a clear **interrupted / stuck** state instead of silently timing out. Completion is judged by an idle+ceiling heartbeat, so long jobs (`apt`, `docker build`) run to the end while truly stuck ones are recovered — and the agent is guided to bound streaming commands (`tail -n`, `top -bn1`, `timeout N …`).
 - 📊 **Rich system monitor** — the monitor panel now covers system info (IP / OS / timezone / uptime), **per‑core CPU** with a live sparkline, a **memory donut** (used / cache / free), **network** up/down rates & cumulative traffic, **disk** usage per mount with read/write I/O, and a **process manager** (hotspot list plus a full searchable table with kill / force‑kill). All charts and colors adapt to the active theme.
 - ⚡ **Faster SFTP transfers** — local↔remote uploads/downloads now use concurrent `fastPut` / `fastGet`, saturating high-latency links instead of sending one 32 KB chunk per round-trip. Large files move dramatically faster.
@@ -200,6 +203,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
 - 🗂️ **主机管理** —— 整理连接、复制会话、一键重连,并可在标签栏之间快速切换。
+- ⌨️ **命令历史与命令面板** —— 你输入的每条命令都会**按服务器本地持久化**(标记 **User / Agent**),并在该主机的所有标签页间共享;历史面板分「**本地 / 服务器**」两个子标签,服务器标签直接读取机器自身的 `~/.bash_history`。在终端里**连按三次 Ctrl** 可呼出分标签命令面板,搜索历史或执行快捷操作——选中的命令只**填入输入行、不自动执行**。
 - 📜 **历史文档** —— 记录过往会话与文档。
 - 📊 **系统监控** —— 每核心 CPU 占用与实时折线、内存环形图、网络上下行速率、按挂载点的磁盘用量及读写 IO,以及可搜索、可结束进程的进程管理器。
 - 🎨 **明暗主题** —— 简洁现代的界面,随系统自动切换。
@@ -208,6 +212,8 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 **近期更新(2026 年 7 月)**
 
+- 📜 **命令历史持久化** —— 你输入的命令现在会**按服务器本地保存**(重启后仍在),并在该主机的所有标签页间共享,每条标注来源 **User** 或 **Agent**(智能体执行的命令也会被记录,而不只是手输的)。历史面板新增「**本地 / 服务器**」子标签——服务器标签直接读取机器自身的 `~/.bash_history` / `~/.zsh_history`。点击任意命令即可**填入输入行而不执行**,并支持删除单条或清空某台服务器的历史。
+- ⌨️ **三击 Ctrl 命令面板** —— 在终端里**连按三次 Ctrl** 弹出分标签面板:「**历史记录**」搜索本地 + 服务器合并的历史,「**快捷操作**」执行常用动作。**Tab / Shift+Tab** 切换标签,**↑/↓ + 回车** 选择,选中的命令会**填入输入行(不自动执行)**。
 - 🛡️ **智能体终端防卡死** —— 智能体不再被 `tail -f`、`top`、交互式 `[Y/n]` 等阻塞命令卡住。它会**主动探测 shell 是否停在提示符**;当某条命令把终端卡死时,走恢复阶梯(Ctrl‑C → 再 Ctrl‑C → 分页器 `q` → 编辑器 `:q!` → Ctrl‑Z 挂起并 `kill %1`)夺回提示符,并明确回报「已中断 / 终端卡死」状态,而不是默默超时。完成判定改用「空闲 + 硬上限」心跳,`apt`、`docker build` 等长任务能跑到底,真正卡死的才被恢复;同时引导模型对持续输出型命令做有界化(`tail -n`、`top -bn1`、`timeout N …`)。
 - 📊 **系统监控大升级** —— 监控面板现覆盖:系统信息(IP / 系统 / 时区 / 运行时间)、**每核心 CPU** 占用与实时折线、**内存环形图**(已用 / 缓存 / 空闲)、**网络**上下行速率与累计流量、按挂载点的**磁盘**用量及读写 IO,以及**进程管理**(热点列表 + 可搜索全表,支持结束 / 强制结束进程)。所有图表与配色随当前主题自适应。
 - ⚡ **SFTP 传输提速** —— 本地↔远端的上传/下载改用并发 `fastPut` / `fastGet`,填满高延迟链路,不再"一次一个 32KB 分块等往返"。大文件传输速度大幅提升。

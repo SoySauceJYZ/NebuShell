@@ -11,6 +11,7 @@ import { registerFileIpc } from './ipc/fileIpc'
 import { registerHistoryIpc } from './ipc/historyIpc'
 import { registerLlmIpc } from './ipc/llmIpc'
 import { registerAgentChatIpc } from './ipc/agentChatIpc'
+import { registerCommandHistoryIpc } from './ipc/commandHistoryIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 
 function createWindow(): void {
@@ -77,6 +78,7 @@ app.whenReady().then(() => {
   registerHistoryIpc()
   registerLlmIpc()
   registerAgentChatIpc()
+  registerCommandHistoryIpc()
   registerSettingsIpc()
 
   createWindow()

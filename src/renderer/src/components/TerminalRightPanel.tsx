@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   History,
   Activity,
@@ -11,7 +11,9 @@ import {
   Languages,
   Minus,
   Plus,
-  Bot
+  Bot,
+  X,
+  RefreshCw
 } from 'lucide-react'
 import {
   useTerminalStore,
@@ -20,14 +22,13 @@ import {
   MIN_FONT_SIZE,
   MAX_FONT_SIZE
 } from '../store/useTerminalStore'
+import { useCommandHistoryStore, EMPTY_ENTRIES } from '../store/useCommandHistoryStore'
+import { ENABLE_CJK_COMMAND } from '../lib/quickActions'
+import { fetchServerHistory } from '../lib/serverHistory'
 import { TERMINAL_THEMES, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { SftpPanel } from './SftpPanel'
 import { AgentPanel } from './AgentPanel'
 import { MonitorPanel } from './MonitorPanel'
-
-// Stable empty reference so the zustand selector doesn't return a fresh array each
-// render (which would trigger an infinite re-render loop and blank the app).
-const EMPTY_HISTORY: string[] = []
 
 const TABS: { id: Exclude<RightPanelTab, null>; label: string; icon: typeof History }[] = [
   { id: 'agent', label: '智能体', icon: Bot },
@@ -88,7 +89,9 @@ export function TerminalRightPanel({
           {rightPanelTab === 'actions' && (
             <ActionsSection sessionId={sessionId} connected={connected} />
           )}
-          {rightPanelTab === 'history' && <HistorySection sessionId={sessionId} />}
+          {rightPanelTab === 'history' && (
+            <HistorySection sessionId={sessionId} hostId={hostId} connected={connected} />
+          )}
           {rightPanelTab === 'monitor' && (
             <MonitorPanel sessionId={sessionId} connected={connected} />
           )}
@@ -140,13 +143,6 @@ function SectionHeader({
   )
 }
 
-// Makes readline 8-bit clean and sets a UTF-8 locale so the shell accepts/echoes
-// multibyte (Chinese) input even when the SSH session's LANG is unset or C/POSIX.
-const ENABLE_CJK_COMMAND =
-  'export LANG=C.UTF-8 2>/dev/null; export LC_ALL=C.UTF-8 2>/dev/null; ' +
-  "bind 'set input-meta on' 2>/dev/null; bind 'set output-meta on' 2>/dev/null; " +
-  "bind 'set convert-meta off' 2>/dev/null; clear"
-
 function ActionsSection({
   sessionId,
   connected
@@ -197,62 +193,240 @@ function ActionsSection({
   )
 }
 
-function HistorySection({ sessionId }: { sessionId: string }): React.ReactElement {
-  const history = useTerminalStore((s) => s.history[sessionId] ?? EMPTY_HISTORY)
-  const clearHistory = useTerminalStore((s) => s.clearHistory)
-  const [query, setQuery] = useState('')
+// Fills a command into the terminal's current input line WITHOUT executing it (no '\n'),
+// so the user can review/edit before pressing Enter. Shared by both sub-tabs.
+function fillIntoTerminal(sessionId: string, command: string): void {
+  window.api.ssh.write(sessionId, command)
+}
 
-  const filtered = [...history]
-    .reverse()
-    .filter((c) => c.toLowerCase().includes(query.toLowerCase()))
+function SearchBox({
+  query,
+  setQuery
+}: {
+  query: string
+  setQuery: (v: string) => void
+}): React.ReactElement {
+  return (
+    <div className="border-b border-[var(--panel-border)] p-2">
+      <div className="flex items-center gap-2 rounded-lg bg-[var(--content-bg)] px-2.5 py-1.5">
+        <Search size={14} className="text-[var(--text-muted)]" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索命令"
+          className="w-full bg-transparent text-sm outline-none"
+        />
+      </div>
+    </div>
+  )
+}
 
-  const run = (cmd: string): void => {
-    window.api.ssh.write(sessionId, cmd + '\n')
-  }
+function HistorySection({
+  sessionId,
+  hostId,
+  connected
+}: {
+  sessionId: string
+  hostId: string
+  connected: boolean
+}): React.ReactElement {
+  const [subTab, setSubTab] = useState<'local' | 'server'>('local')
 
   return (
     <div className="flex h-full flex-col">
-      <SectionHeader
-        title="历史命令"
-        action={
-          history.length > 0 ? (
+      <SectionHeader title="历史命令" />
+      <div className="flex shrink-0 gap-1 border-b border-[var(--panel-border)] p-1.5">
+        {(['local', 'server'] as const).map((id) => {
+          const active = subTab === id
+          return (
             <button
-              onClick={() => clearHistory(sessionId)}
-              title="清空"
-              className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]"
+              key={id}
+              onClick={() => setSubTab(id)}
+              className={`flex-1 rounded-md py-1.5 text-xs font-medium transition ${
+                active
+                  ? 'bg-[var(--nav-active-bg)] text-[var(--accent)]'
+                  : 'text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]'
+              }`}
             >
-              <Trash2 size={14} />
+              {id === 'local' ? '本地' : '服务器'}
             </button>
-          ) : null
-        }
-      />
-      <div className="border-b border-[var(--panel-border)] p-2">
-        <div className="flex items-center gap-2 rounded-lg bg-[var(--content-bg)] px-2.5 py-1.5">
-          <Search size={14} className="text-[var(--text-muted)]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索命令"
-            className="w-full bg-transparent text-sm outline-none"
-          />
-        </div>
+          )
+        })}
       </div>
+      {subTab === 'local' ? (
+        <LocalHistory sessionId={sessionId} hostId={hostId} />
+      ) : (
+        <ServerHistory sessionId={sessionId} connected={connected} />
+      )}
+    </div>
+  )
+}
+
+function LocalHistory({
+  sessionId,
+  hostId
+}: {
+  sessionId: string
+  hostId: string
+}): React.ReactElement {
+  const entries = useCommandHistoryStore((s) => s.byHost[hostId] ?? EMPTY_ENTRIES)
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    void useCommandHistoryStore.getState().hydrate(hostId)
+  }, [hostId])
+
+  const filtered = [...entries]
+    .reverse()
+    .filter((e) => e.command.toLowerCase().includes(query.toLowerCase()))
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-end border-b border-[var(--panel-border)] px-2 py-1.5">
+        {entries.length > 0 && (
+          <button
+            onClick={() => void useCommandHistoryStore.getState().clear(hostId)}
+            title="清空该服务器的历史"
+            className="flex items-center gap-1 rounded p-1 text-xs text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]"
+          >
+            <Trash2 size={13} />
+            清空
+          </button>
+        )}
+      </div>
+      <SearchBox query={query} setQuery={setQuery} />
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {filtered.length === 0 && (
           <div className="mt-10 text-center text-xs text-[var(--text-muted)]">
-            {history.length === 0 ? '暂无输入的命令' : '没有匹配的命令'}
+            {entries.length === 0 ? '暂无输入的命令' : '没有匹配的命令'}
           </div>
         )}
-        {filtered.map((cmd, i) => (
-          <button
-            key={`${cmd}-${i}`}
-            onClick={() => run(cmd)}
-            title="点击重新执行"
-            className="block w-full truncate px-4 py-2 text-left font-mono text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+        {filtered.map((entry) => (
+          <div
+            key={entry.id}
+            className="group flex items-center gap-2 px-2 hover:bg-[var(--nav-bg-hover)]"
           >
-            {cmd}
-          </button>
+            <span
+              title={entry.source === 'agent' ? '由智能体执行' : '用户输入'}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                entry.source === 'agent'
+                  ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                  : 'bg-[var(--content-bg)] text-[var(--text-muted)]'
+              }`}
+            >
+              {entry.source === 'agent' ? 'Agent' : 'User'}
+            </span>
+            <button
+              onClick={() => fillIntoTerminal(sessionId, entry.command)}
+              title="点击填入终端输入行(不自动执行)"
+              className="min-w-0 flex-1 truncate py-2 text-left font-mono text-xs text-[var(--text-dark)]"
+            >
+              {entry.command}
+            </button>
+            <button
+              onClick={() => void useCommandHistoryStore.getState().remove(hostId, entry.id)}
+              title="删除这条"
+              className="shrink-0 rounded p-1 text-[var(--text-muted)] opacity-0 transition hover:text-[var(--text-dark)] group-hover:opacity-100"
+            >
+              <X size={13} />
+            </button>
+          </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ServerHistory({
+  sessionId,
+  connected
+}: {
+  sessionId: string
+  connected: boolean
+}): React.ReactElement {
+  const [commands, setCommands] = useState<string[]>([])
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(connected)
+  const [error, setError] = useState('')
+
+  // Initial load + reload when the session/connection changes. setState only runs after
+  // the await (the established pattern in MonitorPanel), guarded against unmount.
+  useEffect(() => {
+    if (!connected) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const cmds = await fetchServerHistory(sessionId)
+        if (!cancelled) {
+          setCommands(cmds)
+          setError('')
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, connected])
+
+  // Manual refresh — an event handler, so setState here is fine.
+  const refresh = async (): Promise<void> => {
+    if (!connected) return
+    setLoading(true)
+    setError('')
+    try {
+      setCommands(await fetchServerHistory(sessionId))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = commands.filter((c) => c.toLowerCase().includes(query.toLowerCase()))
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-end border-b border-[var(--panel-border)] px-2 py-1.5">
+        <button
+          onClick={() => void refresh()}
+          disabled={!connected || loading}
+          title="刷新"
+          className="flex items-center gap-1 rounded p-1 text-xs text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] disabled:opacity-40"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          刷新
+        </button>
+      </div>
+      <SearchBox query={query} setQuery={setQuery} />
+      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        {!connected ? (
+          <div className="mt-10 px-4 text-center text-xs text-[var(--text-muted)]">
+            需要活动连接才能读取服务器历史
+          </div>
+        ) : error ? (
+          <div className="mt-10 px-4 text-center text-xs text-[var(--danger,#e5484d)]">{error}</div>
+        ) : loading && commands.length === 0 ? (
+          <div className="mt-10 text-center text-xs text-[var(--text-muted)]">加载中…</div>
+        ) : filtered.length === 0 ? (
+          <div className="mt-10 text-center text-xs text-[var(--text-muted)]">
+            {commands.length === 0 ? '未读取到服务器历史' : '没有匹配的命令'}
+          </div>
+        ) : (
+          filtered.map((cmd, i) => (
+            <button
+              key={`${cmd}-${i}`}
+              onClick={() => fillIntoTerminal(sessionId, cmd)}
+              title="点击填入终端输入行(不自动执行)"
+              className="block w-full truncate px-4 py-2 text-left font-mono text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+            >
+              {cmd}
+            </button>
+          ))
+        )}
       </div>
     </div>
   )

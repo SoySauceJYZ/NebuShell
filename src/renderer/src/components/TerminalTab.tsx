@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css'
 import { RotateCw } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useTerminalStore } from '../store/useTerminalStore'
+import { useCommandHistoryStore } from '../store/useCommandHistoryStore'
 import { useSessionStore } from '../store/useSessionStore'
 import { resolveConnectOptions } from '../lib/resolveConnectOptions'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
@@ -12,6 +13,7 @@ import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
 import { TerminalRightPanel } from './TerminalRightPanel'
 import { TerminalContextMenu } from './TerminalContextMenu'
+import { CommandPalette } from './CommandPalette'
 
 function truncateTitle(text: string): string {
   const firstLine = text.split('\n')[0].trim()
@@ -34,11 +36,15 @@ export function TerminalTab({
   const statusRef = useRef<Status>('connecting')
   const reconnectingRef = useRef(false)
   const doConnectRef = useRef<() => void>(() => {})
+  // Triple-tap Ctrl detection: timestamps of "pure" Ctrl taps, and whether the current
+  // Ctrl press was consumed as a modifier (e.g. Ctrl+C) so it doesn't count as a tap.
+  const ctrlTapsRef = useRef<number[]>([])
+  const ctrlUsedRef = useRef(false)
   const [status, setStatus] = useState<Status>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const hosts = useVaultStore((s) => s.hosts)
   const credentials = useVaultStore((s) => s.credentials)
-  const addCommand = useTerminalStore((s) => s.addCommand)
   const openTab = useSessionStore((s) => s.openTab)
   const themeId = useTerminalStore((s) => s.themeBySession[sessionId])
   const preset = getTheme(themeId ?? DEFAULT_THEME_ID)
@@ -133,7 +139,7 @@ export function TerminalTab({
         const buf = term.buffer.active
         const line = buf.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? ''
         const cmd = extractCommandFromLine(line)
-        if (cmd) addCommand(sessionId, cmd)
+        if (cmd) useCommandHistoryStore.getState().add(hostId, cmd, 'user')
       }
     })
 
@@ -183,6 +189,36 @@ export function TerminalTab({
     }
     el.addEventListener('mousedown', onMouseDown)
 
+    // Triple-tap Ctrl (3 pure Ctrl presses within 600ms) opens the command palette.
+    // Capture phase so we see the keys before xterm's own handlers on the textarea.
+    const TAP_WINDOW = 600
+    const onKeyDownCapture = (e: KeyboardEvent): void => {
+      if (e.key === 'Control') {
+        if (!e.repeat) ctrlUsedRef.current = false
+      } else {
+        // any other key marks the held Ctrl as "used" (a modifier, not a tap)
+        ctrlUsedRef.current = true
+      }
+    }
+    const onKeyUpCapture = (e: KeyboardEvent): void => {
+      if (e.key !== 'Control') return
+      if (ctrlUsedRef.current) {
+        ctrlUsedRef.current = false
+        return
+      }
+      const now = Date.now()
+      const taps = ctrlTapsRef.current.filter((t) => now - t < TAP_WINDOW)
+      taps.push(now)
+      if (taps.length >= 3) {
+        ctrlTapsRef.current = []
+        setPaletteOpen(true)
+      } else {
+        ctrlTapsRef.current = taps
+      }
+    }
+    el.addEventListener('keydown', onKeyDownCapture, true)
+    el.addEventListener('keyup', onKeyUpCapture, true)
+
     // Reconnect requested from the tab's right-click menu.
     const onReconnectEvent = (e: Event): void => {
       if ((e as CustomEvent<string>).detail === sessionId) doConnectRef.current()
@@ -194,6 +230,8 @@ export function TerminalTab({
       dataDisposable.dispose()
       selectionDisposable.dispose()
       el.removeEventListener('mousedown', onMouseDown)
+      el.removeEventListener('keydown', onKeyDownCapture, true)
+      el.removeEventListener('keyup', onKeyUpCapture, true)
       window.removeEventListener('ssh-reconnect', onReconnectEvent)
       unsubData()
       unsubClosed()
@@ -201,7 +239,6 @@ export function TerminalTab({
       window.api.ssh.disconnect(sessionId)
       term.dispose()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, hostId])
 
   useEffect(() => {
@@ -263,9 +300,22 @@ export function TerminalTab({
     })
   }
 
+  const closePalette = (): void => {
+    setPaletteOpen(false)
+    // refocus the terminal after the overlay unmounts so the user can keep typing.
+    window.setTimeout(() => termRef.current?.focus(), 0)
+  }
+  const fillFromPalette = (cmd: string): void => {
+    if (statusRef.current === 'connected') window.api.ssh.write(sessionId, cmd)
+    closePalette()
+  }
+
   return (
     <div className="flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col" style={{ background: preset.wrapperBg }}>
+      <div
+        className="relative flex min-w-0 flex-1 flex-col"
+        style={{ background: preset.wrapperBg }}
+      >
         {status !== 'connected' && (
           <div
             className={`flex items-center gap-2 px-4 py-1 text-xs ${
@@ -302,8 +352,21 @@ export function TerminalTab({
             <div ref={containerRef} className="h-full px-2 py-1" />
           </TerminalContextMenu>
         </div>
+        {paletteOpen && (
+          <CommandPalette
+            sessionId={sessionId}
+            hostId={hostId}
+            connected={status === 'connected'}
+            onFill={fillFromPalette}
+            onClose={closePalette}
+          />
+        )}
       </div>
-      <TerminalRightPanel sessionId={sessionId} hostId={hostId} connected={status === 'connected'} />
+      <TerminalRightPanel
+        sessionId={sessionId}
+        hostId={hostId}
+        connected={status === 'connected'}
+      />
     </div>
   )
 }
