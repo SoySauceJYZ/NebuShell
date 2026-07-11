@@ -79,6 +79,8 @@ interface SessionState {
   setDraggingTab: (id: string | null) => void
   moveTabToEdge: (tabId: string, targetPaneId: string, edge: Exclude<Edge, 'center'>) => void
   moveTabToPane: (tabId: string, targetPaneId: string) => void
+  /** Split a pane on the given edge, creating a new adjacent pane. */
+  splitPane: (paneId: string, edge: Exclude<Edge, 'center'>) => void
   setSplitSizes: (splitId: string, sizes: number[]) => void
 }
 
@@ -217,6 +219,63 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       activePaneId: targetPaneId,
       activeTabId: tabId,
       draggingTabId: undefined
+    })
+  },
+
+  splitPane: (paneId, edge) => {
+    const { layout, tabs } = get()
+    const pane = findPane(layout, paneId)
+    if (!pane) return
+    const activeId = pane.activeTabId
+    const activeTab = tabs.find((t) => t.id === activeId)
+
+    // A pane with several tabs splits by moving its active tab into the new pane.
+    if (pane.tabIds.length > 1) {
+      const removed = pruneEmpty(removeTabFromTree(layout, activeId))
+      if (!removed) return
+      const newPane: PaneNode = {
+        type: 'pane',
+        id: newId('pane'),
+        tabIds: [activeId],
+        activeTabId: activeId
+      }
+      set({
+        layout: insertSplitAt(removed, paneId, newPane, edge),
+        activePaneId: newPane.id,
+        activeTabId: activeId
+      })
+      return
+    }
+
+    // A single-tab pane keeps its tab and gets a fresh sibling: a duplicate
+    // terminal (new session on the same host) or a blank editor otherwise.
+    const newTab: Tab =
+      activeTab?.kind === 'terminal' && activeTab.hostId
+        ? {
+            id: `terminal-${activeTab.hostId}-${Date.now()}`,
+            kind: 'terminal',
+            title: activeTab.title,
+            hostId: activeTab.hostId
+          }
+        : {
+            id: `editor-blank-${Date.now()}`,
+            kind: 'editor',
+            title: '未命名',
+            editorContent: '',
+            editorLang: 'plaintext'
+          }
+    const newPane: PaneNode = {
+      type: 'pane',
+      id: newId('pane'),
+      tabIds: [newTab.id],
+      activeTabId: newTab.id
+    }
+    set({
+      tabs: [...tabs, newTab],
+      layout: insertSplitAt(layout, paneId, newPane, edge),
+      activePaneId: newPane.id,
+      activeTabId: newTab.id,
+      ...(newTab.kind === 'terminal' ? { lastActiveTerminalId: newTab.id } : {})
     })
   },
 

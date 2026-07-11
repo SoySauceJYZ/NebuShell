@@ -6,7 +6,7 @@
     <title>NebuShell — jiayizhen · MrToken · Nebulaedata</title>
     <meta
       name="description"
-      content="NebuShell by jiayizhen, representing MrToken and Nebulaedata. A Termius-style SSH client with a built-in AI ops agent."
+      content="NebuShell by jiayizhen, representing MrToken and Nebulaedata. A modern SSH client with a built-in AI ops agent."
     />
     <style>
       :root {
@@ -144,6 +144,27 @@
       }
       .btn-ghost:hover {
         background: var(--panel-2);
+      }
+      .lang-toggle {
+        appearance: none;
+        font-family: inherit;
+        cursor: pointer;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .lang-toggle:hover {
+        background: var(--panel-2);
+      }
+      .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
       @media (max-width: 720px) {
         .nav-links {
@@ -407,8 +428,10 @@
 
     <div class="owner-strip">
       <div class="wrap owner-strip-inner">
-        <strong>Creator / Owner: jiayizhen</strong>
-        <span>Companies: <b>MrToken</b> + <b>Nebulaedata</b></span>
+        <strong data-zh="作者 / 所有者：jiayizhen">Creator / Owner: jiayizhen</strong>
+        <span data-zh="公司：<b>MrToken</b> + <b>Nebulaedata</b>"
+          >Companies: <b>MrToken</b> + <b>Nebulaedata</b></span
+        >
       </div>
     </div>
 
@@ -434,10 +457,10 @@
           NebuShell
         </a>
         <div class="nav-links">
-          <a href="#features">Features</a>
-          <a href="#whats-new">What's New</a>
-          <a href="#screenshots">Screenshots</a>
-          <a href="#download">Download</a>
+          <a href="#features" data-zh="功能">Features</a>
+          <a href="#whats-new" data-zh="更新">What's New</a>
+          <a href="#screenshots" data-zh="截图">Screenshots</a>
+          <a href="#download" data-zh="下载">Download</a>
           <a href="https://github.com/SoySauceJYZ/NebuShell" target="_blank" rel="noopener"
             >GitHub</a
           >
@@ -446,23 +469,43 @@
             href="https://github.com/SoySauceJYZ/NebuShell"
             target="_blank"
             rel="noopener"
+            data-zh="★ 收藏"
             >★ Star</a
           >
         </div>
-        <a class="btn btn-primary" href="#download">⬇ Download</a>
+        <div class="nav-right">
+          <button
+            class="lang-toggle"
+            id="langToggle"
+            type="button"
+            aria-label="切换语言 / Toggle language"
+          >
+            中文
+          </button>
+          <a class="btn btn-primary" href="#download" data-zh="⬇ 下载">⬇ Download</a>
+        </div>
       </div>
     </nav>
 
     <header>
       <div class="wrap">
         <div class="owner-hero" aria-label="Project ownership">
-          <span>Creator / Owner <strong>jiayizhen</strong></span>
-          <span>Companies <strong>MrToken</strong> &amp; <strong>Nebulaedata</strong></span>
+          <span data-zh="作者 / 所有者 <strong>jiayizhen</strong>"
+            >Creator / Owner <strong>jiayizhen</strong></span
+          >
+          <span data-zh="公司 <strong>MrToken</strong> 和 <strong>Nebulaedata</strong>"
+            >Companies <strong>MrToken</strong> &amp; <strong>Nebulaedata</strong></span
+          >
         </div>
-        <div class="badge">Powered by <b>MrToken &amp; Nebulaedata</b></div>
-        <h1>Operate Your Servers With An AI Agent</h1>
-        <p class="sub">
-          NebuShell is a Termius-style SSH client with a built-in AI ops agent. Multi-tab terminals,
+        <div class="badge" data-zh="技术支持 <b>MrToken 和 Nebulaedata</b>">
+          Powered by <b>MrToken &amp; Nebulaedata</b>
+        </div>
+        <h1 data-zh="用 AI 智能体运维你的服务器">Operate Your Servers With An AI Agent</h1>
+        <p
+          class="sub"
+          data-zh="NebuShell 是一款现代化的 SSH 客户端，内置 AI 运维智能体。多标签终端、SFTP 与 Monaco 编辑器——智能体先给出方案，你确认后再执行。未经你许可，绝不动你的机器。"
+        >
+          NebuShell is a modern SSH client with a built-in AI ops agent. Multi-tab terminals,
           SFTP, and a Monaco editor — the agent proposes a plan, you confirm, it runs. Nothing
           touches your machines without your say-so.
         </p>
@@ -472,6 +515,7 @@
             href="https://github.com/SoySauceJYZ/NebuShell/releases"
             target="_blank"
             rel="noopener"
+            data-zh="⬇ 下载 Windows 版"
             >⬇ Download for Windows</a
           >
           <a
@@ -479,10 +523,11 @@
             href="https://github.com/SoySauceJYZ/NebuShell"
             target="_blank"
             rel="noopener"
+            data-zh="◇ 在 GitHub 查看"
             >◇ View on GitHub</a
           >
         </div>
-        <div class="alt">Also for macOS · Linux</div>
+        <div class="alt" data-zh="同时支持 macOS · Linux">Also for macOS · Linux</div>
       </div>
     </header>
 
@@ -495,16 +540,16 @@
           role="tab"
           aria-selected="true"
         >
-          Run an ops agent
+          <span data-zh="运行运维智能体">Run an ops agent</span>
         </button>
         <button class="tab" type="button" data-shot-tab="terminal" role="tab" aria-selected="false">
-          Multi-tab terminals
+          <span data-zh="多标签终端">Multi-tab terminals</span>
         </button>
         <button class="tab" type="button" data-shot-tab="sftp" role="tab" aria-selected="false">
-          SFTP &amp; editor
+          <span data-zh="SFTP 与编辑器">SFTP &amp; editor</span>
         </button>
         <button class="tab" type="button" data-shot-tab="vault" role="tab" aria-selected="false">
-          Encrypted vault
+          <span data-zh="加密保险库">Encrypted vault</span>
         </button>
       </div>
 
@@ -516,7 +561,9 @@
                 src="./screenshot-Agent-Plan-3.png"
                 alt="NebuShell AI agent generated K3s execution plan"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>生成执行计划</strong> AI 运维智能体读取终端输出，提出执行计划，并在动你的服务器之前等待明确确认。"
+              >
                 <strong>Generated execution plan</strong>
                 The AI ops agent reads terminal output, proposes an execution plan, and waits for
                 explicit confirmation before touching your server.
@@ -528,7 +575,9 @@
                 alt="NebuShell AI agent asks for confirmation"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>先计划再确认</strong> 智能体可先运行安全检查，并在操作步骤前请求人工确认。"
+              >
                 <strong>Plan and confirm</strong>
                 The agent can run safe checks and ask for human confirmation before operational
                 steps.
@@ -540,7 +589,9 @@
                 alt="NebuShell AI agent summarizes system checks"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>系统检查</strong> 命令结果会在部署操作之前被归纳为可执行的决策。"
+              >
                 <strong>System checks</strong>
                 Command results are summarized into practical decisions before deployment actions.
               </figcaption>
@@ -551,7 +602,9 @@
                 alt="NebuShell AI agent approval mode selector"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>执行模式</strong> 可选择仅计划、需审批、半自动或完全放开等行为模式。"
+              >
                 <strong>Execution modes</strong>
                 Choose plan-only, approval-required, semi-approved, or full-access behavior.
               </figcaption>
@@ -562,7 +615,9 @@
                 alt="NebuShell terminal with AI agent panel"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>智能体工作区</strong> 终端与 AI 运维面板并排显示，智能体持续跟踪会话上下文。"
+              >
                 <strong>Agent workspace</strong>
                 Keep the terminal and AI ops panel side by side while the agent tracks session
                 context.
@@ -574,7 +629,9 @@
                 alt="NebuShell model provider settings"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>模型提供商设置</strong> 配置兼容 MrToken 的模型提供商、Base URL、API Key 和模型名称。"
+              >
                 <strong>Model provider settings</strong>
                 Configure MrToken-compatible model providers, base URLs, API keys, and model names.
               </figcaption>
@@ -590,7 +647,9 @@
                 alt="NebuShell connected SSH terminal"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>SSH 终端</strong> 打开多标签 SSH 终端，显示服务器登录输出，侧边工具常驻。"
+              >
                 <strong>SSH terminal</strong>
                 Open a tabbed SSH terminal with server login output and persistent side tools.
               </figcaption>
@@ -601,7 +660,9 @@
                 alt="NebuShell host list and host details"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>主机管理</strong> 按分组管理主机，查看连接详情，快速连接或打开 SFTP。"
+              >
                 <strong>Host management</strong>
                 Organize hosts by group, inspect connection details, and connect or open SFTP
                 quickly.
@@ -613,7 +674,9 @@
                 alt="Create a new SSH host in NebuShell"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>创建 SSH 主机</strong> 在专注的对话框中填写地址、端口、用户、分组和认证信息。"
+              >
                 <strong>Create SSH hosts</strong>
                 Add address, port, user, group, and authentication details in a focused dialog.
               </figcaption>
@@ -629,7 +692,9 @@
                 alt="NebuShell remote file editor with SFTP panes"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>远程编辑器</strong> 在内置编辑器中打开远程脚本，修改后保存回服务器。"
+              >
                 <strong>Remote editor</strong>
                 Open remote scripts in the built-in editor and save changes back to the server.
               </figcaption>
@@ -640,7 +705,9 @@
                 alt="NebuShell local and remote multi-pane SFTP browser"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>多栏文件管理器</strong> 在一个 SFTP 工作区中同时操作本地文件与多台远程主机。"
+              >
                 <strong>Multi-pane file manager</strong>
                 Work across local files and multiple remote hosts in one SFTP workspace.
               </figcaption>
@@ -651,7 +718,9 @@
                 alt="NebuShell SFTP browser beside terminal"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>SFTP 浏览器</strong> 在活动终端旁浏览远程文件，无需离开 SSH 工作区。"
+              >
                 <strong>SFTP browser</strong>
                 Browse remote files beside the active terminal without leaving the SSH workspace.
               </figcaption>
@@ -667,7 +736,9 @@
                 alt="Create the local encrypted NebuShell vault"
                 loading="lazy"
               />
-              <figcaption>
+              <figcaption
+                data-zh="<strong>加密保险库设置</strong> 在存储主机、密码和密钥之前，先创建本地主密码保险库。"
+              >
                 <strong>Encrypted vault setup</strong>
                 Create the local master-password vault before storing hosts, passwords, and keys.
               </figcaption>
@@ -679,63 +750,74 @@
 
     <section id="features">
       <div class="wrap">
-        <h2 class="sec-title">Everything you need in one terminal</h2>
-        <p class="sec-sub">
+        <h2 class="sec-title" data-zh="一个终端，满足所有需求">
+          Everything you need in one terminal
+        </h2>
+        <p class="sec-sub" data-zh="现代化的 SSH 工作区，让每个会话、每个智能体都持续运转。">
           A modern SSH workspace that keeps every session — and every agent — moving.
         </p>
         <div class="grid">
           <div class="card">
             <div class="ico">🤖</div>
-            <h3>Built-in AI ops agent</h3>
-            <p>
+            <h3 data-zh="内置 AI 运维智能体">Built-in AI ops agent</h3>
+            <p
+              data-zh="兼容 OpenAI 接口的智能体，可执行命令、读取输出、提出问题并给出计划——始终先计划、再确认。"
+            >
               An OpenAI-compatible agent that runs commands, reads output, asks questions, and
               presents plans — always plan-and-confirm.
             </p>
           </div>
           <div class="card">
             <div class="ico">🖥️</div>
-            <h3>Multi-tab terminals</h3>
-            <p>
-              xterm.js terminals with fit, web links, and themes. Split the layout to watch several
-              sessions side by side.
+            <h3 data-zh="多标签终端与分屏">Multi-tab terminals &amp; split view</h3>
+            <p
+              data-zh="基于 xterm.js 的终端，支持自适应、网页链接和主题。可将任意面板向右或向下分屏，并递归继续分屏组成任意网格；可在面板间拖动标签页——拖到边缘新建分屏，拖到中间合并。"
+            >
+              xterm.js terminals with fit, web links, and themes. Split any pane right or down, keep
+              splitting recursively into any grid, and drag tabs between panes — drop on an edge to
+              make a new split, on the center to merge.
             </p>
           </div>
           <div class="card">
             <div class="ico">🔐</div>
-            <h3>Encrypted vault</h3>
-            <p>
+            <h3 data-zh="加密保险库">Encrypted vault</h3>
+            <p data-zh="主机、密码和 SSH 密钥都由主密码保护。你的密钥库永不离开本机。">
               Hosts, passwords, and SSH keys are protected by a master password. Your keychain never
               leaves your machine.
             </p>
           </div>
           <div class="card">
             <div class="ico">📁</div>
-            <h3>SFTP file browser</h3>
-            <p>
+            <h3 data-zh="SFTP 文件浏览器">SFTP file browser</h3>
+            <p data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。">
               Dual-pane remote/local management with drag-and-drop transfers and a live transfer
               queue.
             </p>
           </div>
           <div class="card">
             <div class="ico">📝</div>
-            <h3>Monaco editor</h3>
-            <p>
+            <h3 data-zh="Monaco 编辑器">Monaco editor</h3>
+            <p data-zh="内置 VS Code 编辑器——在标签页内直接编辑远程与本地文件，支持语法高亮。">
               The VS Code editor built in — edit remote and local files with syntax highlighting,
               right inside a tab.
             </p>
           </div>
           <div class="card">
             <div class="ico">📊</div>
-            <h3>System monitor</h3>
-            <p>
+            <h3 data-zh="系统监控">System monitor</h3>
+            <p
+              data-zh="逐核 CPU 实时曲线、内存环形图、网络上下行速率、各挂载点磁盘用量与读写 I/O，以及可搜索、可结束进程的进程管理器。"
+            >
               Per-core CPU with a live sparkline, a memory donut, network up/down rates, per-mount
               disk usage with read/write I/O, and a searchable process manager you can kill from.
             </p>
           </div>
           <div class="card">
             <div class="ico">⌨️</div>
-            <h3>Command history &amp; palette</h3>
-            <p>
+            <h3 data-zh="命令历史与命令面板">Command history &amp; palette</h3>
+            <p
+              data-zh="按服务器持久保存命令历史——标记 User 或 Agent，包含本地历史与服务器自身的 <code>~/.bash_history</code>。三击 Ctrl 打开面板，搜索历史并执行快捷操作；选中的命令会填入输入框而不执行。"
+            >
               Per-server persistent command history — tagged User or Agent, local plus the server's
               own <code>~/.bash_history</code>. Triple-tap Ctrl for a palette that searches history
               and runs quick actions; picks drop into the prompt without executing.
@@ -747,13 +829,30 @@
 
     <section id="whats-new">
       <div class="wrap">
-        <h2 class="sec-title">What's New</h2>
-        <p class="sec-sub">Recent updates — July 2026.</p>
+        <h2 class="sec-title" data-zh="更新内容">What's New</h2>
+        <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🪟</div>
+            <h3 data-zh="可拖动的递归分屏">Draggable, recursive split view</h3>
+            <p
+              data-zh="分屏后还能继续分屏。每个面板的标签条（以及顶栏）新增了向右 / 向下分屏按钮，可对已分出来的面板继续分屏组成任意网格。用鼠标把标签页从一个面板拖到另一个：拖到边缘新建分屏，拖到中间合并进该面板。对单标签的终端面板分屏时会复制会话到新面板，分隔条也有更宽的拖拽热区便于调整大小。（拖拽改用指针实现而非 HTML5 拖放，在应用窗口内更稳定可靠。）"
+            >
+              Split panes now keep splitting. Each pane's tab strip (and the top bar) gains right /
+              down split buttons that work on the panes you already split, so you can build any
+              grid. Drag a tab by mouse from one pane into another — drop on an edge to carve a new
+              split, on the center to merge. Splitting a single-tab terminal pane duplicates the
+              session into the new pane, and the dividers have a wider grab zone for easier
+              resizing. (Dragging is pointer-based rather than HTML5 drag-and-drop, so it works
+              reliably inside the app window.)
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">📜</div>
-            <h3>Persistent command history</h3>
-            <p>
+            <h3 data-zh="持久化命令历史">Persistent command history</h3>
+            <p
+              data-zh="命令按服务器本地保存（重启后仍在），并在该主机的各标签间共享，每条标记 User 或 Agent——含智能体执行的命令。历史面板新增本地 / 服务器分栏，服务器栏读取机器自身的 <code>~/.bash_history</code>。点击即可把命令填入输入框而不执行。"
+            >
               Commands are saved locally per server (surviving restarts) and shared across that
               host's tabs, each tagged User or Agent — agent-run commands included. The history
               panel adds a Local / Server split, the Server tab reading the box's own
@@ -763,8 +862,10 @@
           </div>
           <div class="card">
             <div class="ico">⌨️</div>
-            <h3>Triple-Ctrl command palette</h3>
-            <p>
+            <h3 data-zh="三击 Ctrl 命令面板">Triple-Ctrl command palette</h3>
+            <p
+              data-zh="在终端中连按三次 Ctrl 弹出分页面板——搜索合并后的本地 + 服务器历史，或执行快捷操作。Tab/Shift+Tab 切换分页，↑/↓ + Enter 选择，选中的命令会填入输入框，绝不自动执行。"
+            >
               Tap Ctrl three times in a terminal to pop a tabbed palette — search merged local +
               server history, or fire quick actions. Tab/Shift+Tab switch tabs, ↑/↓ + Enter pick,
               and the chosen command is inserted into the prompt, never auto-run.
@@ -772,8 +873,10 @@
           </div>
           <div class="card">
             <div class="ico">🛡️</div>
-            <h3>Agent terminal anti-jam</h3>
-            <p>
+            <h3 data-zh="智能体终端防卡死">Agent terminal anti-jam</h3>
+            <p
+              data-zh="智能体不再被阻塞命令（<code>tail -f</code>、<code>top</code>、交互式提示）卡住。它会探测 shell 是否处于提示符，并运行恢复阶梯（Ctrl-C → Ctrl-Z + <code>kill</code> → 退出分页/编辑器）夺回提示符，并报告清晰的 <em>已中断 / 卡住</em> 状态，而不是悄无声息地超时。"
+            >
               The agent no longer hangs on blocking commands (<code>tail -f</code>,
               <code>top</code>, interactive prompts). It probes whether the shell is at a prompt and
               runs a recovery ladder (Ctrl-C → Ctrl-Z + <code>kill</code> → pager/editor exit) to
@@ -783,8 +886,10 @@
           </div>
           <div class="card">
             <div class="ico">📊</div>
-            <h3>Rich system monitor</h3>
-            <p>
+            <h3 data-zh="丰富的系统监控">Rich system monitor</h3>
+            <p
+              data-zh="监控面板现在展示系统信息、逐核 CPU 实时曲线、内存环形图（已用/缓存/空闲）、网络上下行速率与累计流量、各挂载点磁盘用量与读写 I/O，以及支持结束 / 强制结束的进程管理器——全部随主题适配。"
+            >
               The monitor panel now shows system info, per-core CPU with a live sparkline, a memory
               donut (used/cache/free), network up/down rates &amp; totals, per-mount disk usage with
               read/write I/O, and a process manager with kill / force-kill — all theme-aware.
@@ -792,8 +897,10 @@
           </div>
           <div class="card">
             <div class="ico">⚡</div>
-            <h3>Faster SFTP transfers</h3>
-            <p>
+            <h3 data-zh="更快的 SFTP 传输">Faster SFTP transfers</h3>
+            <p
+              data-zh="本地↔远程传输改用并发 <code>fastPut</code> / <code>fastGet</code>，跑满高延迟链路，而不再每次往返只传 32&nbsp;KB。大文件传输显著提速。"
+            >
               Local↔remote transfers now use concurrent <code>fastPut</code> / <code>fastGet</code>,
               saturating high-latency links instead of one 32&nbsp;KB chunk per round-trip. Large
               files move dramatically faster.
@@ -801,48 +908,52 @@
           </div>
           <div class="card">
             <div class="ico">📈</div>
-            <h3>Transfer speed &amp; ETA</h3>
-            <p>
+            <h3 data-zh="传输速度与预计剩余时间">Transfer speed &amp; ETA</h3>
+            <p data-zh="传输界面显示实时吞吐（MB/s）和预计剩余时间——不再只有百分比。">
               The transfer UI shows live throughput (MB/s) and estimated time remaining — not just a
               percentage.
             </p>
           </div>
           <div class="card">
             <div class="ico">🗂️</div>
-            <h3>Per-window transfer records</h3>
-            <p>
+            <h3 data-zh="按窗口分组的传输记录">Per-window transfer records</h3>
+            <p
+              data-zh="传输按发起它的窗口分组，收进可折叠的停靠栏；已完成的会作为可浏览的历史保留，直到你清除。"
+            >
               Transfers are grouped by the window that started them into a collapsible dock;
               finished ones stay as browsable history until you clear them.
             </p>
           </div>
           <div class="card">
             <div class="ico">⚠️</div>
-            <h3>Close-tab protection</h3>
-            <p>
+            <h3 data-zh="关闭标签保护">Close-tab protection</h3>
+            <p data-zh="关闭仍在传输的标签页时会先确认，因为关闭会断开 SFTP 连接。">
               Closing a tab with an in-progress transfer now asks for confirmation, since closing
               tears down the SFTP connection.
             </p>
           </div>
           <div class="card">
             <div class="ico">📊</div>
-            <h3>Side-panel SFTP progress</h3>
-            <p>
+            <h3 data-zh="侧栏 SFTP 进度">Side-panel SFTP progress</h3>
+            <p data-zh="内嵌的 SFTP 面板同样显示传输进度，工具栏上传按钮支持多选并带进度条。">
               The embedded SFTP panel shows transfer progress too, and the toolbar upload button
               supports multi-select with a progress bar.
             </p>
           </div>
           <div class="card">
             <div class="ico">⚙️</div>
-            <h3>Configurable concurrency</h3>
-            <p>
+            <h3 data-zh="可配置并发数">Configurable concurrency</h3>
+            <p data-zh="新增设置页可调节 SFTP 传输并发数（默认 64，范围 1–256），并会持久保存。">
               A new Settings page tunes SFTP transfer concurrency (default 64, range 1–256), and the
               value is persisted.
             </p>
           </div>
           <div class="card">
             <div class="ico">🎨</div>
-            <h3>Terminal color fix</h3>
-            <p>
+            <h3 data-zh="终端颜色修复">Terminal color fix</h3>
+            <p
+              data-zh="内置主题现在提供完整的 16 色 ANSI 调色板，修复了浅色主题下彩色（尤其是白色）文字不可见的问题。"
+            >
               Built-in themes now ship full 16-color ANSI palettes, fixing colored (especially
               white) text that was invisible on the light theme.
             </p>
@@ -854,8 +965,11 @@
     <section id="download">
       <div class="wrap">
         <div class="final">
-          <h2 class="sec-title">Ship faster from your terminal</h2>
-          <p class="sec-sub">
+          <h2 class="sec-title" data-zh="从终端更快地交付">Ship faster from your terminal</h2>
+          <p
+            class="sec-sub"
+            data-zh="基于 MIT 许可开源免费。下载对应平台版本，几秒内连接你的第一台主机。"
+          >
             Free and open source under the MIT license. Download for your platform and connect your
             first host in seconds.
           </p>
@@ -865,6 +979,7 @@
               href="https://github.com/SoySauceJYZ/NebuShell/releases"
               target="_blank"
               rel="noopener"
+              data-zh="⬇ 下载 Windows 版"
               >⬇ Download for Windows</a
             >
             <a
@@ -872,18 +987,24 @@
               href="https://github.com/SoySauceJYZ/NebuShell"
               target="_blank"
               rel="noopener"
+              data-zh="◇ 在 GitHub 查看"
               >◇ View on GitHub</a
             >
           </div>
-          <div class="alt">macOS (.dmg) · Linux (AppImage / snap / deb)</div>
+          <div class="alt" data-zh="macOS（.dmg） · Linux（AppImage / snap / deb）">
+            macOS (.dmg) · Linux (AppImage / snap / deb)
+          </div>
         </div>
       </div>
     </section>
 
     <footer>
       <div class="wrap foot-inner">
-        <span>© 2026 NebuShell · jiayizhen · MIT License</span>
+        <span data-zh="© 2026 NebuShell · jiayizhen · MIT 许可">
+          © 2026 NebuShell · jiayizhen · MIT License
+        </span>
         <span
+          data-zh="技术支持 <strong style='color: var(--muted)'>MrToken</strong> 和 <strong style='color: var(--muted)'>Nebulaedata</strong>"
           >Powered by <strong style="color: var(--muted)">MrToken</strong> &amp;
           <strong style="color: var(--muted)">Nebulaedata</strong></span
         >
@@ -912,6 +1033,40 @@
     </footer>
 
     <script>
+      // ===== Language toggle (EN / 中文) =====
+      // Each translatable element carries a data-zh attribute with its Chinese
+      // HTML; the original English is captured into data-en on first switch.
+      ;(function () {
+        const KEY = 'nebushell-lang'
+        const toggle = document.getElementById('langToggle')
+
+        function apply(lang) {
+          document.querySelectorAll('[data-zh]').forEach((el) => {
+            if (el.dataset.en == null) el.dataset.en = el.innerHTML
+            el.innerHTML = lang === 'zh' ? el.dataset.zh : el.dataset.en
+          })
+          document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+          if (toggle) toggle.textContent = lang === 'zh' ? 'EN' : '中文'
+          try {
+            localStorage.setItem(KEY, lang)
+          } catch (e) {}
+        }
+
+        let stored = null
+        try {
+          stored = localStorage.getItem(KEY)
+        } catch (e) {}
+        const initial =
+          stored || ((navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en')
+        apply(initial)
+
+        if (toggle) {
+          toggle.addEventListener('click', () => {
+            apply(document.documentElement.lang.indexOf('zh') === 0 ? 'en' : 'zh')
+          })
+        }
+      })()
+
       document.querySelectorAll('[data-shot-tab]').forEach((tab) => {
         tab.addEventListener('click', () => {
           const target = tab.dataset.shotTab

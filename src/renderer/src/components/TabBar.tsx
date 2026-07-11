@@ -1,10 +1,20 @@
 import { Fragment } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { Server, FileText, X, Plus, Copy, RotateCw } from 'lucide-react'
+import {
+  Server,
+  FileText,
+  X,
+  Plus,
+  Copy,
+  RotateCw,
+  SplitSquareHorizontal,
+  SplitSquareVertical
+} from 'lucide-react'
 import { useSessionStore, type Tab } from '../store/useSessionStore'
 import { KIND_ICON } from '../lib/tabIcons'
 import { requestCloseTab } from '../lib/requestCloseTab'
+import { startTabDrag } from '../lib/tabDrag'
 import { WindowControls } from './WindowControls'
 import appIcon from '../assets/app-icon.png'
 
@@ -12,7 +22,8 @@ const isMac = window.electron.process.platform === 'darwin'
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export function TabBar(): React.ReactElement {
-  const { tabs, activeTabId, layout, setActiveTab, openTab, setDraggingTab } = useSessionStore()
+  const { tabs, activeTabId, layout, activePaneId, setActiveTab, openTab, splitPane } =
+    useSessionStore()
   // When the view is split, each pane renders its own strip, so the top bar
   // only keeps window chrome + the new-tab button.
   const isSplit = layout.type !== 'pane'
@@ -62,19 +73,15 @@ export function TabBar(): React.ReactElement {
             const Icon = KIND_ICON[tab.kind]
             const tabInner = (
               <div
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/x-tab', tab.id)
-                  e.dataTransfer.effectAllowed = 'move'
-                  setDraggingTab(tab.id)
-                }}
-                onDragEnd={() => setDraggingTab(null)}
-                onClick={() => setActiveTab(tab.id)}
                 onMouseDown={(e) => {
                   if (e.button === 1) {
                     e.preventDefault()
                     void requestCloseTab(tab.id)
+                    return
                   }
+                  if (e.button !== 0) return
+                  setActiveTab(tab.id)
+                  startTabDrag(tab.id, e.clientX, e.clientY)
                 }}
                 style={noDrag}
                 className={`group flex h-full min-w-[130px] max-w-[210px] cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition ${
@@ -87,6 +94,7 @@ export function TabBar(): React.ReactElement {
                 <span className="flex-1 truncate">{tab.title}</span>
                 {tab.id !== 'hosts' && (
                   <button
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation()
                       void requestCloseTab(tab.id)
@@ -175,6 +183,24 @@ export function TabBar(): React.ReactElement {
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
+
+        {/* Split the active pane. */}
+        <button
+          style={noDrag}
+          title="向右分屏"
+          onClick={() => splitPane(activePaneId, 'right')}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] hover:text-[var(--text-dark)]"
+        >
+          <SplitSquareHorizontal size={16} strokeWidth={1.75} />
+        </button>
+        <button
+          style={noDrag}
+          title="向下分屏"
+          onClick={() => splitPane(activePaneId, 'bottom')}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] hover:text-[var(--text-dark)]"
+        >
+          <SplitSquareVertical size={16} strokeWidth={1.75} />
+        </button>
       </div>
       <div className="w-1 shrink-0" />
       <WindowControls />

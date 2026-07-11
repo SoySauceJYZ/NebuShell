@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore } from '../store/useSessionStore'
 import {
   computeRects,
@@ -11,6 +11,7 @@ import {
   type Rect,
   type SplitterRect
 } from '../lib/layoutTree'
+import { TAB_DRAG_START, type TabDragStartDetail } from '../lib/tabDrag'
 import { TabContent } from './TabContent'
 import { PaneTabStrip } from './PaneTabStrip'
 
@@ -26,14 +27,13 @@ export function SplitLayout(): React.ReactElement {
   const activePaneId = useSessionStore((s) => s.activePaneId)
   const draggingTabId = useSessionStore((s) => s.draggingTabId)
   const setActivePane = useSessionStore((s) => s.setActivePane)
-  const setDraggingTab = useSessionStore((s) => s.setDraggingTab)
   const setSplitSizes = useSessionStore((s) => s.setSplitSizes)
-  const moveTabToEdge = useSessionStore((s) => s.moveTabToEdge)
-  const moveTabToPane = useSessionStore((s) => s.moveTabToPane)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [dropTarget, setDropTarget] = useState<{ paneId: string; edge: Edge } | null>(null)
+  // Latest pane geometry, read by the pointer-drag handlers below.
+  const panesRef = useRef<PaneRect[]>([])
 
   useLayoutEffect(() => {
     const el = containerRef.current
@@ -58,61 +58,98 @@ export function SplitLayout(): React.ReactElement {
     for (const pr of panes) for (const tabId of pr.pane.tabIds) m.set(tabId, pr)
     return m
   }, [panes])
+  useEffect(() => {
+    panesRef.current = panes
+  }, [panes])
 
-  const onSplitterDown = (s: SplitterRect) => (e: React.MouseEvent): void => {
-    e.preventDefault()
-    const splitRect = splitRects.get(s.splitId)
-    const node = findSplit(layout, s.splitId)
-    if (!splitRect || !node) return
-    const horizontal = s.direction === 'row'
-    const startPos = horizontal ? e.clientX : e.clientY
-    const startSizes = [...node.sizes]
-    const sum = startSizes.reduce((a, b) => a + b, 0)
-    const avail = (horizontal ? splitRect.width : splitRect.height) - SPLITTER * (node.children.length - 1)
+  const onSplitterDown =
+    (s: SplitterRect) =>
+    (e: React.MouseEvent): void => {
+      e.preventDefault()
+      const splitRect = splitRects.get(s.splitId)
+      const node = findSplit(layout, s.splitId)
+      if (!splitRect || !node) return
+      const horizontal = s.direction === 'row'
+      const startPos = horizontal ? e.clientX : e.clientY
+      const startSizes = [...node.sizes]
+      const sum = startSizes.reduce((a, b) => a + b, 0)
+      const avail =
+        (horizontal ? splitRect.width : splitRect.height) - SPLITTER * (node.children.length - 1)
 
-    const onMove = (ev: MouseEvent): void => {
-      const pos = horizontal ? ev.clientX : ev.clientY
-      const dw = ((pos - startPos) / avail) * sum
-      const sizes = startSizes.map((v, i) =>
-        i === s.index ? Math.max(0.1, v + dw) : i === s.index + 1 ? Math.max(0.1, v - dw) : v
+      const onMove = (ev: MouseEvent): void => {
+        const pos = horizontal ? ev.clientX : ev.clientY
+        const dw = ((pos - startPos) / avail) * sum
+        const sizes = startSizes.map((v, i) =>
+          i === s.index ? Math.max(0.1, v + dw) : i === s.index + 1 ? Math.max(0.1, v - dw) : v
+        )
+        setSplitSizes(s.splitId, sizes)
+      }
+      const onUp = (): void => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+
+  // Pointer-based tab dragging. A strip fires TAB_DRAG_START on mouse-down; we
+  // then track the pointer directly (capture phase, so a terminal underneath
+  // can't swallow the events) and drop the tab into whatever pane/edge it lands.
+  useEffect(() => {
+    const targetAt = (clientX: number, clientY: number): { paneId: string; edge: Edge } | null => {
+      const cont = containerRef.current?.getBoundingClientRect()
+      if (!cont) return null
+      const x = clientX - cont.left
+      const y = clientY - cont.top
+      const pr = panesRef.current.find(
+        (p) =>
+          x >= p.paneRect.left &&
+          x <= p.paneRect.left + p.paneRect.width &&
+          y >= p.paneRect.top &&
+          y <= p.paneRect.top + p.paneRect.height
       )
-      setSplitSizes(s.splitId, sizes)
+      return pr ? { paneId: pr.pane.id, edge: edgeAt(pr.paneRect, x, y) } : null
     }
-    const onUp = (): void => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
 
-  const onOverlayDragOver = (e: React.DragEvent): void => {
-    if (!draggingTabId) return
-    e.preventDefault()
-    const cont = containerRef.current?.getBoundingClientRect()
-    if (!cont) return
-    const x = e.clientX - cont.left
-    const y = e.clientY - cont.top
-    const pr = panes.find(
-      (p) =>
-        x >= p.paneRect.left &&
-        x <= p.paneRect.left + p.paneRect.width &&
-        y >= p.paneRect.top &&
-        y <= p.paneRect.top + p.paneRect.height
-    )
-    setDropTarget(pr ? { paneId: pr.pane.id, edge: edgeAt(pr.paneRect, x, y) } : null)
-  }
+    const onStart = (ev: Event): void => {
+      const { tabId, clientX, clientY } = (ev as CustomEvent<TabDragStartDetail>).detail
+      let active = false
 
-  const onOverlayDrop = (e: React.DragEvent): void => {
-    e.preventDefault()
-    const tabId = draggingTabId || e.dataTransfer.getData('text/x-tab')
-    if (tabId && dropTarget) {
-      if (dropTarget.edge === 'center') moveTabToPane(tabId, dropTarget.paneId)
-      else moveTabToEdge(tabId, dropTarget.paneId, dropTarget.edge)
+      const onMove = (m: MouseEvent): void => {
+        if (!active) {
+          // Ignore tiny movements so a plain click still just selects the tab.
+          if (Math.abs(m.clientX - clientX) + Math.abs(m.clientY - clientY) < 5) return
+          active = true
+          useSessionStore.getState().setDraggingTab(tabId)
+          document.body.style.userSelect = 'none'
+          document.body.style.cursor = 'grabbing'
+        }
+        setDropTarget(targetAt(m.clientX, m.clientY))
+      }
+
+      const onUp = (m: MouseEvent): void => {
+        window.removeEventListener('mousemove', onMove, true)
+        window.removeEventListener('mouseup', onUp, true)
+        setDropTarget(null)
+        if (!active) return
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        const store = useSessionStore.getState()
+        const target = targetAt(m.clientX, m.clientY)
+        if (target) {
+          if (target.edge === 'center') store.moveTabToPane(tabId, target.paneId)
+          else store.moveTabToEdge(tabId, target.paneId, target.edge)
+        }
+        store.setDraggingTab(null)
+      }
+
+      window.addEventListener('mousemove', onMove, true)
+      window.addEventListener('mouseup', onUp, true)
     }
-    setDropTarget(null)
-    setDraggingTab(null)
-  }
+
+    window.addEventListener(TAB_DRAG_START, onStart)
+    return () => window.removeEventListener(TAB_DRAG_START, onStart)
+  }, [])
 
   const indicator = (() => {
     if (!dropTarget) return null
@@ -152,35 +189,47 @@ export function SplitLayout(): React.ReactElement {
         )
       })}
 
-      {/* Split handles. */}
-      {splitters.map((s) => (
-        <div
-          key={`${s.splitId}-${s.index}`}
-          style={box(s.rect)}
-          onMouseDown={onSplitterDown(s)}
-          className={`z-30 ${
-            s.direction === 'row' ? 'cursor-col-resize' : 'cursor-row-resize'
-          } bg-[var(--panel-border)] hover:bg-[var(--accent)]`}
-        />
-      ))}
-
-      {/* Drop overlay shown only while a tab is being dragged. */}
-      {draggingTabId && (
-        <div
-          className="absolute inset-0 z-[60]"
-          onDragOver={onOverlayDragOver}
-          onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null)
-          }}
-          onDrop={onOverlayDrop}
-        >
-          {indicator && (
+      {/* Split handles: a wide transparent grab zone around a thin visible line. */}
+      {splitters.map((s) => {
+        const row = s.direction === 'row'
+        const pad = 4
+        const hit: Rect = row
+          ? {
+              left: s.rect.left - pad,
+              top: s.rect.top,
+              width: s.rect.width + pad * 2,
+              height: s.rect.height
+            }
+          : {
+              left: s.rect.left,
+              top: s.rect.top - pad,
+              width: s.rect.width,
+              height: s.rect.height + pad * 2
+            }
+        return (
+          <div
+            key={`${s.splitId}-${s.index}`}
+            style={box(hit)}
+            onMouseDown={onSplitterDown(s)}
+            className={`group z-30 flex ${
+              row ? 'cursor-col-resize justify-center' : 'cursor-row-resize flex-col justify-center'
+            }`}
+          >
             <div
-              style={box(indicator)}
-              className="pointer-events-none border-2 border-[var(--accent)] bg-[var(--accent)]/20"
+              className={`${
+                row ? 'h-full w-1' : 'h-1 w-full'
+              } bg-[var(--panel-border)] group-hover:bg-[var(--accent)]`}
             />
-          )}
-        </div>
+          </div>
+        )
+      })}
+
+      {/* Drop indicator shown while a tab is being dragged. */}
+      {draggingTabId && indicator && (
+        <div
+          style={box(indicator)}
+          className="pointer-events-none z-[60] border-2 border-[var(--accent)] bg-[var(--accent)]/20"
+        />
       )}
     </div>
   )
