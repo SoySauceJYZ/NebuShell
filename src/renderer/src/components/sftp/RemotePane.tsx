@@ -3,6 +3,7 @@ import {
   ArrowUp,
   Upload,
   FolderPlus,
+  FilePlus,
   RefreshCw,
   Maximize2,
   Download,
@@ -16,7 +17,7 @@ import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { remoteParent } from '../../lib/pathUtils'
-import { FileTable, type FileEntry, type MenuAction } from './FileTable'
+import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { usePromptModal } from './PromptModal'
 import type { SftpListEntry } from '@shared/types'
 
@@ -156,13 +157,37 @@ export function RemotePane({
   const handleMkdir = async (): Promise<void> => {
     const name = await ask('新建文件夹', '新建文件夹')
     if (!name) return
+    if (entries.some((e) => e.name === name)) {
+      setNavError(`“${name}” 已存在`)
+      return
+    }
     try {
       await window.api.sftp.mkdir(sessionId, remoteJoin(path, name))
       await load(path)
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err))
+      setNavError(err instanceof Error ? err.message : String(err))
     }
   }
+
+  const handleCreateFile = async (): Promise<void> => {
+    const name = await ask('新建文件', 'untitled.txt')
+    if (!name) return
+    if (entries.some((e) => e.name === name)) {
+      setNavError(`“${name}” 已存在`)
+      return
+    }
+    try {
+      await window.api.sftp.writeFile(sessionId, remoteJoin(path, name), '')
+      await load(path)
+    } catch (err) {
+      setNavError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const emptyMenuActions: EmptyMenuAction[] = [
+    { label: '新建文件', icon: FilePlus, onSelect: handleCreateFile },
+    { label: '新建文件夹', icon: FolderPlus, onSelect: handleMkdir }
+  ]
 
   const downloadTo = async (entry: FileEntry): Promise<void> => {
     const dir = await window.api.local.pickDir()
@@ -254,6 +279,9 @@ export function RemotePane({
           title="输入路径后回车跳转"
           className="min-w-0 flex-1 rounded-lg bg-[var(--content-bg)] px-3 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
+        <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+          <FilePlus size={14} />
+        </button>
         <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">
           <FolderPlus size={14} />
         </button>
@@ -279,6 +307,7 @@ export function RemotePane({
         dnd={dnd}
         menuActions={menuActions}
         dragOut={dragOut}
+        emptyMenuActions={emptyMenuActions}
       />
       {promptNode}
     </div>

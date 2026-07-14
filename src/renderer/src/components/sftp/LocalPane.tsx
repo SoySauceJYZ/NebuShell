@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowUp, FolderPlus, RefreshCw, HardDrive, Pencil, Trash2 } from 'lucide-react'
+import { ArrowUp, FolderPlus, FilePlus, RefreshCw, HardDrive, Pencil, Trash2 } from 'lucide-react'
 import { useSessionStore } from '../../store/useSessionStore'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { localParent, localJoin } from '../../lib/pathUtils'
-import { FileTable, type FileEntry, type MenuAction } from './FileTable'
+import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { usePromptModal } from './PromptModal'
 import type { LocalListEntry } from '@shared/types'
 
@@ -103,6 +103,10 @@ export function LocalPane({
   const handleMkdir = async (): Promise<void> => {
     const name = await ask('新建文件夹', '新建文件夹')
     if (!name) return
+    if (entries.some((e) => e.name === name)) {
+      setErrorMsg(`“${name}” 已存在`)
+      return
+    }
     try {
       await window.api.local.mkdir(localJoin(cwd, name))
       await load(cwd)
@@ -110,6 +114,26 @@ export function LocalPane({
       setErrorMsg(err instanceof Error ? err.message : String(err))
     }
   }
+
+  const handleCreateFile = async (): Promise<void> => {
+    const name = await ask('新建文件', 'untitled.txt')
+    if (!name) return
+    if (entries.some((e) => e.name === name)) {
+      setErrorMsg(`“${name}” 已存在`)
+      return
+    }
+    try {
+      await window.api.local.writeFile(localJoin(cwd, name), '')
+      await load(cwd)
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const emptyMenuActions: EmptyMenuAction[] = [
+    { label: '新建文件', icon: FilePlus, onSelect: handleCreateFile },
+    { label: '新建文件夹', icon: FolderPlus, onSelect: handleMkdir }
+  ]
 
   const rename = async (entry: FileEntry): Promise<void> => {
     const name = await ask('重命名', entry.name)
@@ -188,6 +212,9 @@ export function LocalPane({
           title="输入路径后回车跳转"
           className="min-w-0 flex-1 rounded-lg bg-[var(--content-bg)] px-3 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
+        <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+          <FilePlus size={14} />
+        </button>
         <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">
           <FolderPlus size={14} />
         </button>
@@ -199,7 +226,13 @@ export function LocalPane({
         </div>
       )}
 
-      <FileTable entries={entries} onOpen={onOpen} dnd={dnd} menuActions={menuActions} />
+      <FileTable
+        entries={entries}
+        onOpen={onOpen}
+        dnd={dnd}
+        menuActions={menuActions}
+        emptyMenuActions={emptyMenuActions}
+      />
       {promptNode}
     </div>
   )

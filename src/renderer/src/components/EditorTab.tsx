@@ -97,6 +97,8 @@ export function EditorTab({
   const isSftp = !!(sftpSessionId && remotePath && fileKey)
   const isLocal = !!localPath
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  // Always points at the latest save() so the Monaco Ctrl+S command isn't stale.
+  const saveRef = useRef<() => void>(() => {})
   const [language, setLanguage] = useState(
     initialLang || (isSftp || isLocal ? guessLanguage(fileName) : 'plaintext')
   )
@@ -173,8 +175,12 @@ export function EditorTab({
     }
   }, [isLocal, localPath])
 
-  const handleMount: OnMount = (ed) => {
+  const handleMount: OnMount = (ed, monaco) => {
     editorRef.current = ed
+    // Ctrl/Cmd+S saves (to the server for remote files) instead of the browser default.
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      saveRef.current()
+    })
   }
 
   const currentText = (): string => editorRef.current?.getValue() ?? value
@@ -202,6 +208,7 @@ export function EditorTab({
   }
 
   const save = async (): Promise<void> => {
+    if (loading) return
     if (isSftp) {
       const ok = await window.api.dialog.confirm({
         message: `是否将修改保存到服务器?`,
@@ -241,6 +248,11 @@ export function EditorTab({
       window.setTimeout(() => setSaved(false), 1500)
     }
   }
+
+  // Keep the Ctrl+S command bound to the current save() closure.
+  useEffect(() => {
+    saveRef.current = save
+  })
 
   const versionOptions = [
     { value: SERVER_VERSION, label: '服务器当前版本' },

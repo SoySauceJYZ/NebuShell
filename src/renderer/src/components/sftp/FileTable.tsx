@@ -26,6 +26,13 @@ export interface MenuAction {
   separatorBefore?: boolean
 }
 
+/** Action shown when right-clicking empty space (no row under the cursor). */
+export interface EmptyMenuAction {
+  label: string
+  icon: typeof Folder
+  onSelect: () => void
+}
+
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i
 
 type SortKey = 'name' | 'size' | 'modifyTime'
@@ -43,7 +50,8 @@ export function FileTable({
   onOpen,
   dnd,
   menuActions,
-  dragOut
+  dragOut,
+  emptyMenuActions
 }: {
   entries: FileEntry[]
   onOpen: (entry: FileEntry) => void
@@ -51,6 +59,8 @@ export function FileTable({
   menuActions: (entry: FileEntry) => MenuAction[]
   /** Return a native drag-out handler for this entry, or null if not draggable-out. */
   dragOut?: (entry: FileEntry) => (() => void) | null
+  /** Actions offered when right-clicking blank space in the list. */
+  emptyMenuActions?: EmptyMenuAction[]
 }): React.ReactElement {
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -100,7 +110,7 @@ export function FileTable({
     </th>
   )
 
-  return (
+  const list = (
     <div
       className={`flex-1 overflow-y-auto transition-colors ${
         dnd.isDragOver ? 'bg-[var(--accent)]/5 ring-2 ring-inset ring-[var(--accent)]' : ''
@@ -128,6 +138,7 @@ export function FileTable({
                     title={entry.type === 'directory' ? '双击进入目录' : '双击打开'}
                     className="group cursor-default border-t border-[var(--panel-border)] hover:bg-gray-50"
                     onDoubleClick={() => onOpen(entry)}
+                    onContextMenu={(e) => e.stopPropagation()}
                   >
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
@@ -179,7 +190,9 @@ export function FileTable({
                           <action.icon
                             size={15}
                             strokeWidth={1.75}
-                            className={action.danger ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}
+                            className={
+                              action.danger ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'
+                            }
                           />
                           {action.label}
                         </ContextMenu.Item>
@@ -200,5 +213,26 @@ export function FileTable({
         </tbody>
       </table>
     </div>
+  )
+
+  if (!emptyMenuActions || emptyMenuActions.length === 0) return list
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>{list}</ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className="z-[70] min-w-[180px] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-lg">
+          {emptyMenuActions.map((action) => (
+            <ContextMenu.Item
+              key={action.label}
+              onSelect={() => action.onSelect()}
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
+            >
+              <action.icon size={15} strokeWidth={1.75} className="text-[var(--text-muted)]" />
+              {action.label}
+            </ContextMenu.Item>
+          ))}
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   )
 }
