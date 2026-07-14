@@ -789,17 +789,21 @@
           <div class="card">
             <div class="ico">📁</div>
             <h3 data-zh="SFTP 文件浏览器">SFTP file browser</h3>
-            <p data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。">
+            <p
+              data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。可从工具栏或右键空白处新建文件 / 文件夹。"
+            >
               Dual-pane remote/local management with drag-and-drop transfers and a live transfer
-              queue.
+              queue. Create files and folders from the toolbar or by right-clicking blank space.
             </p>
           </div>
           <div class="card">
             <div class="ico">📝</div>
             <h3 data-zh="Monaco 编辑器">Monaco editor</h3>
-            <p data-zh="内置 VS Code 编辑器——在标签页内直接编辑远程与本地文件，支持语法高亮。">
+            <p
+              data-zh="内置 VS Code 编辑器——在标签页内直接编辑远程与本地文件，支持语法高亮。打开服务器文件后按 Ctrl+S 即可直接保存回服务器。"
+            >
               The VS Code editor built in — edit remote and local files with syntax highlighting,
-              right inside a tab.
+              right inside a tab. Ctrl+S saves a remote file straight back to the server.
             </p>
           </div>
           <div class="card">
@@ -832,6 +836,52 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🗃️</div>
+            <h3 data-zh="SFTP 新建文件与文件夹">Create files &amp; folders in SFTP</h3>
+            <p
+              data-zh="文件列表在「新建文件夹」旁边新增了「新建文件」按钮，右键空白处（包括空目录）也会弹出「新建文件 / 新建文件夹」菜单。右键文件行仍然是原来的菜单（打开 / 下载 / 重命名 / 删除），两者互不冲突。远程和本地两个面板都会先查重名，所以新建文件绝不会把同名文件清空。"
+            >
+              The file listing gains a New file button next to New folder, and right-clicking blank
+              space (including an empty directory) offers New file / New folder. Right-clicking a
+              file still shows its own menu (open / download / rename / delete), so the two never
+              collide. Both panes check for a name clash first, so creating a file can never blank
+              out an existing one.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">💾</div>
+            <h3 data-zh="Ctrl+S 保存到服务器">Ctrl+S saves to the server</h3>
+            <p
+              data-zh="在编辑器里打开服务器文件后，按 Ctrl/Cmd+S 就会通过 SFTP 直接保存回服务器，并存一个历史版本，效果与点「保存到服务器」按钮完全一致。文件还在加载时会阻止保存，避免把占位文本覆盖到你的文件上。"
+            >
+              With a remote file open in the editor, Ctrl/Cmd+S now saves it straight back over SFTP
+              and snapshots a history version, exactly like the save button. Saving is blocked while
+              the file is still loading, so a placeholder can never overwrite your file.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🧾</div>
+            <h3 data-zh="提示符不再贴底">Breathing room under the prompt</h3>
+            <p
+              data-zh="终端底部现在会保留两行空白，命令提示符不再紧贴窗口边缘。留白是按「行」而不是像素预留的，所以任何字号下间距都正确，并且在窗口缩放、分屏、改字号时都会重新生效。"
+            >
+              The terminal now reserves two blank rows at the bottom, so the prompt no longer sits
+              flush against the window edge. It is reserved in rows, not pixels, so the gap stays
+              correct at any font size and is reapplied on resize, split, and font changes.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📋</div>
+            <h3 data-zh="修复 Ctrl+Shift+V 重复粘贴">Ctrl+Shift+V no longer pastes twice</h3>
+            <p
+              data-zh="终端的粘贴快捷键现在会调用 preventDefault()，阻止浏览器原生的「粘贴为纯文本」在我们自己的粘贴之外再粘一次。Ctrl+Shift+C 也做了同样处理。"
+            >
+              The terminal's paste shortcut now calls preventDefault(), stopping the browser's
+              native paste-as-plain-text from firing on top of our own paste handler. Ctrl+Shift+C
+              got the same treatment.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🪟</div>
             <h3 data-zh="可拖动的递归分屏">Draggable, recursive split view</h3>

@@ -50,8 +50,8 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 🖥️ **Multi‑tab terminals & flexible split view** — xterm.js terminals with a fit addon, web links, and per‑theme styling. Split any pane **right or down** from the tab‑strip buttons, keep splitting the split‑out panes **recursively** into any grid, **drag tabs** between panes (drop on an edge to make a new split, on the center to merge), and drag the dividers to resize.
 - 🤖 **Built‑in AI ops agent** — an OpenAI‑compatible agent that can `run_command`, `read_command_output`, `ask_user`, and `present_plan`. It proposes a plan, asks for confirmation, then executes across one or many terminals.
 - 🔐 **Encrypted vault** — hosts, passwords, and SSH keys are protected behind a master password; the keychain never leaves your machine.
-- 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue.
-- 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting.
+- 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing.
+- 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting. **Ctrl+S** saves a remote file straight back to the server (and snapshots a history version).
 - 🖼️ **Image preview** — open remote images directly in a tab.
 - 🗂️ **Host management** — organize connections, duplicate sessions, reconnect, and jump between them from the tab bar.
 - ⌨️ **Command history & command palette** — every command you type is saved locally per server (tagged **User** / **Agent**) and shared across that host's tabs; a history panel splits **Local** vs the server's own `~/.bash_history`. Triple‑tap **Ctrl** to open a tabbed palette that searches history and runs quick actions — picking a command drops it into the prompt **without executing**.
@@ -63,6 +63,10 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 **Recent updates (July 2026)**
 
+- 🗃️ **Create files & folders in SFTP** — the file listing gains a **New file** button next to **New folder**, and **right‑clicking blank space** (including an empty directory) offers **新建文件 / 新建文件夹**. Right‑clicking a file still shows its own menu (open / download / rename / delete), so the two never collide. Both panes (remote and local) check for a name clash first, so creating a file can never blank out an existing one.
+- 💾 **Ctrl+S saves to the server** — with a remote file open in the editor, **Ctrl/Cmd+S** now saves it straight back over SFTP and snapshots a history version, exactly like the **保存到服务器** button. Saving is blocked while the file is still loading, so a placeholder can never overwrite your file.
+- 🧾 **Breathing room under the prompt** — the terminal now reserves **two blank rows** at the bottom, so the prompt no longer sits flush against the window edge. It is reserved in *rows*, not pixels, so the gap stays correct at any font size and is reapplied on resize, split, and font changes.
+- 📋 **Ctrl+Shift+V no longer pastes twice** — the terminal's paste shortcut now calls `preventDefault()`, stopping the browser's native "paste as plain text" from firing on top of our own paste handler. (Ctrl+Shift+C got the same treatment.)
 - 🪟 **Draggable, recursive split view** — split panes now keep splitting. Each pane's tab strip (and the top bar) gains **向右分屏 / 向下分屏** buttons that split a pane **right or down** — including the panes you already split, so you can build any grid. **Drag a tab** by mouse from one pane into another: drop on an **edge** to carve out a new split, or on the **center** to merge it into that pane. Splitting a single‑tab terminal pane duplicates the session into the new pane, and the dividers have a wider grab zone for easier resizing. (Dragging is pointer‑based rather than HTML5 drag‑and‑drop, so it works reliably inside the app window.)
 - 📜 **Persistent command history** — commands you type are now saved **locally per server** (surviving restarts) and shared across every tab of that host, each tagged **User** or **Agent** — agent‑run commands are captured too, not just what you type. The history panel gains a **Local / Server** split, where the Server tab reads the box's own `~/.bash_history` / `~/.zsh_history`. Click any command to drop it into the input line **without running it**, delete single entries, or clear a server's history.
 - ⌨️ **Triple‑Ctrl command palette** — tap **Ctrl three times** in a terminal to pop a tabbed palette: **历史记录 (History)** searches your merged local + server history, **快捷操作 (Quick actions)** fires common actions. **Tab / Shift+Tab** switch tabs, **↑/↓ + Enter** pick, and the chosen command is inserted into the prompt (never auto‑run).
@@ -200,8 +204,8 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 🖥️ **多标签终端与灵活分屏** —— 基于 xterm.js,支持自适应、网页链接识别和主题化。可在标签条上点击**向右/向下分屏**,并对分出来的屏**递归继续分屏**组成任意网格;支持**拖动标签页**在各屏之间移动(拖到边缘新建分屏,拖到中间合并到该屏),分隔条可拖动调整大小。
 - 🤖 **内置 AI 运维智能体** —— 兼容 OpenAI 接口,支持 `run_command`(执行命令)、`read_command_output`(读取输出)、`ask_user`(向你提问)、`present_plan`(给出计划)。先出方案、征得确认,再在一个或多个终端上执行。
 - 🔐 **加密保险库** —— 主机、密码和 SSH 密钥都由主密码保护,密钥库永不离开本机。
-- 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。
-- 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。
+- 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**。
+- 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。打开服务器文件后按 **Ctrl+S** 即可直接保存回服务器(并自动存一个历史版本)。
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
 - 🗂️ **主机管理** —— 整理连接、复制会话、一键重连,并可在标签栏之间快速切换。
 - ⌨️ **命令历史与命令面板** —— 你输入的每条命令都会**按服务器本地持久化**(标记 **User / Agent**),并在该主机的所有标签页间共享;历史面板分「**本地 / 服务器**」两个子标签,服务器标签直接读取机器自身的 `~/.bash_history`。在终端里**连按三次 Ctrl** 可呼出分标签命令面板,搜索历史或执行快捷操作——选中的命令只**填入输入行、不自动执行**。

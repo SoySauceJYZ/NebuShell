@@ -20,6 +20,21 @@ function truncateTitle(text: string): string {
   return firstLine.length > 24 ? firstLine.slice(0, 24) + '…' : firstLine
 }
 
+/** Blank rows kept under the prompt so it never sits flush against the bottom edge. */
+const BOTTOM_GAP_ROWS = 2
+
+/**
+ * Size the grid to the container, minus a couple of rows. FitAddon on its own
+ * fills the container edge to edge, which puts the prompt right on the bottom.
+ */
+function fitWithBottomGap(term: Terminal, fit: FitAddon): void {
+  const dims = fit.proposeDimensions()
+  if (!dims || !Number.isFinite(dims.rows) || !Number.isFinite(dims.cols)) return
+  const cols = Math.max(1, dims.cols)
+  const rows = Math.max(1, dims.rows - BOTTOM_GAP_ROWS)
+  if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows)
+}
+
 type Status = 'connecting' | 'connected' | 'error' | 'closed'
 
 export function TerminalTab({
@@ -70,7 +85,7 @@ export function TerminalTab({
         reconnectingRef.current = false
         setStatus('connected')
         try {
-          fitRef.current?.fit()
+          if (fitRef.current) fitWithBottomGap(term, fitRef.current)
           window.api.ssh.resize(sessionId, term.cols, term.rows)
         } catch {
           // ignore
@@ -102,7 +117,7 @@ export function TerminalTab({
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
-    fitAddon.fit()
+    fitWithBottomGap(term, fitAddon)
     termRef.current = term
     fitRef.current = fitAddon
 
@@ -147,7 +162,7 @@ export function TerminalTab({
 
     const resizeObserver = new ResizeObserver(() => {
       try {
-        fitAddon.fit()
+        fitWithBottomGap(term, fitAddon)
         window.api.ssh.resize(sessionId, term.cols, term.rows)
       } catch {
         // ignore resize race during teardown
@@ -167,11 +182,16 @@ export function TerminalTab({
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && e.ctrlKey && e.shiftKey) {
+        // preventDefault matters: returning false only stops xterm from handling the
+        // key, the browser would still run its native Ctrl+Shift+V paste into xterm's
+        // textarea — pasting a second time.
         if (e.code === 'KeyV') {
+          e.preventDefault()
           paste()
           return false
         }
         if (e.code === 'KeyC') {
+          e.preventDefault()
           const selection = term.getSelection()
           if (selection) window.api.clipboard.writeText(selection)
           return false
@@ -250,7 +270,7 @@ export function TerminalTab({
     if (!term) return
     term.options.fontSize = fontSize
     try {
-      fitRef.current?.fit()
+      if (fitRef.current) fitWithBottomGap(term, fitRef.current)
       window.api.ssh.resize(sessionId, term.cols, term.rows)
     } catch {
       // ignore fit race during teardown
