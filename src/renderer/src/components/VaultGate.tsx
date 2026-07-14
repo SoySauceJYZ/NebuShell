@@ -3,15 +3,31 @@ import { useVaultStore } from '../store/useVaultStore'
 import appIcon from '../assets/app-icon.png'
 
 export function VaultGate({ children }: { children: React.ReactNode }): React.ReactElement {
-  const { initialized, unlocked, checkStatus, createVault, unlock } = useVaultStore()
+  const { initialized, unlocked, checkStatus, createVault, unlock, setTrusted } = useVaultStore()
   const [checked, setChecked] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [trustDevice, setTrustDevice] = useState(false)
+  const [trustSupported, setTrustSupported] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    checkStatus().finally(() => setChecked(true))
+    window.api.vault.isTrustSupported().then(setTrustSupported)
+  }, [])
+
+  // On launch, silently try the password this device remembers before showing
+  // the form. Runs once: a later manual lock should still ask for the password.
+  useEffect(() => {
+    void (async () => {
+      try {
+        await checkStatus()
+        const s = useVaultStore.getState()
+        if (s.initialized && !s.unlocked && s.trusted) await s.unlockTrusted()
+      } finally {
+        setChecked(true)
+      }
+    })()
   }, [checkStatus])
 
   if (!checked) {
@@ -42,18 +58,28 @@ export function VaultGate({ children }: { children: React.ReactNode }): React.Re
         await createVault(password)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
-      } finally {
         setBusy(false)
+        return
       }
     } else {
       setBusy(true)
       try {
         await unlock(password)
-      } catch (err) {
+      } catch {
         setError('密码错误,请重试')
-      } finally {
         setBusy(false)
+        return
       }
+    }
+
+    // The vault is open at this point; a failure to remember the password must
+    // not be reported as a failed unlock.
+    try {
+      if (trustDevice) await setTrusted(true)
+    } catch (err) {
+      console.warn('无法信任此设备:', err)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -100,6 +126,26 @@ export function VaultGate({ children }: { children: React.ReactNode }): React.Re
             />
           </>
         )}
+
+        <label
+          className={`mb-4 flex items-start gap-2 ${trustSupported ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+        >
+          <input
+            type="checkbox"
+            checked={trustDevice}
+            disabled={!trustSupported}
+            onChange={(e) => setTrustDevice(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+          />
+          <span className="text-xs leading-relaxed text-[var(--text-muted)]">
+            <span className="text-[var(--text-dark)]">信任此设备</span>
+            <span className="ml-1">
+              {trustSupported
+                ? '下次打开将自动解锁,无需输入主密码。主密码会用系统凭据存储加密后保存在本机。'
+                : '当前系统不支持安全存储,无法使用此功能。'}
+            </span>
+          </span>
+        </label>
 
         {error && <div className="mb-3 text-sm text-[var(--danger)]">{error}</div>}
 

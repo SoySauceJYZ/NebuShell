@@ -23,7 +23,8 @@ import {
   CircleHelp,
   ClipboardList,
   Square,
-  Gauge
+  Gauge,
+  ImagePlus
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
@@ -43,6 +44,12 @@ import {
   guessContextWindow,
   formatTokens
 } from '../lib/contextUsage'
+import {
+  fileToDataUrl,
+  imageFilesFrom,
+  imageFilesFromClipboard,
+  MAX_ATTACHED_IMAGES
+} from '../lib/images'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import type { ToolCall, LlmSettingsPublic, AgentConversationMeta } from '@shared/types'
 
@@ -145,8 +152,13 @@ export function AgentPanel({
   const [settings, setSettings] = useState<LlmSettingsPublic | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [input, setInput] = useState('')
+  const [images, setImages] = useState<string[]>([])
+  const [imageError, setImageError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
   const [convs, setConvs] = useState<AgentConversationMeta[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const loadConvs = (): void => {
     window.api.agentChat.list(hostId).then(setConvs)
@@ -222,21 +234,40 @@ export function AgentPanel({
   const resultFor = (id: string): string | undefined =>
     session.messages.find((m) => m.role === 'tool' && m.tool_call_id === id)?.content
 
+  const addImages = async (files: File[]): Promise<void> => {
+    if (files.length === 0) return
+    setImageError('')
+    const room = MAX_ATTACHED_IMAGES - images.length
+    if (room <= 0) {
+      setImageError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
+      return
+    }
+    try {
+      const urls = await Promise.all(files.slice(0, room).map(fileToDataUrl))
+      setImages((prev) => [...prev, ...urls])
+      if (files.length > room) setImageError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const handleSend = (): void => {
     const text = input.trim()
-    if (!text || session.status !== 'idle') return
+    if ((!text && images.length === 0) || session.status !== 'idle') return
     if (!configured) {
       setShowSettings(true)
       return
     }
     setInput('')
-    send(sessionId, text)
+    setImages([])
+    setImageError('')
+    send(sessionId, text, images)
   }
 
-  // Re-ask: resend an earlier user message as a new turn.
-  const reAsk = (text: string): void => {
+  // Re-ask: resend an earlier user message (with its images) as a new turn.
+  const reAsk = (text: string, imgs?: string[]): void => {
     if (session.status !== 'idle' || !configured) return
-    send(sessionId, text)
+    send(sessionId, text, imgs)
   }
 
   return (
@@ -353,9 +384,24 @@ export function AgentPanel({
             if (m.role === 'user') {
               return (
                 <div key={i} className="group flex flex-col items-end">
-                  <div className="selectable max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
-                    {m.content}
-                  </div>
+                  {m.images?.length ? (
+                    <div className="mb-1 flex max-w-[88%] flex-wrap justify-end gap-1.5">
+                      {m.images.map((src, k) => (
+                        <img
+                          key={k}
+                          src={src}
+                          alt=""
+                          onClick={() => setPreview(src)}
+                          className="max-h-32 cursor-zoom-in rounded-lg border border-[var(--panel-border)] object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {m.content && (
+                    <div className="selectable max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
+                      {m.content}
+                    </div>
+                  )}
                   <div className="mt-0.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
                     <MsgAction
                       icon={Copy}
@@ -366,7 +412,7 @@ export function AgentPanel({
                       icon={RotateCcw}
                       title="重问"
                       disabled={session.status !== 'idle'}
-                      onClick={() => reAsk(m.content)}
+                      onClick={() => reAsk(m.content, m.images)}
                     />
                   </div>
                 </div>
@@ -458,10 +504,59 @@ export function AgentPanel({
 
       {/* Claude-style input box: textarea + bottom toolbar (mode + model + send) */}
       <div className="shrink-0 p-2">
-        <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] focus-within:border-[var(--accent)]">
+        <div
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+              e.preventDefault()
+              setDragOver(true)
+            }
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            const files = imageFilesFrom(e.dataTransfer)
+            if (files.length === 0) return
+            e.preventDefault()
+            setDragOver(false)
+            void addImages(files)
+          }}
+          className={`rounded-xl border bg-[var(--panel-bg)] focus-within:border-[var(--accent)] ${
+            dragOver
+              ? 'border-[var(--accent)] bg-[var(--accent-soft)]/30'
+              : 'border-[var(--panel-border)]'
+          }`}
+        >
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-2 pt-2">
+              {images.map((src, i) => (
+                <div key={i} className="group/img relative">
+                  <img
+                    src={src}
+                    alt=""
+                    onClick={() => setPreview(src)}
+                    className="h-14 w-14 cursor-zoom-in rounded-lg border border-[var(--panel-border)] object-cover"
+                  />
+                  <button
+                    onClick={() => setImages((prev) => prev.filter((_, k) => k !== i))}
+                    title="移除"
+                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--danger)] text-white opacity-0 transition group-hover/img:opacity-100"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {imageError && <div className="px-3 pt-2 text-xs text-[var(--danger)]">{imageError}</div>}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              const files = imageFilesFromClipboard(e.clipboardData)
+              if (files.length === 0) return
+              // 剪贴板里同时带图和 HTML 时,阻止浏览器再把图片的 <img> 标签粘成文字。
+              e.preventDefault()
+              void addImages(files)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -469,11 +564,31 @@ export function AgentPanel({
               }
             }}
             rows={2}
-            placeholder={session.status === 'idle' ? '输入消息…' : '处理中…'}
+            placeholder={session.status === 'idle' ? '输入消息…(可粘贴 / 拖入图片)' : '处理中…'}
             disabled={session.status !== 'idle'}
             className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none"
           />
           <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                void addImages(Array.from(e.target.files ?? []))
+                e.target.value = ''
+              }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={session.status !== 'idle'}
+              title="添加图片"
+              className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)] disabled:opacity-40"
+            >
+              <ImagePlus size={13} className="text-[var(--accent)]" />
+              图片
+            </button>
             <ModeSelector mode={mode} onChange={setMode} />
             <ModelSelector
               settings={settings}
@@ -505,7 +620,7 @@ export function AgentPanel({
             ) : (
               <button
                 onClick={handleSend}
-                disabled={session.status !== 'idle' || !input.trim()}
+                disabled={session.status !== 'idle' || (!input.trim() && images.length === 0)}
                 className="btn-primary h-8 w-8 shrink-0 !p-0 disabled:opacity-40"
                 title="发送"
               >
@@ -515,6 +630,15 @@ export function AgentPanel({
           </div>
         </div>
       </div>
+
+      {preview && (
+        <div
+          onClick={() => setPreview(null)}
+          className="fixed inset-0 z-[80] flex cursor-zoom-out items-center justify-center bg-black/70 p-8"
+        >
+          <img src={preview} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+        </div>
+      )}
 
       {showSettings && (
         <AgentSettingsModal onClose={() => setShowSettings(false)} onSaved={loadSettings} />

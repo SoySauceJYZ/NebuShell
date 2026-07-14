@@ -96,6 +96,12 @@ export interface ChatMessage {
   content: string
   tool_calls?: ToolCall[]
   tool_call_id?: string
+  /**
+   * Images attached to a user message, as `data:image/...;base64,...` URLs. Kept
+   * beside `content` so every consumer can keep treating content as plain text;
+   * LlmClient folds them into OpenAI multimodal parts on the way out.
+   */
+  images?: string[]
 }
 
 // tool/function definition sent to the LLM (OpenAI format)

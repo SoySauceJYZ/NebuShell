@@ -57,7 +57,8 @@ interface AgentStore {
   bindHost: (sessionId: string, hostId: string) => void
   newConversation: (sessionId: string) => void
   openConversation: (sessionId: string, convId: string) => Promise<void>
-  send: (sessionId: string, text: string) => void
+  /** `images` are data URLs attached to the user message (vision models only). */
+  send: (sessionId: string, text: string, images?: string[]) => void
   resolveCall: (sessionId: string, call: ToolCall, approve: boolean) => void
   /** Answer an ask_user question tool call, then continue the conversation. */
   answerQuestion: (sessionId: string, call: ToolCall, answer: string) => void
@@ -99,7 +100,9 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     const msgs = cur(id).messages
     if (!hostId || !convId || msgs.length === 0) return
     const firstUser = msgs.find((m) => m.role === 'user')
-    const title = (firstUser?.content ?? '新会话').split('\n')[0].slice(0, 30)
+    const titleSource =
+      firstUser?.content?.trim() || (firstUser?.images?.length ? '[图片]' : '新会话')
+    const title = titleSource.split('\n')[0].slice(0, 30)
     void window.api.agentChat.save(hostId, convId, title, msgs)
   }
 
@@ -371,7 +374,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       }))
     },
 
-    send: (id, text) => {
+    send: (id, text, images) => {
       if (cur(id).status !== 'idle') return
       stopped[id] = false
       if (!get().convBySession[id]) {
@@ -379,7 +382,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           convBySession: { ...state.convBySession, [id]: crypto.randomUUID() }
         }))
       }
-      pushMsgs(id, [{ role: 'user', content: text }])
+      pushMsgs(id, [{ role: 'user', content: text, ...(images?.length ? { images } : {}) }])
       void runTurn(id)
     },
 

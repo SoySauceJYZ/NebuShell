@@ -4,12 +4,16 @@ import type { Host, Group, Credential, VaultImportResult } from '@shared/types'
 interface VaultState {
   unlocked: boolean
   initialized: boolean
+  trusted: boolean
   hosts: Host[]
   groups: Group[]
   credentials: Credential[]
   checkStatus: () => Promise<void>
   createVault: (password: string) => Promise<void>
   unlock: (password: string) => Promise<void>
+  /** Try the remembered master password. Resolves to true when the vault got unlocked. */
+  unlockTrusted: () => Promise<boolean>
+  setTrusted: (trusted: boolean) => Promise<void>
   lock: () => Promise<void>
   refresh: () => Promise<void>
 
@@ -33,6 +37,7 @@ interface VaultState {
 export const useVaultStore = create<VaultState>((set, get) => ({
   unlocked: false,
   initialized: false,
+  trusted: false,
   hosts: [],
   groups: [],
   credentials: [],
@@ -40,7 +45,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   checkStatus: async () => {
     const initialized = await window.api.vault.isInitialized()
     const unlocked = await window.api.vault.isUnlocked()
-    set({ initialized, unlocked })
+    const trusted = await window.api.vault.isTrusted()
+    set({ initialized, unlocked, trusted })
     if (unlocked) await get().refresh()
   },
 
@@ -52,6 +58,21 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   unlock: async (password) => {
     const data = await window.api.vault.unlock(password)
     set({ unlocked: true, ...data })
+  },
+
+  unlockTrusted: async () => {
+    const data = await window.api.vault.unlockTrusted()
+    if (!data) {
+      set({ trusted: false })
+      return false
+    }
+    set({ unlocked: true, trusted: true, ...data })
+    return true
+  },
+
+  setTrusted: async (trusted) => {
+    const now = await window.api.vault.setTrusted(trusted)
+    set({ trusted: now })
   },
 
   lock: async () => {

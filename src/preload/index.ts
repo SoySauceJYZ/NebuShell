@@ -4,6 +4,7 @@ import type {
   Host,
   Group,
   Credential,
+  VaultData,
   VaultImportResult,
   SshConnectOptions,
   SftpListEntry,
@@ -54,6 +55,12 @@ const api = {
     unlock: (masterPassword: string) => ipcRenderer.invoke('vault:unlock', masterPassword),
     lock: () => ipcRenderer.invoke('vault:lock'),
     getData: () => ipcRenderer.invoke('vault:getData'),
+
+    isTrusted: (): Promise<boolean> => ipcRenderer.invoke('vault:isTrusted'),
+    isTrustSupported: (): Promise<boolean> => ipcRenderer.invoke('vault:isTrustSupported'),
+    unlockTrusted: (): Promise<VaultData | null> => ipcRenderer.invoke('vault:unlockTrusted'),
+    setTrusted: (trusted: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('vault:setTrusted', trusted),
 
     addHost: (host: Omit<Host, 'id'>): Promise<Host> => ipcRenderer.invoke('vault:host:add', host),
     updateHost: (id: string, patch: Partial<Host>): Promise<Host> =>

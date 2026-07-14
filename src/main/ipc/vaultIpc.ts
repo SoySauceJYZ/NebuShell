@@ -21,6 +21,22 @@ export function registerVaultIpc(): void {
     vaultManager.lock()
   })
 
+  ipcMain.handle('vault:isTrusted', () => vaultManager.isTrusted())
+  ipcMain.handle('vault:isTrustSupported', () => vaultManager.isTrustSupported())
+
+  // Auto-unlock at startup. Returns null when this device isn't trusted (or the
+  // stored password no longer works), which means the gate must ask for one.
+  ipcMain.handle('vault:unlockTrusted', () => {
+    if (!vaultManager.unlockWithTrust()) return null
+    return vaultManager.getData()
+  })
+
+  ipcMain.handle('vault:setTrusted', (_e, trusted: boolean) => {
+    if (trusted) vaultManager.trustDevice()
+    else vaultManager.revokeTrust()
+    return vaultManager.isTrusted()
+  })
+
   ipcMain.handle('vault:getData', () => vaultManager.getData())
 
   ipcMain.handle('vault:host:add', (_e, host: Omit<Host, 'id'>) => vaultManager.addHost(host))

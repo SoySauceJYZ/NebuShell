@@ -48,8 +48,8 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 ### Features
 
 - 🖥️ **Multi‑tab terminals & flexible split view** — xterm.js terminals with a fit addon, web links, and per‑theme styling. Split any pane **right or down** from the tab‑strip buttons, keep splitting the split‑out panes **recursively** into any grid, **drag tabs** between panes (drop on an edge to make a new split, on the center to merge), and drag the dividers to resize.
-- 🤖 **Built‑in AI ops agent** — an OpenAI‑compatible agent that can `run_command`, `read_command_output`, `ask_user`, and `present_plan`. It proposes a plan, asks for confirmation, then executes across one or many terminals.
-- 🔐 **Encrypted vault** — hosts, passwords, and SSH keys are protected behind a master password; the keychain never leaves your machine.
+- 🤖 **Built‑in AI ops agent** — an OpenAI‑compatible agent that can `run_command`, `read_command_output`, `ask_user`, and `present_plan`. It proposes a plan, asks for confirmation, then executes across one or many terminals. **Send it images** too — paste a screenshot, pick a file, or drag one into the composer.
+- 🔐 **Encrypted vault** — hosts, passwords, and SSH keys are protected behind a master password; the keychain never leaves your machine. **Trust this device** to skip the password on future launches.
 - 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing.
 - 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting. **Ctrl+S** saves a remote file straight back to the server (and snapshots a history version).
 - 🖼️ **Image preview** — open remote images directly in a tab.
@@ -63,9 +63,11 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 **Recent updates (July 2026)**
 
+- 🖼️ **Send images to the agent** — the agent composer now takes images three ways: **paste** a screenshot straight into the input (`Ctrl+V`), pick files from the new **image button**, or **drag and drop** them onto the box. Thumbnails sit above the input (click to zoom, × to remove), up to 6 per message. Screenshots are **downscaled to 1568px** before sending, so a 4K grab doesn't balloon the request or eat your context window — and the context meter counts the images too. Works with any vision-capable OpenAI-compatible model.
+- 🔓 **Trust this device** — the master-password screen gains a **信任此设备** checkbox. Tick it and the next launch unlocks the vault automatically, straight to the main window. The password is sealed with the **OS credential store** (DPAPI on Windows, Keychain on macOS) — never written in plaintext — and the trust record is dropped automatically if it stops working. Turn it back off any time from **Settings**; systems without a credential store disable the option rather than fall back to storing the password in the clear.
 - 🗃️ **Create files & folders in SFTP** — the file listing gains a **New file** button next to **New folder**, and **right‑clicking blank space** (including an empty directory) offers **新建文件 / 新建文件夹**. Right‑clicking a file still shows its own menu (open / download / rename / delete), so the two never collide. Both panes (remote and local) check for a name clash first, so creating a file can never blank out an existing one.
 - 💾 **Ctrl+S saves to the server** — with a remote file open in the editor, **Ctrl/Cmd+S** now saves it straight back over SFTP and snapshots a history version, exactly like the **保存到服务器** button. Saving is blocked while the file is still loading, so a placeholder can never overwrite your file.
-- 🧾 **Breathing room under the prompt** — the terminal now reserves **two blank rows** at the bottom, so the prompt no longer sits flush against the window edge. It is reserved in *rows*, not pixels, so the gap stays correct at any font size and is reapplied on resize, split, and font changes.
+- 🧾 **Breathing room under the prompt** — the terminal now reserves **two blank rows** at the bottom, so the prompt no longer sits flush against the window edge. It is reserved in _rows_, not pixels, so the gap stays correct at any font size and is reapplied on resize, split, and font changes.
 - 📋 **Ctrl+Shift+V no longer pastes twice** — the terminal's paste shortcut now calls `preventDefault()`, stopping the browser's native "paste as plain text" from firing on top of our own paste handler. (Ctrl+Shift+C got the same treatment.)
 - 🪟 **Draggable, recursive split view** — split panes now keep splitting. Each pane's tab strip (and the top bar) gains **向右分屏 / 向下分屏** buttons that split a pane **right or down** — including the panes you already split, so you can build any grid. **Drag a tab** by mouse from one pane into another: drop on an **edge** to carve out a new split, or on the **center** to merge it into that pane. Splitting a single‑tab terminal pane duplicates the session into the new pane, and the dividers have a wider grab zone for easier resizing. (Dragging is pointer‑based rather than HTML5 drag‑and‑drop, so it works reliably inside the app window.)
 - 📜 **Persistent command history** — commands you type are now saved **locally per server** (surviving restarts) and shared across every tab of that host, each tagged **User** or **Agent** — agent‑run commands are captured too, not just what you type. The history panel gains a **Local / Server** split, where the Server tab reads the box's own `~/.bash_history` / `~/.zsh_history`. Click any command to drop it into the input line **without running it**, delete single entries, or clear a server's history.
@@ -202,8 +204,8 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 ### 功能特性
 
 - 🖥️ **多标签终端与灵活分屏** —— 基于 xterm.js,支持自适应、网页链接识别和主题化。可在标签条上点击**向右/向下分屏**,并对分出来的屏**递归继续分屏**组成任意网格;支持**拖动标签页**在各屏之间移动(拖到边缘新建分屏,拖到中间合并到该屏),分隔条可拖动调整大小。
-- 🤖 **内置 AI 运维智能体** —— 兼容 OpenAI 接口,支持 `run_command`(执行命令)、`read_command_output`(读取输出)、`ask_user`(向你提问)、`present_plan`(给出计划)。先出方案、征得确认,再在一个或多个终端上执行。
-- 🔐 **加密保险库** —— 主机、密码和 SSH 密钥都由主密码保护,密钥库永不离开本机。
+- 🤖 **内置 AI 运维智能体** —— 兼容 OpenAI 接口,支持 `run_command`(执行命令)、`read_command_output`(读取输出)、`ask_user`(向你提问)、`present_plan`(给出计划)。先出方案、征得确认,再在一个或多个终端上执行。还可以**给它发图片**——截图直接粘贴、选择文件,或拖进输入框。
+- 🔐 **加密保险库** —— 主机、密码和 SSH 密钥都由主密码保护,密钥库永不离开本机。可勾选「**信任此设备**」,下次打开免输主密码。
 - 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**。
 - 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。打开服务器文件后按 **Ctrl+S** 即可直接保存回服务器(并自动存一个历史版本)。
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
@@ -217,6 +219,8 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 **近期更新(2026 年 7 月)**
 
+- 🖼️ **给智能体发图片** —— 智能体输入框现在支持三种加图方式:截图**直接粘贴**(`Ctrl+V`)、点新增的「**图片**」按钮选择文件、或把图片**拖进输入框**。缩略图排在输入框上方(点击放大,× 移除),单条消息最多 6 张。图片发送前会**按最长边缩到 1568px**,4K 截图不会把请求体撑爆、也不会吃光上下文——上下文用量表也会把图片算进去。任何支持视觉的 OpenAI 兼容模型都能用。
+- 🔓 **信任此设备** —— 主密码界面新增「**信任此设备**」勾选框。勾上之后,下次打开应用会自动解锁保险库,直接进主界面。主密码用**操作系统凭据存储**加密保存(Windows DPAPI / macOS 钥匙串),**绝不明文落盘**;万一记录失效(比如保险库被重建),会自动清掉并退回手输密码,不会卡死。随时可在「**设置**」里关掉。系统若不支持安全存储,该选项会被禁用,而不是退化成明文保存密码。
 - 🗃️ **SFTP 新建文件与文件夹** —— 文件列表在「新建文件夹」旁边新增了「**新建文件**」按钮,**右键空白处**(包括空目录)也会弹出「**新建文件 / 新建文件夹**」菜单。右键文件行仍然是原来的菜单(打开 / 下载 / 重命名 / 删除),两者互不冲突。远程和本地两个面板都会**先查重名**,所以新建文件绝不会把同名文件清空。
 - 💾 **Ctrl+S 保存到服务器** —— 在编辑器里打开服务器文件后,按 **Ctrl/Cmd+S** 就会通过 SFTP 直接保存回服务器,并存一个历史版本,效果与点「保存到服务器」按钮完全一致。文件还在加载时会阻止保存,避免把占位文本覆盖到你的文件上。
 - 🧾 **提示符不再贴底** —— 终端底部现在会保留**两行空白**,命令提示符不再紧贴窗口边缘。留白是按「**行**」而不是像素预留的,所以任何字号下间距都正确,并且在窗口缩放、分屏、改字号时都会重新生效。

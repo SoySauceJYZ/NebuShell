@@ -1,6 +1,6 @@
-import { app } from 'electron'
+import { app, safeStorage } from 'electron'
 import { randomUUID, randomBytes, scryptSync, createCipheriv, createDecipheriv } from 'crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join, dirname } from 'path'
 import type {
   VaultData,
@@ -48,11 +48,15 @@ function emptyVaultData(): VaultData {
 
 export class VaultManager {
   private filePath: string
+  private trustPath: string
   private key: Buffer | null = null
   private data: VaultData | null = null
+  /** Kept only while unlocked, so "trust this device" can re-encrypt it on demand. */
+  private masterPassword: string | null = null
 
   constructor() {
     this.filePath = join(app.getPath('userData'), 'vault.dat')
+    this.trustPath = join(app.getPath('userData'), 'trusted-device.dat')
   }
 
   isInitialized(): boolean {
@@ -71,6 +75,7 @@ export class VaultManager {
     const key = scryptSync(masterPassword, salt, SCRYPT_KEYLEN, SCRYPT_OPTS)
     this.key = key
     this.data = emptyVaultData()
+    this.masterPassword = masterPassword
     this.persist(salt)
   }
 
@@ -96,11 +101,65 @@ export class VaultManager {
 
     this.key = key
     this.data = JSON.parse(plaintext.toString('utf8'))
+    this.masterPassword = masterPassword
   }
 
   lock(): void {
     this.key = null
     this.data = null
+    this.masterPassword = null
+  }
+
+  // Trusted device: remember the master password under OS-level encryption
+  // (DPAPI on Windows, Keychain on macOS, libsecret on Linux) so the next
+  // launch can unlock without a prompt.
+
+  /** False on systems without an OS credential store (e.g. Linux with no keyring). */
+  isTrustSupported(): boolean {
+    return safeStorage.isEncryptionAvailable()
+  }
+
+  isTrusted(): boolean {
+    return this.isTrustSupported() && existsSync(this.trustPath)
+  }
+
+  /** Store the current master password for this device. Requires an unlocked vault. */
+  trustDevice(): void {
+    this.assertUnlocked()
+    if (!this.isTrustSupported()) {
+      throw new Error('当前系统不支持安全存储,无法信任此设备')
+    }
+    const blob = safeStorage.encryptString(this.masterPassword as string)
+    mkdirSync(dirname(this.trustPath), { recursive: true })
+    writeFileSync(this.trustPath, blob)
+  }
+
+  revokeTrust(): void {
+    rmSync(this.trustPath, { force: true })
+  }
+
+  /**
+   * Unlock using the remembered password. Returns false (and drops the stale
+   * record) when there is nothing usable to unlock with — e.g. the vault was
+   * recreated with a different password, or the blob can no longer be decrypted
+   * because the OS credential changed.
+   */
+  unlockWithTrust(): boolean {
+    if (!this.isInitialized() || !this.isTrusted()) return false
+    let password: string
+    try {
+      password = safeStorage.decryptString(readFileSync(this.trustPath))
+    } catch {
+      this.revokeTrust()
+      return false
+    }
+    try {
+      this.unlock(password)
+    } catch {
+      this.revokeTrust()
+      return false
+    }
+    return true
   }
 
   getData(): VaultData {

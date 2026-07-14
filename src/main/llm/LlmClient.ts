@@ -19,6 +19,33 @@ interface StreamingToolCall {
   args: string
 }
 
+type ApiMessage =
+  | Omit<ChatMessage, 'images'>
+  | (Omit<ChatMessage, 'content' | 'images'> & {
+      content: (
+        { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
+      )[]
+    })
+
+/**
+ * Fold attached images into OpenAI's multimodal content array. Messages without
+ * images are passed through unchanged (a plain string content), which keeps
+ * providers that don't do vision happy.
+ */
+function toApiMessages(messages: ChatMessage[]): ApiMessage[] {
+  return messages.map((m) => {
+    const { images, ...rest } = m
+    if (!images?.length) return rest
+    return {
+      ...rest,
+      content: [
+        ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+        ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))
+      ]
+    }
+  })
+}
+
 /**
  * Performs one streaming OpenAI-compatible chat completion. Text deltas are forwarded
  * to the renderer as they arrive; on completion the assembled assistant message
@@ -68,7 +95,7 @@ export async function streamChat(
       },
       body: JSON.stringify({
         model: cfg.model,
-        messages,
+        messages: toApiMessages(messages),
         tools: tools.length ? tools : undefined,
         tool_choice: tools.length ? 'auto' : undefined,
         stream: true
