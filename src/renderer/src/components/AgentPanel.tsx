@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
@@ -1067,6 +1067,41 @@ function MsgAction({
   )
 }
 
+function nodeToText(node: React.ReactNode): string {
+  if (node == null || node === false || node === true) return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeToText).join('')
+  if (isValidElement(node)) {
+    return nodeToText((node.props as { children?: React.ReactNode }).children)
+  }
+  return ''
+}
+
+function CodeBlock({ children }: { children?: React.ReactNode }): React.ReactElement {
+  const [copied, setCopied] = useState(false)
+  const copy = (): void => {
+    window.api.clipboard.writeText(nodeToText(children))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div className="group relative my-2">
+      <button
+        type="button"
+        onClick={copy}
+        title={copied ? '已复制' : '复制'}
+        className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md bg-white/10 px-1.5 py-1 text-[11px] text-[#d4d4d4] opacity-0 transition hover:bg-white/20 group-hover:opacity-100"
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? '已复制' : '复制'}
+      </button>
+      <pre className="overflow-x-auto rounded-lg bg-[#0f1117] p-3 text-[0.82em] leading-relaxed text-[#d4d4d4]">
+        {children}
+      </pre>
+    </div>
+  )
+}
+
 function Markdown({ text }: { text: string }): React.ReactElement {
   return (
     <div className="selectable max-w-[92%] self-start break-words rounded-2xl rounded-bl-sm bg-[var(--content-bg)] px-3.5 py-2.5 text-sm leading-relaxed text-[var(--text-dark)] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
@@ -1146,11 +1181,7 @@ function Markdown({ text }: { text: string }): React.ReactElement {
               </code>
             )
           },
-          pre: ({ children }) => (
-            <pre className="my-2 overflow-x-auto rounded-lg bg-[#0f1117] p-3 text-[0.82em] leading-relaxed text-[#d4d4d4]">
-              {children}
-            </pre>
-          )
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>
         }}
       >
         {text}
