@@ -50,6 +50,9 @@ export function registerVaultIpc(): void {
     vaultManager.updateGroup(id, patch)
   )
   ipcMain.handle('vault:group:delete', (_e, id: string) => vaultManager.deleteGroup(id))
+  ipcMain.handle('vault:group:reorder', (_e, orderedIds: string[]) =>
+    vaultManager.reorderGroups(orderedIds)
+  )
 
   ipcMain.handle('vault:credential:add', (_e, cred: Omit<Credential, 'id'>) =>
     vaultManager.addCredential(cred)

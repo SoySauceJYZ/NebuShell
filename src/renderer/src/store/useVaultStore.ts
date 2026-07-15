@@ -24,6 +24,7 @@ interface VaultState {
   addGroup: (group: Omit<Group, 'id'>) => Promise<Group>
   updateGroup: (id: string, patch: Partial<Group>) => Promise<void>
   deleteGroup: (id: string) => Promise<void>
+  reorderGroups: (orderedIds: string[]) => Promise<void>
 
   addCredential: (cred: Omit<Credential, 'id'>) => Promise<void>
   updateCredential: (id: string, patch: Partial<Credential>) => Promise<void>
@@ -109,6 +110,10 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
   deleteGroup: async (id) => {
     await window.api.vault.deleteGroup(id)
+    await get().refresh()
+  },
+  reorderGroups: async (orderedIds) => {
+    await window.api.vault.reorderGroups(orderedIds)
     await get().refresh()
   },
 

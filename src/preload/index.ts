@@ -85,6 +85,8 @@ const api = {
     updateGroup: (id: string, patch: Partial<Group>): Promise<Group> =>
       ipcRenderer.invoke('vault:group:update', id, patch),
     deleteGroup: (id: string): Promise<void> => ipcRenderer.invoke('vault:group:delete', id),
+    reorderGroups: (orderedIds: string[]): Promise<Group[]> =>
+      ipcRenderer.invoke('vault:group:reorder', orderedIds),
 
     addCredential: (cred: Omit<Credential, 'id'>): Promise<Credential> =>
       ipcRenderer.invoke('vault:credential:add', cred),

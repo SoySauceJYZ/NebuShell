@@ -291,6 +291,25 @@ export class VaultManager {
     this.persist()
   }
 
+  /** Rearrange groups to match the given id order. Ids not present are ignored;
+   * any existing group missing from the list is appended, so no group is lost. */
+  reorderGroups(orderedIds: string[]): Group[] {
+    const data = this.getData()
+    const byId = new Map(data.groups.map((g) => [g.id, g]))
+    const next: Group[] = []
+    for (const id of orderedIds) {
+      const g = byId.get(id)
+      if (g) {
+        next.push(g)
+        byId.delete(id)
+      }
+    }
+    for (const g of byId.values()) next.push(g)
+    data.groups = next
+    this.persist()
+    return data.groups
+  }
+
   // Credentials
   addCredential(cred: Omit<Credential, 'id'>): Credential {
     const data = this.getData()

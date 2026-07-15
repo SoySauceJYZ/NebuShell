@@ -53,7 +53,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing.
 - 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting. **Ctrl+S** saves a remote file straight back to the server (and snapshots a history version).
 - 🖼️ **Image preview** — open remote images directly in a tab.
-- 🗂️ **Host management** — organize connections, duplicate sessions, reconnect, and jump between them from the tab bar.
+- 🗂️ **Host management** — organize connections into groups, **search by name or address**, **right‑click a host** to connect / duplicate / edit, edit host details **inline** with a save button, and **rename & reorder groups** from a group manager (the order flows through to the list). Duplicate sessions, reconnect, and jump between them from the tab bar.
 - ⌨️ **Command history & command palette** — every command you type is saved locally per server (tagged **User** / **Agent**) and shared across that host's tabs; a history panel splits **Local** vs the server's own `~/.bash_history`. Triple‑tap **Ctrl** to open a tabbed palette that searches history and runs quick actions — picking a command drops it into the prompt **without executing**.
 - 📜 **History docs** — keep track of past sessions and documents.
 - 📊 **System monitor** — per‑core CPU with a live sparkline, a memory donut, network up/down rates, per‑mount disk usage with read/write I/O, and a process manager you can search and kill from.
@@ -63,6 +63,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 **Recent updates (July 2026)**
 
+- 🗂️ **Host management, leveled up** _(2026‑07‑15)_ — the hosts page gains a **search box** that filters by **name or address** as you type; **right‑click any host card** for a quick menu (**连接 / 复制 / 编辑**), where **复制** clones a host with all of its connection settings; the **host detail panel is now editable in place** — hit **直接编辑**, change the address / name / group / user / port / auth, and **保存** without opening a dialog; and a new **分组管理** dropdown beside **新建分组** lets you **rename groups and reorder them**, with the order driving how the group sections are arranged in the list.
 - 🪟 **Tear tabs off into their own windows** _(2026‑07‑15)_ — drag any content tab (a terminal, SFTP, editor or image tab — including one living inside a split pane) **out of the window** to pop it into a **new window** at the cursor; drop it **onto another window** to merge it there instead (both directions). The session **moves without dropping** — the SSH connection and any running command keep going untouched, and the terminal **keeps its full scrollback**, replayed into the new window. Close the original window and the torn‑off session is unaffected.
 - 🖼️ **Send images to the agent** — the agent composer now takes images three ways: **paste** a screenshot straight into the input (`Ctrl+V`), pick files from the new **image button**, or **drag and drop** them onto the box. Thumbnails sit above the input (click to zoom, × to remove), up to 6 per message. Screenshots are **downscaled to 1568px** before sending, so a 4K grab doesn't balloon the request or eat your context window — and the context meter counts the images too. Works with any vision-capable OpenAI-compatible model.
 - 🔓 **Trust this device** — the master-password screen gains a **信任此设备** checkbox. Tick it and the next launch unlocks the vault automatically, straight to the main window. The password is sealed with the **OS credential store** (DPAPI on Windows, Keychain on macOS) — never written in plaintext — and the trust record is dropped automatically if it stops working. Turn it back off any time from **Settings**; systems without a credential store disable the option rather than fall back to storing the password in the clear.
@@ -210,7 +211,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**。
 - 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。打开服务器文件后按 **Ctrl+S** 即可直接保存回服务器(并自动存一个历史版本)。
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
-- 🗂️ **主机管理** —— 整理连接、复制会话、一键重连,并可在标签栏之间快速切换。
+- 🗂️ **主机管理** —— 把连接整理进分组,支持**按名称或地址搜索**、**右键主机**连接 / 复制 / 编辑、带保存按钮的**就地编辑主机详情**,以及在分组管理里**重命名与排序分组**(顺序会同步到列表);并可复制会话、一键重连、在标签栏之间快速切换。
 - ⌨️ **命令历史与命令面板** —— 你输入的每条命令都会**按服务器本地持久化**(标记 **User / Agent**),并在该主机的所有标签页间共享;历史面板分「**本地 / 服务器**」两个子标签,服务器标签直接读取机器自身的 `~/.bash_history`。在终端里**连按三次 Ctrl** 可呼出分标签命令面板,搜索历史或执行快捷操作——选中的命令只**填入输入行、不自动执行**。
 - 📜 **历史文档** —— 记录过往会话与文档。
 - 📊 **系统监控** —— 每核心 CPU 占用与实时折线、内存环形图、网络上下行速率、按挂载点的磁盘用量及读写 IO,以及可搜索、可结束进程的进程管理器。
@@ -220,6 +221,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 **近期更新(2026 年 7 月)**
 
+- 🗂️ **主机管理增强** _(2026‑07‑15)_ —— 主机页新增**搜索框**,可按**名称或地址**实时过滤主机;**右键任意主机卡片**弹出快捷菜单(**连接 / 复制 / 编辑**),其中「复制」会连同全部连接配置克隆一台主机;**主机详情面板支持就地编辑**——点「**直接编辑**」即可改地址 / 名称 / 分组 / 用户 / 端口 / 认证方式,再点「**保存**」,无需打开弹窗;**新建分组**旁新增「**分组管理**」下拉菜单,可**重命名分组并调整顺序**,顺序会决定主机列表中各分组的排列。
 - 🪟 **把标签页撕成独立窗口** _(2026‑07‑15)_ —— 把任意内容标签(终端 / SFTP / 编辑器 / 图片,包括分屏面板里的某个标签)**拖出窗口**,即可在光标处弹出一个**新窗口**装它;若拖到**另一个已有窗口**上,则合并进那个窗口(双向都行)。会话**原样搬移、不断开**——SSH 连接和正在运行的命令都毫发无伤,终端**保留完整历史滚屏**(在新窗口里回放重建)。关掉原窗口也不会影响已经撕出去的会话。
 - 🖼️ **给智能体发图片** —— 智能体输入框现在支持三种加图方式:截图**直接粘贴**(`Ctrl+V`)、点新增的「**图片**」按钮选择文件、或把图片**拖进输入框**。缩略图排在输入框上方(点击放大,× 移除),单条消息最多 6 张。图片发送前会**按最长边缩到 1568px**,4K 截图不会把请求体撑爆、也不会吃光上下文——上下文用量表也会把图片算进去。任何支持视觉的 OpenAI 兼容模型都能用。
 - 🔓 **信任此设备** —— 主密码界面新增「**信任此设备**」勾选框。勾上之后,下次打开应用会自动解锁保险库,直接进主界面。主密码用**操作系统凭据存储**加密保存(Windows DPAPI / macOS 钥匙串),**绝不明文落盘**;万一记录失效(比如保险库被重建),会自动清掉并退回手输密码,不会卡死。随时可在「**设置**」里关掉。系统若不支持安全存储,该选项会被禁用,而不是退化成明文保存密码。
