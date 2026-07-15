@@ -37,9 +37,12 @@ export function createAppWindow(): BrowserWindow {
   })
 
   windows.add(win)
+  // Capture the id now: inside `closed` the webContents is already destroyed and
+  // touching `win.webContents` would throw "Object has been destroyed".
+  const wcId = win.webContents.id
   win.on('closed', () => {
     windows.delete(win)
-    pendingAdopt.delete(win.webContents.id)
+    pendingAdopt.delete(wcId)
   })
 
   win.on('ready-to-show', () => win.show())
