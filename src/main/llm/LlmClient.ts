@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { ChatMessage, ChatTool, ToolCall } from '../../shared/types'
+import type { Attachment, ChatMessage, ChatTool, ToolCall } from '../../shared/types'
 
 export interface ResolvedLlm {
   baseUrl: string
@@ -20,26 +20,53 @@ interface StreamingToolCall {
 }
 
 type ApiMessage =
-  | Omit<ChatMessage, 'images'>
-  | (Omit<ChatMessage, 'content' | 'images'> & {
+  | Omit<ChatMessage, 'images' | 'attachments'>
+  | (Omit<ChatMessage, 'content' | 'images' | 'attachments'> & {
       content: (
         { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
       )[]
     })
 
 /**
- * Fold attached images into OpenAI's multimodal content array. Messages without
- * images are passed through unchanged (a plain string content), which keeps
- * providers that don't do vision happy.
+ * Render an attached document as a tagged envelope. The tag matters twice over: it
+ * tells the model where user prose ends and untrusted file content begins (the system
+ * prompt leans on that), and it carries the ref it needs to pull the rest of a
+ * truncated document via `read_attachment`.
+ */
+function envelope(a: Attachment): string {
+  const attrs = [
+    `name="${a.name.replace(/"/g, "'")}"`,
+    `type="${a.kind}"`,
+    ...(a.pages ? [`pages="${a.pages}"`] : []),
+    `chars="${a.chars}"`,
+    ...(a.truncated ? [`ref="${a.id}"`, 'truncated="true"'] : [])
+  ].join(' ')
+  const tail = a.truncated
+    ? `\n…(内容过长,以上仅为前 ${a.preview.length} 字,共 ${a.chars} 字。` +
+      `需要其余部分时用 read_attachment 检索 #${a.id},可 grep 关键字或取行号区间。)`
+    : ''
+  return `<attachment ${attrs}>\n${a.preview}${tail}\n</attachment>`
+}
+
+/**
+ * Fold attachments and images into the outgoing message. Documents become text
+ * envelopes ahead of the user's own prose; images become OpenAI multimodal parts.
+ * A message with neither is passed through unchanged (plain string content), which
+ * keeps providers that don't do vision happy.
  */
 function toApiMessages(messages: ChatMessage[]): ApiMessage[] {
   return messages.map((m) => {
-    const { images, ...rest } = m
-    if (!images?.length) return rest
+    const { images, attachments, ...rest } = m
+    if (!images?.length && !attachments?.length) return rest
+
+    const docs = attachments?.length ? attachments.map(envelope).join('\n\n') : ''
+    const text = docs ? (m.content ? `${docs}\n\n${m.content}` : docs) : m.content
+
+    if (!images?.length) return { ...rest, content: text }
     return {
       ...rest,
       content: [
-        ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+        ...(text ? [{ type: 'text' as const, text }] : []),
         ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))
       ]
     }

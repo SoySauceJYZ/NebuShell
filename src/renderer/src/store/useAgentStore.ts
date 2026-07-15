@@ -1,15 +1,17 @@
 import { create } from 'zustand'
-import type { ChatMessage, ToolCall } from '@shared/types'
+import type { Attachment, ChatMessage, ToolCall } from '@shared/types'
 import {
   buildRunCommandTool,
   buildSystemPrompt,
   ASK_USER_TOOL,
   PRESENT_PLAN_TOOL,
+  READ_ATTACHMENT_TOOL,
   READ_COMMAND_OUTPUT_TOOL,
   type AgentTarget
 } from '../lib/agentTools'
 import { type AgentMode, disposition, isRiskyCommand } from '../lib/agentPermissions'
 import { clampCommandOutput, saveCommandOutput, readSavedOutput } from '../lib/commandOutput'
+import { readSavedAttachment } from '../lib/attachments'
 import { useSessionStore } from './useSessionStore'
 import { useCommandHistoryStore } from './useCommandHistoryStore'
 
@@ -57,8 +59,11 @@ interface AgentStore {
   bindHost: (sessionId: string, hostId: string) => void
   newConversation: (sessionId: string) => void
   openConversation: (sessionId: string, convId: string) => Promise<void>
-  /** `images` are data URLs attached to the user message (vision models only). */
-  send: (sessionId: string, text: string, images?: string[]) => void
+  /**
+   * `images` are data URLs attached to the user message (vision models only);
+   * `attachments` are documents already extracted to text.
+   */
+  send: (sessionId: string, text: string, images?: string[], attachments?: Attachment[]) => void
   resolveCall: (sessionId: string, call: ToolCall, approve: boolean) => void
   /** Answer an ask_user question tool call, then continue the conversation. */
   answerQuestion: (sessionId: string, call: ToolCall, answer: string) => void
@@ -101,7 +106,9 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     if (!hostId || !convId || msgs.length === 0) return
     const firstUser = msgs.find((m) => m.role === 'user')
     const titleSource =
-      firstUser?.content?.trim() || (firstUser?.images?.length ? '[图片]' : '新会话')
+      firstUser?.content?.trim() ||
+      firstUser?.attachments?.[0]?.name ||
+      (firstUser?.images?.length ? '[图片]' : '新会话')
     const title = titleSource.split('\n')[0].slice(0, 30)
     void window.api.agentChat.save(hostId, convId, title, msgs)
   }
@@ -167,8 +174,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
   }
 
-  // read_command_output:纯本地检索已保存的完整输出,只读、无副作用,任何模式下都直接执行。
-  const executeReadOutput = (id: string, call: ToolCall): void => {
+  // read_command_output / read_attachment:纯本地检索已保存的完整文本,
+  // 只读、无副作用,任何模式下都直接执行(不走审批)。
+  const executeLookup = (id: string, call: ToolCall): void => {
+    const lookup = call.function.name === 'read_attachment' ? readSavedAttachment : readSavedOutput
     let content: string
     try {
       const args = JSON.parse(call.function.arguments || '{}')
@@ -176,7 +185,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         Array.isArray(args.range) && args.range.length === 2
           ? ([Number(args.range[0]), Number(args.range[1])] as [number, number])
           : undefined
-      content = readSavedOutput(String(args.ref ?? ''), {
+      content = lookup(String(args.ref ?? ''), {
         grep: args.grep,
         head: typeof args.head === 'number' ? args.head : undefined,
         tail: typeof args.tail === 'number' ? args.tail : undefined,
@@ -201,9 +210,13 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         anyAsk = true
         continue
       }
-      // read_command_output is a read-only local lookup — always safe to run inline.
-      if (call.function.name === 'read_command_output') {
-        executeReadOutput(id, call)
+      // Read-only local lookups (saved command output / attachment full text) — always
+      // safe to run inline, no approval.
+      if (
+        call.function.name === 'read_command_output' ||
+        call.function.name === 'read_attachment'
+      ) {
+        executeLookup(id, call)
         continue
       }
       const risky = isRiskyCommand(parseArgs(call).command)
@@ -260,10 +273,16 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           ? [
               buildRunCommandTool(targets),
               READ_COMMAND_OUTPUT_TOOL,
+              READ_ATTACHMENT_TOOL,
               ASK_USER_TOOL,
               PRESENT_PLAN_TOOL
             ]
-          : [buildRunCommandTool(targets), READ_COMMAND_OUTPUT_TOOL, ASK_USER_TOOL]
+          : [
+              buildRunCommandTool(targets),
+              READ_COMMAND_OUTPUT_TOOL,
+              READ_ATTACHMENT_TOOL,
+              ASK_USER_TOOL
+            ]
       window.api.llm.chat(runId, {
         messages: [sys, ...cur(id).messages],
         tools,
@@ -374,7 +393,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       }))
     },
 
-    send: (id, text, images) => {
+    send: (id, text, images, attachments) => {
       if (cur(id).status !== 'idle') return
       stopped[id] = false
       if (!get().convBySession[id]) {
@@ -382,7 +401,14 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           convBySession: { ...state.convBySession, [id]: crypto.randomUUID() }
         }))
       }
-      pushMsgs(id, [{ role: 'user', content: text, ...(images?.length ? { images } : {}) }])
+      pushMsgs(id, [
+        {
+          role: 'user',
+          content: text,
+          ...(images?.length ? { images } : {}),
+          ...(attachments?.length ? { attachments } : {})
+        }
+      ])
       void runTurn(id)
     },
 

@@ -91,6 +91,30 @@ export interface ToolCall {
   function: { name: string; arguments: string }
 }
 
+export type AttachmentKind = 'text' | 'pdf' | 'docx'
+
+/**
+ * A document the user attached to a message, already extracted to text.
+ *
+ * Only the bounded `preview` travels with the message (and into persistence) — the
+ * full text stays in a renderer-side LRU keyed by `id`, and the model pulls more of
+ * it on demand via `read_attachment`. That keeps a 50-page PDF out of both the
+ * context window and the conversation JSON.
+ */
+export interface Attachment {
+  id: string
+  name: string
+  kind: AttachmentKind
+  /** Original file size in bytes. */
+  size: number
+  /** Total characters of extracted text (may exceed what `preview` holds). */
+  chars: number
+  /** PDF only. */
+  pages?: number
+  preview: string
+  truncated: boolean
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
@@ -102,6 +126,11 @@ export interface ChatMessage {
    * LlmClient folds them into OpenAI multimodal parts on the way out.
    */
   images?: string[]
+  /**
+   * Documents attached to a user message. Same deal as `images`: kept beside
+   * `content`, folded into `<attachment>` envelopes by LlmClient on the way out.
+   */
+  attachments?: Attachment[]
 }
 
 // tool/function definition sent to the LLM (OpenAI format)

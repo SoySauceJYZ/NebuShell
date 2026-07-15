@@ -27,13 +27,17 @@ export function estimateTokens(text: string): number {
 // 一张缩放后(最长边 ≤1568)的图片在主流视觉模型里大致就是这个量级,按上限估。
 const TOKENS_PER_IMAGE = 1600
 
-/** 估算一组消息的 token 数(含 role 包裹、图片与 tool_calls 参数的开销)。 */
+/** 估算一组消息的 token 数(含 role 包裹、图片、附件与 tool_calls 参数的开销)。 */
 export function estimateMessagesTokens(messages: ChatMessage[]): number {
   let total = 0
   for (const m of messages) {
     total += 4 // 每条消息的 role/包裹固定开销
     if (m.content) total += estimateTokens(m.content)
     if (m.images) total += m.images.length * TOKENS_PER_IMAGE
+    // 附件只有 preview 会进上下文(其余靠 read_attachment 按需取),这里也只算 preview。
+    if (m.attachments) {
+      for (const a of m.attachments) total += estimateTokens(a.preview) + 16
+    }
     if (m.tool_calls) {
       for (const tc of m.tool_calls) {
         total += 4 + estimateTokens(tc.function.name) + estimateTokens(tc.function.arguments)

@@ -24,7 +24,8 @@ import {
   ClipboardList,
   Square,
   Gauge,
-  ImagePlus
+  Paperclip,
+  FileText
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
@@ -34,6 +35,7 @@ import {
   buildSystemPrompt,
   buildRunCommandTool,
   READ_COMMAND_OUTPUT_TOOL,
+  READ_ATTACHMENT_TOOL,
   ASK_USER_TOOL,
   PRESENT_PLAN_TOOL,
   type AgentTarget
@@ -50,8 +52,60 @@ import {
   imageFilesFromClipboard,
   MAX_ATTACHED_IMAGES
 } from '../lib/images'
+import {
+  attachmentFullText,
+  buildAttachment,
+  docFilesFrom,
+  docFilesFromClipboard,
+  DOC_ACCEPT,
+  MAX_ATTACHED_DOCS
+} from '../lib/attachments'
 import { AgentSettingsModal } from './AgentSettingsModal'
-import type { ToolCall, LlmSettingsPublic, AgentConversationMeta } from '@shared/types'
+import type { Attachment, ToolCall, LlmSettingsPublic, AgentConversationMeta } from '@shared/types'
+
+function docMeta(a: Attachment): string {
+  const chars = a.chars < 1000 ? `${a.chars} 字` : `${(a.chars / 1000).toFixed(1)}k 字`
+  return a.pages ? `${a.pages} 页 · ${chars}` : chars
+}
+
+/** 一枚文档附件的 chip:输入框里可删除,消息气泡上只读。 */
+function DocChip({
+  a,
+  onOpen,
+  onRemove
+}: {
+  a: Attachment
+  onOpen: () => void
+  onRemove?: () => void
+}): React.ReactElement {
+  return (
+    <div className="group/doc relative">
+      <button
+        onClick={onOpen}
+        title="查看提取出的文本"
+        className="flex max-w-[220px] items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[var(--nav-bg-hover)] px-2 py-1.5 text-left hover:border-[var(--accent)]"
+      >
+        <FileText size={16} className="shrink-0 text-[var(--accent)]" />
+        <div className="min-w-0">
+          <div className="truncate text-xs text-[var(--text-dark)]">{a.name}</div>
+          <div className="truncate text-[10px] text-[var(--text-muted)]">
+            {docMeta(a)}
+            {a.truncated && ' · 已截断'}
+          </div>
+        </div>
+      </button>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          title="移除"
+          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--danger)] text-white opacity-0 transition group-hover/doc:opacity-100"
+        >
+          <X size={10} />
+        </button>
+      )}
+    </div>
+  )
+}
 
 function parseCommand(call: ToolCall): string {
   try {
@@ -153,9 +207,12 @@ export function AgentPanel({
   const [showSettings, setShowSettings] = useState(false)
   const [input, setInput] = useState('')
   const [images, setImages] = useState<string[]>([])
-  const [imageError, setImageError] = useState('')
+  const [docs, setDocs] = useState<Attachment[]>([])
+  const [extracting, setExtracting] = useState(0)
+  const [attachError, setAttachError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [docPreview, setDocPreview] = useState<Attachment | null>(null)
   const [convs, setConvs] = useState<AgentConversationMeta[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -192,10 +249,16 @@ export function AgentPanel({
         ? [
             buildRunCommandTool(currentTargets),
             READ_COMMAND_OUTPUT_TOOL,
+            READ_ATTACHMENT_TOOL,
             ASK_USER_TOOL,
             PRESENT_PLAN_TOOL
           ]
-        : [buildRunCommandTool(currentTargets), READ_COMMAND_OUTPUT_TOOL, ASK_USER_TOOL]
+        : [
+            buildRunCommandTool(currentTargets),
+            READ_COMMAND_OUTPUT_TOOL,
+            READ_ATTACHMENT_TOOL,
+            ASK_USER_TOOL
+          ]
     const overhead = estimateTokens(sysText) + estimateTokens(JSON.stringify(tools))
     const msgs = estimateMessagesTokens(session.messages)
     const used = overhead + msgs + estimateTokens(session.streamingText)
@@ -236,38 +299,69 @@ export function AgentPanel({
 
   const addImages = async (files: File[]): Promise<void> => {
     if (files.length === 0) return
-    setImageError('')
+    setAttachError('')
     const room = MAX_ATTACHED_IMAGES - images.length
     if (room <= 0) {
-      setImageError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
+      setAttachError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
       return
     }
     try {
       const urls = await Promise.all(files.slice(0, room).map(fileToDataUrl))
       setImages((prev) => [...prev, ...urls])
-      if (files.length > room) setImageError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
+      if (files.length > room) setAttachError(`最多附加 ${MAX_ATTACHED_IMAGES} 张图片`)
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : String(err))
+      setAttachError(err instanceof Error ? err.message : String(err))
     }
+  }
+
+  // 抽取可能要几秒(大 PDF),逐个处理并把失败的文件单独报出来,不因为一个坏文件丢掉其余的。
+  const addDocs = async (files: File[]): Promise<void> => {
+    if (files.length === 0) return
+    setAttachError('')
+    const room = MAX_ATTACHED_DOCS - docs.length
+    if (room <= 0) {
+      setAttachError(`最多附加 ${MAX_ATTACHED_DOCS} 个文档`)
+      return
+    }
+    const picked = files.slice(0, room)
+    if (files.length > room) setAttachError(`最多附加 ${MAX_ATTACHED_DOCS} 个文档`)
+    setExtracting((n) => n + picked.length)
+    for (const file of picked) {
+      try {
+        const a = await buildAttachment(file)
+        setDocs((prev) => [...prev, a])
+      } catch (err) {
+        setAttachError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setExtracting((n) => n - 1)
+      }
+    }
+  }
+
+  // 一次 drop/paste 里图片和文档可能同时出现,各走各的通道。
+  const addFiles = (files: File[]): void => {
+    void addImages(files.filter((f) => f.type.startsWith('image/')))
+    void addDocs(files.filter((f) => !f.type.startsWith('image/')))
   }
 
   const handleSend = (): void => {
     const text = input.trim()
-    if ((!text && images.length === 0) || session.status !== 'idle') return
+    if ((!text && images.length === 0 && docs.length === 0) || session.status !== 'idle') return
     if (!configured) {
       setShowSettings(true)
       return
     }
     setInput('')
     setImages([])
-    setImageError('')
-    send(sessionId, text, images)
+    setDocs([])
+    setAttachError('')
+    send(sessionId, text, images, docs)
   }
 
-  // Re-ask: resend an earlier user message (with its images) as a new turn.
-  const reAsk = (text: string, imgs?: string[]): void => {
+  // Re-ask: resend an earlier user message (with its images and documents) as a new turn.
+  const reAsk = (text: string, imgs?: string[], atts?: Attachment[]): void => {
     if (session.status !== 'idle' || !configured) return
-    send(sessionId, text, imgs)
+    send(sessionId, text, imgs, atts)
   }
 
   return (
@@ -397,6 +491,13 @@ export function AgentPanel({
                       ))}
                     </div>
                   ) : null}
+                  {m.attachments?.length ? (
+                    <div className="mb-1 flex max-w-[88%] flex-wrap justify-end gap-1.5">
+                      {m.attachments.map((a) => (
+                        <DocChip key={a.id} a={a} onOpen={() => setDocPreview(a)} />
+                      ))}
+                    </div>
+                  ) : null}
                   {m.content && (
                     <div className="selectable max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
                       {m.content}
@@ -412,7 +513,7 @@ export function AgentPanel({
                       icon={RotateCcw}
                       title="重问"
                       disabled={session.status !== 'idle'}
-                      onClick={() => reAsk(m.content, m.images)}
+                      onClick={() => reAsk(m.content, m.images, m.attachments)}
                     />
                   </div>
                 </div>
@@ -513,11 +614,11 @@ export function AgentPanel({
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
-            const files = imageFilesFrom(e.dataTransfer)
+            const files = [...imageFilesFrom(e.dataTransfer), ...docFilesFrom(e.dataTransfer)]
             if (files.length === 0) return
             e.preventDefault()
             setDragOver(false)
-            void addImages(files)
+            addFiles(files)
           }}
           className={`rounded-xl border bg-[var(--panel-bg)] focus-within:border-[var(--accent)] ${
             dragOver
@@ -546,16 +647,39 @@ export function AgentPanel({
               ))}
             </div>
           )}
-          {imageError && <div className="px-3 pt-2 text-xs text-[var(--danger)]">{imageError}</div>}
+          {(docs.length > 0 || extracting > 0) && (
+            <div className="flex flex-wrap items-center gap-2 px-2 pt-2">
+              {docs.map((a, i) => (
+                <DocChip
+                  key={a.id}
+                  a={a}
+                  onOpen={() => setDocPreview(a)}
+                  onRemove={() => setDocs((prev) => prev.filter((_, k) => k !== i))}
+                />
+              ))}
+              {extracting > 0 && (
+                <div className="flex items-center gap-1.5 px-1 text-xs text-[var(--text-muted)]">
+                  <Loader2 size={13} className="animate-spin" />
+                  正在解析 {extracting} 个文件…
+                </div>
+              )}
+            </div>
+          )}
+          {attachError && (
+            <div className="px-3 pt-2 text-xs text-[var(--danger)]">{attachError}</div>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
-              const files = imageFilesFromClipboard(e.clipboardData)
+              const files = [
+                ...imageFilesFromClipboard(e.clipboardData),
+                ...docFilesFromClipboard(e.clipboardData)
+              ]
               if (files.length === 0) return
               // 剪贴板里同时带图和 HTML 时,阻止浏览器再把图片的 <img> 标签粘成文字。
               e.preventDefault()
-              void addImages(files)
+              addFiles(files)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -564,7 +688,9 @@ export function AgentPanel({
               }
             }}
             rows={2}
-            placeholder={session.status === 'idle' ? '输入消息…(可粘贴 / 拖入图片)' : '处理中…'}
+            placeholder={
+              session.status === 'idle' ? '输入消息…(可粘贴 / 拖入图片、文档)' : '处理中…'
+            }
             disabled={session.status !== 'idle'}
             className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none"
           />
@@ -572,22 +698,22 @@ export function AgentPanel({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept={`image/*,${DOC_ACCEPT}`}
               multiple
               hidden
               onChange={(e) => {
-                void addImages(Array.from(e.target.files ?? []))
+                addFiles(Array.from(e.target.files ?? []))
                 e.target.value = ''
               }}
             />
             <button
               onClick={() => fileRef.current?.click()}
               disabled={session.status !== 'idle'}
-              title="添加图片"
+              title="添加图片或文档(PDF / docx / 文本)"
               className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)] disabled:opacity-40"
             >
-              <ImagePlus size={13} className="text-[var(--accent)]" />
-              图片
+              <Paperclip size={13} className="text-[var(--accent)]" />
+              附件
             </button>
             <ModeSelector mode={mode} onChange={setMode} />
             <ModelSelector
@@ -620,7 +746,11 @@ export function AgentPanel({
             ) : (
               <button
                 onClick={handleSend}
-                disabled={session.status !== 'idle' || (!input.trim() && images.length === 0)}
+                disabled={
+                  session.status !== 'idle' ||
+                  extracting > 0 ||
+                  (!input.trim() && images.length === 0 && docs.length === 0)
+                }
                 className="btn-primary h-8 w-8 shrink-0 !p-0 disabled:opacity-40"
                 title="发送"
               >
@@ -637,6 +767,42 @@ export function AgentPanel({
           className="fixed inset-0 z-[80] flex cursor-zoom-out items-center justify-center bg-black/70 p-8"
         >
           <img src={preview} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+        </div>
+      )}
+
+      {docPreview && (
+        <div
+          onClick={() => setDocPreview(null)}
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-8"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-full w-[720px] max-w-full flex-col rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)]"
+          >
+            <div className="flex shrink-0 items-center gap-2 border-b border-[var(--panel-border)] px-3 py-2">
+              <FileText size={14} className="text-[var(--accent)]" />
+              <span className="truncate text-sm text-[var(--text-dark)]">{docPreview.name}</span>
+              <span className="shrink-0 text-xs text-[var(--text-muted)]">
+                {docMeta(docPreview)}
+              </span>
+              <div className="flex-1" />
+              <button
+                onClick={() => setDocPreview(null)}
+                className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <pre className="selectable flex-1 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs text-[var(--text-dark)]">
+              {attachmentFullText(docPreview)}
+            </pre>
+            {docPreview.truncated && (
+              <div className="shrink-0 border-t border-[var(--panel-border)] px-3 py-1.5 text-[10px] text-[var(--text-muted)]">
+                模型只直接看到前 {docPreview.preview.length}{' '}
+                字,其余部分由它按需检索(read_attachment)。
+              </div>
+            )}
+          </div>
         </div>
       )}
 

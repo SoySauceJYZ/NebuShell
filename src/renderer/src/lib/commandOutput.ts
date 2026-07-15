@@ -66,13 +66,22 @@ export interface ReadOptions {
   range?: [number, number]
 }
 
-/** L4:按需检索已保存的完整输出(grep / 头 / 尾 / 行号区间)。 */
-export function readSavedOutput(ref: string, opts: ReadOptions): string {
-  const saved = store.get(ref)
-  if (!saved) {
-    return `未找到 #${ref} 对应的输出(可能已被新命令挤出缓存)。如仍需要,请重新执行该命令。`
-  }
-  const all = saved.output.split('\n')
+export interface SliceResult {
+  /** 渲染好的正文(已按 READ_MAX 硬截断)。 */
+  text: string
+  /** 命中行数 / 总行数,供调用方拼检索结果头。 */
+  hit: number
+  total: number
+  /** 本次筛选条件的可读描述,如 `grep /error/i`;无筛选时为空串。 */
+  desc: string
+}
+
+/**
+ * 按 grep / 头 / 尾 / 行号区间从一段文本里切出若干行。
+ * 命令输出与附件全文共用这一份实现(read_command_output / read_attachment)。
+ */
+export function sliceLines(source: string, opts: ReadOptions): SliceResult {
+  const all = source.split('\n')
   let picked = all
   let desc = ''
 
@@ -102,13 +111,20 @@ export function readSavedOutput(ref: string, opts: ReadOptions): string {
   }
 
   let text = picked.join('\n')
-  let clipped = ''
   if (text.length > READ_MAX) {
-    text = text.slice(0, READ_MAX)
-    clipped = '\n…(结果仍过长已截断;请用更精确的 grep 或行号区间缩小范围)'
+    text = `${text.slice(0, READ_MAX)}\n…(结果仍过长已截断;请用更精确的 grep 或行号区间缩小范围)`
   }
-  const head = `#${ref} 检索结果${desc ? `(${desc})` : ''} · 命中 ${picked.length}/${all.length} 行`
-  return `${head}\n${text || '(无匹配)'}${clipped}`
+  return { text: text || '(无匹配)', hit: picked.length, total: all.length, desc }
+}
+
+/** L4:按需检索已保存的完整输出(grep / 头 / 尾 / 行号区间)。 */
+export function readSavedOutput(ref: string, opts: ReadOptions): string {
+  const saved = store.get(ref)
+  if (!saved) {
+    return `未找到 #${ref} 对应的输出(可能已被新命令挤出缓存)。如仍需要,请重新执行该命令。`
+  }
+  const { text, hit, total, desc } = sliceLines(saved.output, opts)
+  return `#${ref} 检索结果${desc ? `(${desc})` : ''} · 命中 ${hit}/${total} 行\n${text}`
 }
 
 // ---- L1:行级去噪(折叠连续重复行) ------------------------------------------
