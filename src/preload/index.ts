@@ -247,6 +247,11 @@ const api = {
       ipcRenderer.invoke('llm:setSettings', settings),
     setActive: (providerId: string, modelId: string): Promise<void> =>
       ipcRenderer.invoke('llm:setActive', providerId, modelId),
+    listModels: (payload: {
+      providerId?: string
+      baseUrl: string
+      apiKey?: string
+    }): Promise<string[]> => ipcRenderer.invoke('llm:listModels', payload),
     chat: (
       runId: string,
       payload: { messages: ChatMessage[]; tools: ChatTool[]; providerId?: string; model?: string }

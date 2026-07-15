@@ -41,6 +41,41 @@ export function registerLlmIpc(): void {
     vaultManager.setActiveModel(providerId, modelId)
   })
 
+  // Query an OpenAI-compatible provider's GET /models. Uses the values currently in
+  // the settings form (which may be unsaved); a blank apiKey falls back to the stored
+  // key for that provider, so the renderer never has to see the plaintext key.
+  ipcMain.handle(
+    'llm:listModels',
+    async (_e, payload: { providerId?: string; baseUrl: string; apiKey?: string }) => {
+      const baseUrl = (payload.baseUrl ?? '').trim()
+      if (!baseUrl) throw new Error('请先填写 Base URL')
+      let apiKey = (payload.apiKey ?? '').trim()
+      if (!apiKey && payload.providerId) {
+        apiKey =
+          vaultManager.getLlmSettings().providers.find((p) => p.id === payload.providerId)
+            ?.apiKey ?? ''
+      }
+      const url = `${baseUrl.replace(/\/+$/, '')}/models`
+      let res: Response
+      try {
+        res = await fetch(url, {
+          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}
+        })
+      } catch (err) {
+        throw new Error(`无法连接 ${url}:${err instanceof Error ? err.message : String(err)}`)
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        throw new Error(`获取失败 (${res.status}) ${body.slice(0, 300)}`)
+      }
+      const json = (await res.json().catch(() => null)) as { data?: { id?: string }[] } | null
+      const ids = (json?.data ?? [])
+        .map((m) => m?.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      return Array.from(new Set(ids)).sort((a, b) => a.localeCompare(b))
+    }
+  )
+
   // Active streaming requests, so the renderer can abort them.
   const controllers = new Map<string, AbortController>()
 
@@ -56,7 +91,10 @@ export function registerLlmIpc(): void {
       const settings = vaultManager.getLlmSettings()
       const provider = settings.providers.find((p) => p.id === payload.providerId)
       if (!provider) {
-        win.webContents.send(`llm:error:${runId}`, '未选择模型或供应商,请在设置中添加并在输入框选择。')
+        win.webContents.send(
+          `llm:error:${runId}`,
+          '未选择模型或供应商,请在设置中添加并在输入框选择。'
+        )
         return
       }
       const model =
