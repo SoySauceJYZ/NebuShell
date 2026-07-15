@@ -1,7 +1,6 @@
-import { app, shell, BrowserWindow } from 'electron'
-import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { app, BrowserWindow } from 'electron'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { createAppWindow } from './windows'
 import { registerVaultIpc } from './ipc/vaultIpc'
 import { registerSshIpc } from './ipc/sshIpc'
 import { registerSftpIpc } from './ipc/sftpIpc'
@@ -14,46 +13,8 @@ import { registerAgentChatIpc } from './ipc/agentChatIpc'
 import { registerCommandHistoryIpc } from './ipc/commandHistoryIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 
-function createWindow(): void {
-  const isMac = process.platform === 'darwin'
-
-  // Create the browser window. On macOS keep the native traffic lights (hiddenInset);
-  // on Windows/Linux go fully frameless and draw our own controls in the tab bar so
-  // their height matches the bar exactly.
-  const mainWindow = new BrowserWindow({
-    title: 'NebuShell',
-    width: 1400,
-    height: 900,
-    show: false,
-    backgroundColor: '#f7f6f2',
-    frame: false,
-    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
-    ...(isMac ? { trafficLightPosition: { x: 16, y: 14 } } : {}),
-    autoHideMenuBar: true,
-    icon,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-}
+// Window creation lives in ./windows so both the initial window and torn-off tab
+// windows go through the same path (and get registered for broadcast/hit-testing).
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -81,12 +42,12 @@ app.whenReady().then(() => {
   registerCommandHistoryIpc()
   registerSettingsIpc()
 
-  createWindow()
+  createAppWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createAppWindow()
   })
 })
 

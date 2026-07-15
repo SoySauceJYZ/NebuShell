@@ -19,7 +19,8 @@ import type {
   LlmSettingsPublic,
   AgentConversationMeta,
   CommandHistoryEntry,
-  AppSettings
+  AppSettings,
+  AdoptPayload
 } from '../shared/types'
 
 const api = {
@@ -46,6 +47,18 @@ const api = {
       ipcRenderer.on('window:maximizeChanged', listener)
       ipcRenderer.send('window:subscribeMaximize')
       return () => ipcRenderer.removeListener('window:maximizeChanged', listener)
+    },
+    // Tear a tab off toward a screen point: re-dock into a window there, else new window.
+    detachTab: (payload: AdoptPayload): Promise<void> =>
+      ipcRenderer.invoke('window:detachTab', payload),
+    // A freshly torn-off window pulls the tab it was created for.
+    takePendingAdopt: (): Promise<AdoptPayload | null> =>
+      ipcRenderer.invoke('window:takePendingAdopt'),
+    // An existing window is handed a tab dropped onto it from another window.
+    onAdoptTab: (cb: (payload: AdoptPayload) => void): (() => void) => {
+      const listener = (_e: unknown, payload: AdoptPayload): void => cb(payload)
+      ipcRenderer.on('window:adoptTab', listener)
+      return () => ipcRenderer.removeListener('window:adoptTab', listener)
     }
   },
   vault: {
@@ -96,6 +109,7 @@ const api = {
     runInShell: (sessionId: string, command: string): Promise<RunShellResult> =>
       ipcRenderer.invoke('ssh:runInShell', sessionId, command),
     disconnect: (sessionId: string) => ipcRenderer.invoke('ssh:disconnect', sessionId),
+    replay: (sessionId: string): Promise<string> => ipcRenderer.invoke('ssh:replay', sessionId),
     onData: (sessionId: string, cb: (data: string) => void): (() => void) => {
       const channel = `ssh:data:${sessionId}`
       const listener = (_e: unknown, data: string): void => cb(data)

@@ -17,8 +17,23 @@ import { PaneTabStrip } from './PaneTabStrip'
 
 const STRIP_HEIGHT = 32
 
+// Only session/content tabs tear off into new windows; utility singletons stay put.
+const DETACHABLE_KINDS = new Set(['terminal', 'sftp', 'explorer', 'editor', 'image'])
+
 function box(r: Rect): React.CSSProperties {
   return { position: 'absolute', left: r.left, top: r.top, width: r.width, height: r.height }
+}
+
+/** Whether a screen-coordinate point falls outside this window's content viewport. */
+function isOutsideWindow(screenX: number, screenY: number): boolean {
+  const left = window.screenX
+  const top = window.screenY
+  return (
+    screenX < left ||
+    screenX > left + window.innerWidth ||
+    screenY < top ||
+    screenY > top + window.innerHeight
+  )
 }
 
 export function SplitLayout(): React.ReactElement {
@@ -122,9 +137,11 @@ export function SplitLayout(): React.ReactElement {
           active = true
           useSessionStore.getState().setDraggingTab(tabId)
           document.body.style.userSelect = 'none'
-          document.body.style.cursor = 'grabbing'
         }
-        setDropTarget(targetAt(m.clientX, m.clientY))
+        // Outside the window → this drop will tear the tab off; drop the in-window indicator.
+        const outside = isOutsideWindow(m.screenX, m.screenY)
+        document.body.style.cursor = outside ? 'copy' : 'grabbing'
+        setDropTarget(outside ? null : targetAt(m.clientX, m.clientY))
       }
 
       const onUp = (m: MouseEvent): void => {
@@ -135,6 +152,21 @@ export function SplitLayout(): React.ReactElement {
         document.body.style.userSelect = ''
         document.body.style.cursor = ''
         const store = useSessionStore.getState()
+        if (isOutsideWindow(m.screenX, m.screenY)) {
+          // Tear off: hand the tab to main (re-dock into a window there, else new window),
+          // then drop it locally without killing the session. Only content tabs detach —
+          // the singleton utility tabs (hosts/settings/…) stay put.
+          const tab = store.tabs.find((t) => t.id === tabId)
+          if (tab && DETACHABLE_KINDS.has(tab.kind)) {
+            void window.api.window.detachTab({
+              tab: tab as unknown as Record<string, unknown>,
+              cursor: { x: m.screenX, y: m.screenY }
+            })
+            store.detachTabLocal(tabId)
+          }
+          store.setDraggingTab(null)
+          return
+        }
         const target = targetAt(m.clientX, m.clientY)
         if (target) {
           if (target.edge === 'center') store.moveTabToPane(tabId, target.paneId)

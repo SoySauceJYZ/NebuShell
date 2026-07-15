@@ -47,7 +47,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 ### Features
 
-- 🖥️ **Multi‑tab terminals & flexible split view** — xterm.js terminals with a fit addon, web links, and per‑theme styling. Split any pane **right or down** from the tab‑strip buttons, keep splitting the split‑out panes **recursively** into any grid, **drag tabs** between panes (drop on an edge to make a new split, on the center to merge), and drag the dividers to resize.
+- 🖥️ **Multi‑tab terminals & flexible split view** — xterm.js terminals with a fit addon, web links, and per‑theme styling. Split any pane **right or down** from the tab‑strip buttons, keep splitting the split‑out panes **recursively** into any grid, **drag tabs** between panes (drop on an edge to make a new split, on the center to merge), **drag a tab out of the window** to tear it off into its own window (the live session moves with it), and drag the dividers to resize.
 - 🤖 **Built‑in AI ops agent** — an OpenAI‑compatible agent that can `run_command`, `read_command_output`, `ask_user`, and `present_plan`. It proposes a plan, asks for confirmation, then executes across one or many terminals. **Send it images** too — paste a screenshot, pick a file, or drag one into the composer.
 - 🔐 **Encrypted vault** — hosts, passwords, and SSH keys are protected behind a master password; the keychain never leaves your machine. **Trust this device** to skip the password on future launches.
 - 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing.
@@ -63,6 +63,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 **Recent updates (July 2026)**
 
+- 🪟 **Tear tabs off into their own windows** _(2026‑07‑15)_ — drag any content tab (a terminal, SFTP, editor or image tab — including one living inside a split pane) **out of the window** to pop it into a **new window** at the cursor; drop it **onto another window** to merge it there instead (both directions). The session **moves without dropping** — the SSH connection and any running command keep going untouched, and the terminal **keeps its full scrollback**, replayed into the new window. Close the original window and the torn‑off session is unaffected.
 - 🖼️ **Send images to the agent** — the agent composer now takes images three ways: **paste** a screenshot straight into the input (`Ctrl+V`), pick files from the new **image button**, or **drag and drop** them onto the box. Thumbnails sit above the input (click to zoom, × to remove), up to 6 per message. Screenshots are **downscaled to 1568px** before sending, so a 4K grab doesn't balloon the request or eat your context window — and the context meter counts the images too. Works with any vision-capable OpenAI-compatible model.
 - 🔓 **Trust this device** — the master-password screen gains a **信任此设备** checkbox. Tick it and the next launch unlocks the vault automatically, straight to the main window. The password is sealed with the **OS credential store** (DPAPI on Windows, Keychain on macOS) — never written in plaintext — and the trust record is dropped automatically if it stops working. Turn it back off any time from **Settings**; systems without a credential store disable the option rather than fall back to storing the password in the clear.
 - 🗃️ **Create files & folders in SFTP** — the file listing gains a **New file** button next to **New folder**, and **right‑clicking blank space** (including an empty directory) offers **新建文件 / 新建文件夹**. Right‑clicking a file still shows its own menu (open / download / rename / delete), so the two never collide. Both panes (remote and local) check for a name clash first, so creating a file can never blank out an existing one.
@@ -203,7 +204,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 ### 功能特性
 
-- 🖥️ **多标签终端与灵活分屏** —— 基于 xterm.js,支持自适应、网页链接识别和主题化。可在标签条上点击**向右/向下分屏**,并对分出来的屏**递归继续分屏**组成任意网格;支持**拖动标签页**在各屏之间移动(拖到边缘新建分屏,拖到中间合并到该屏),分隔条可拖动调整大小。
+- 🖥️ **多标签终端与灵活分屏** —— 基于 xterm.js,支持自适应、网页链接识别和主题化。可在标签条上点击**向右/向下分屏**,并对分出来的屏**递归继续分屏**组成任意网格;支持**拖动标签页**在各屏之间移动(拖到边缘新建分屏,拖到中间合并到该屏),还能**把标签页拖出窗口**撕成独立窗口(会话原样跟着搬走),分隔条可拖动调整大小。
 - 🤖 **内置 AI 运维智能体** —— 兼容 OpenAI 接口,支持 `run_command`(执行命令)、`read_command_output`(读取输出)、`ask_user`(向你提问)、`present_plan`(给出计划)。先出方案、征得确认,再在一个或多个终端上执行。还可以**给它发图片**——截图直接粘贴、选择文件,或拖进输入框。
 - 🔐 **加密保险库** —— 主机、密码和 SSH 密钥都由主密码保护,密钥库永不离开本机。可勾选「**信任此设备**」,下次打开免输主密码。
 - 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**。
@@ -219,6 +220,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 **近期更新(2026 年 7 月)**
 
+- 🪟 **把标签页撕成独立窗口** _(2026‑07‑15)_ —— 把任意内容标签(终端 / SFTP / 编辑器 / 图片,包括分屏面板里的某个标签)**拖出窗口**,即可在光标处弹出一个**新窗口**装它;若拖到**另一个已有窗口**上,则合并进那个窗口(双向都行)。会话**原样搬移、不断开**——SSH 连接和正在运行的命令都毫发无伤,终端**保留完整历史滚屏**(在新窗口里回放重建)。关掉原窗口也不会影响已经撕出去的会话。
 - 🖼️ **给智能体发图片** —— 智能体输入框现在支持三种加图方式:截图**直接粘贴**(`Ctrl+V`)、点新增的「**图片**」按钮选择文件、或把图片**拖进输入框**。缩略图排在输入框上方(点击放大,× 移除),单条消息最多 6 张。图片发送前会**按最长边缩到 1568px**,4K 截图不会把请求体撑爆、也不会吃光上下文——上下文用量表也会把图片算进去。任何支持视觉的 OpenAI 兼容模型都能用。
 - 🔓 **信任此设备** —— 主密码界面新增「**信任此设备**」勾选框。勾上之后,下次打开应用会自动解锁保险库,直接进主界面。主密码用**操作系统凭据存储**加密保存(Windows DPAPI / macOS 钥匙串),**绝不明文落盘**;万一记录失效(比如保险库被重建),会自动清掉并退回手输密码,不会卡死。随时可在「**设置**」里关掉。系统若不支持安全存储,该选项会被禁用,而不是退化成明文保存密码。
 - 🗃️ **SFTP 新建文件与文件夹** —— 文件列表在「新建文件夹」旁边新增了「**新建文件**」按钮,**右键空白处**(包括空目录)也会弹出「**新建文件 / 新建文件夹**」菜单。右键文件行仍然是原来的菜单(打开 / 下载 / 重命名 / 删除),两者互不冲突。远程和本地两个面板都会**先查重名**,所以新建文件绝不会把同名文件清空。

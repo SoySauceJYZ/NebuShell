@@ -772,11 +772,12 @@
             <div class="ico">🖥️</div>
             <h3 data-zh="多标签终端与分屏">Multi-tab terminals &amp; split view</h3>
             <p
-              data-zh="基于 xterm.js 的终端，支持自适应、网页链接和主题。可将任意面板向右或向下分屏，并递归继续分屏组成任意网格；可在面板间拖动标签页——拖到边缘新建分屏，拖到中间合并。"
+              data-zh="基于 xterm.js 的终端，支持自适应、网页链接和主题。可将任意面板向右或向下分屏，并递归继续分屏组成任意网格；可在面板间拖动标签页——拖到边缘新建分屏，拖到中间合并，或拖出窗口撕成独立窗口（会话原样跟着搬走）。"
             >
               xterm.js terminals with fit, web links, and themes. Split any pane right or down, keep
               splitting recursively into any grid, and drag tabs between panes — drop on an edge to
-              make a new split, on the center to merge.
+              make a new split, on the center to merge, or drag one out of the window to tear it off
+              into its own window (the live session moves with it).
             </p>
           </div>
           <div class="card">
@@ -839,6 +840,22 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🪟</div>
+            <h3 data-zh="把标签页撕成独立窗口（2026‑07‑15）">
+              Tear tabs off into their own windows (2026‑07‑15)
+            </h3>
+            <p
+              data-zh="把任意内容标签（终端 / SFTP / 编辑器 / 图片，包括分屏面板里的某个标签）拖出窗口，即可在光标处弹出一个新窗口装它；若拖到另一个已有窗口上，则合并进那个窗口（双向都行）。会话原样搬移、不断开——SSH 连接和正在运行的命令都毫发无伤，终端保留完整历史滚屏（在新窗口里回放重建）。关掉原窗口也不会影响已经撕出去的会话。"
+            >
+              Drag any content tab — a terminal, SFTP, editor or image tab, including one living
+              inside a split pane — out of the window to pop it into a new window at the cursor; drop
+              it onto another window to merge it there instead (both directions). The session moves
+              without dropping: the SSH connection and any running command keep going untouched, and
+              the terminal keeps its full scrollback, replayed into the new window. Close the
+              original window and the torn-off session is unaffected.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🖼️</div>
             <h3 data-zh="给智能体发图片">Send images to the agent</h3>

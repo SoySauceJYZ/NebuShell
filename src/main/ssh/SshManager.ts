@@ -1,15 +1,19 @@
 import { Client, type ClientChannel } from 'ssh2'
-import type { BrowserWindow } from 'electron'
 import { randomBytes } from 'crypto'
 import type { SshConnectOptions, RunShellResult } from '../../shared/types'
 import { SAFE_ALGORITHMS, SAFE_KEEPALIVE_INTERVAL } from './algorithms'
 import { createNoDelaySocket } from './createSocket'
 import { foldTerminalOutput } from '../../shared/terminalFold'
+import { broadcast } from '../windows'
 
 interface Session {
   client: Client
   channel: ClientChannel | null
 }
+
+// Cap on the per-session replay buffer (chars). Enough to rebuild a few screens of
+// scrollback when a tab is torn off into a new window, without unbounded growth.
+const REPLAY_CAP = 200_000
 
 /**
  * 启发式判断输出末尾是否停在一个「等待输入」的提示上(apt 的 [Y/n]、sudo 的 password:、
@@ -27,8 +31,22 @@ function looksLikePrompt(output: string): boolean {
 
 export class SshManager {
   private sessions = new Map<string, Session>()
+  // Rolling tail of each session's output, so a window that adopts the tab can replay
+  // the scrollback. Data is broadcast to all windows (channels are keyed by sessionId,
+  // so only the window owning the tab listens), which decouples a session from the
+  // window it was born in — the prerequisite for moving a tab between windows.
+  private buffers = new Map<string, string>()
 
-  async connect(win: BrowserWindow, opts: SshConnectOptions): Promise<void> {
+  private appendBuffer(sessionId: string, chunk: string): void {
+    const next = (this.buffers.get(sessionId) ?? '') + chunk
+    this.buffers.set(sessionId, next.length > REPLAY_CAP ? next.slice(-REPLAY_CAP) : next)
+  }
+
+  replay(sessionId: string): string {
+    return this.buffers.get(sessionId) ?? ''
+  }
+
+  async connect(opts: SshConnectOptions): Promise<void> {
     const sock = await createNoDelaySocket(opts.host, opts.port)
 
     return new Promise((resolve, reject) => {
@@ -46,13 +64,17 @@ export class SshManager {
             if (session) session.channel = channel
 
             channel.on('data', (chunk: Buffer) => {
-              win.webContents.send(`ssh:data:${opts.sessionId}`, chunk.toString('utf8'))
+              const text = chunk.toString('utf8')
+              this.appendBuffer(opts.sessionId, text)
+              broadcast(`ssh:data:${opts.sessionId}`, text)
             })
             channel.stderr.on('data', (chunk: Buffer) => {
-              win.webContents.send(`ssh:data:${opts.sessionId}`, chunk.toString('utf8'))
+              const text = chunk.toString('utf8')
+              this.appendBuffer(opts.sessionId, text)
+              broadcast(`ssh:data:${opts.sessionId}`, text)
             })
             channel.on('close', () => {
-              win.webContents.send(`ssh:closed:${opts.sessionId}`)
+              broadcast(`ssh:closed:${opts.sessionId}`)
               // Only remove the map entry if it still points to THIS client — during a
               // reconnect a newer session may already own this id, and we must not delete it.
               if (this.sessions.get(opts.sessionId)?.client === client) {
@@ -64,7 +86,7 @@ export class SshManager {
           })
         })
         .on('error', (err) => {
-          win.webContents.send(`ssh:error:${opts.sessionId}`, err.message)
+          broadcast(`ssh:error:${opts.sessionId}`, err.message)
           // Only fail the initial connect attempt here; once the shell is up, transport-level
           // warnings (e.g. transient "Bad packet length") must not tear down the live session
           // or writes would silently stop working while the terminal still shows a prompt.
@@ -334,6 +356,7 @@ export class SshManager {
       session.client.end()
       this.sessions.delete(sessionId)
     }
+    this.buffers.delete(sessionId)
   }
 
   getClient(sessionId: string): Client | undefined {

@@ -10,6 +10,7 @@ import { useSessionStore } from '../store/useSessionStore'
 import { resolveConnectOptions } from '../lib/resolveConnectOptions'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
+import { consumeDetaching } from '../lib/detachRegistry'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
 import { TerminalRightPanel } from './TerminalRightPanel'
 import { TerminalContextMenu } from './TerminalContextMenu'
@@ -121,8 +122,17 @@ export function TerminalTab({
     termRef.current = term
     fitRef.current = fitAddon
 
+    // Adopted tabs were torn off from another window: the session is already alive in
+    // main. Instead of reconnecting (which would kill it and start a new shell), replay
+    // the buffered scrollback and go live. Queue any live data arriving during the replay
+    // fetch so nothing is lost or written out of order.
+    const adopted =
+      useSessionStore.getState().tabs.find((t) => t.id === sessionId)?.adopted === true
+    let replaying = adopted
+    const pending: string[] = []
     const unsubData = window.api.ssh.onData(sessionId, (data) => {
-      term.write(data)
+      if (replaying) pending.push(data)
+      else term.write(data)
     })
     const unsubClosed = window.api.ssh.onClosed(sessionId, () => {
       if (reconnectingRef.current) return
@@ -158,7 +168,24 @@ export function TerminalTab({
       }
     })
 
-    doConnectRef.current()
+    if (adopted) {
+      useSessionStore.getState().clearAdopted(sessionId)
+      window.api.ssh.replay(sessionId).then((buf) => {
+        if (buf) term.write(buf)
+        replaying = false
+        for (const chunk of pending) term.write(chunk)
+        pending.length = 0
+        setStatus('connected')
+        try {
+          if (fitRef.current) fitWithBottomGap(term, fitRef.current)
+          window.api.ssh.resize(sessionId, term.cols, term.rows)
+        } catch {
+          // ignore resize race
+        }
+      })
+    } else {
+      doConnectRef.current()
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       try {
@@ -256,7 +283,8 @@ export function TerminalTab({
       unsubData()
       unsubClosed()
       unsubError()
-      window.api.ssh.disconnect(sessionId)
+      // If this tab is being torn off, keep the session alive for the new window.
+      if (!consumeDetaching(sessionId)) window.api.ssh.disconnect(sessionId)
       term.dispose()
     }
   }, [sessionId, hostId])

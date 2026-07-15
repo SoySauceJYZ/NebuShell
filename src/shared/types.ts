@@ -4,6 +4,17 @@ export interface Group {
   parentId?: string | null
 }
 
+/**
+ * Payload for tearing a tab off into another window. `tab` is the renderer's `Tab`
+ * object (all plain serializable data); it's typed loosely here so the main process
+ * can route it without importing renderer code — the renderer casts back to `Tab`.
+ * `cursor` is the drop point in screen coordinates, used to place/target the window.
+ */
+export interface AdoptPayload {
+  tab: Record<string, unknown>
+  cursor?: { x: number; y: number }
+}
+
 export interface Credential {
   id: string
   name: string

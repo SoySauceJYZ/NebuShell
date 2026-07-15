@@ -12,6 +12,7 @@ import {
   updateSizes,
   type Edge
 } from '../lib/layoutTree'
+import { markDetaching } from '../lib/detachRegistry'
 
 export type TabKind =
   | 'hosts'
@@ -42,6 +43,9 @@ export interface Tab {
   // local-file-backed editor / image tabs
   editorLocalPath?: string
   imageLocalPath?: string
+  // Transient: set when this tab was adopted from another window. Tells TerminalTab /
+  // RemotePane the session is already alive in main — replay/reuse it, don't reconnect.
+  adopted?: boolean
 }
 
 // ---- content-area layout tree (panes + row/column splits) ----
@@ -74,6 +78,12 @@ interface SessionState {
 
   openTab: (tab: Tab) => void
   closeTab: (id: string) => void
+  /** Insert a tab torn off from another window into the active pane (marks it adopted). */
+  adoptTab: (tab: Tab) => void
+  /** Clear the transient adopted flag once the tab's component has consumed it. */
+  clearAdopted: (id: string) => void
+  /** Remove a tab locally for a tear-off — keeps the session alive (no disconnect). */
+  detachTabLocal: (id: string) => void
   setActiveTab: (id: string) => void
   setActivePane: (paneId: string) => void
   setDraggingTab: (id: string | null) => void
@@ -153,6 +163,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       activePaneId: newActivePane,
       lastActiveTerminalId: newLastTerm
     })
+  },
+
+  adoptTab: (tab) => {
+    // Reuse openTab's insertion, but stamp `adopted` so the session is reused, not reconnected.
+    get().openTab({ ...tab, adopted: true })
+  },
+
+  clearAdopted: (id) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, adopted: false } : t))
+    })),
+
+  detachTabLocal: (id) => {
+    // The tab id is the session id (see TabContent). Suppress the disconnect that this
+    // tab's component would otherwise fire on unmount, then remove it like closeTab.
+    markDetaching(id)
+    get().closeTab(id)
   },
 
   setActiveTab: (id) => {

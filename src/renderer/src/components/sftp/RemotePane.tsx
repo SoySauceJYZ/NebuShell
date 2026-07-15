@@ -16,6 +16,7 @@ import { useSessionStore } from '../../store/useSessionStore'
 import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
+import { consumeDetaching } from '../../lib/detachRegistry'
 import { remoteParent } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { usePromptModal } from './PromptModal'
@@ -98,9 +99,15 @@ export function RemotePane({
   useEffect(() => {
     const host = hosts.find((h) => h.id === hostId)
     if (!host) return
-    const opts = resolveConnectOptions(sessionId, host, credentials)
-    window.api.sftp
-      .connect(opts)
+    // Adopted from another window: the sftp session is already alive in main — reuse it
+    // (skip connect, just list) instead of reconnecting.
+    const adopted =
+      useSessionStore.getState().tabs.find((t) => t.id === sessionId)?.adopted === true
+    if (adopted) useSessionStore.getState().clearAdopted(sessionId)
+    const ready = adopted
+      ? Promise.resolve()
+      : window.api.sftp.connect(resolveConnectOptions(sessionId, host, credentials))
+    ready
       .then(() => {
         setStatus('ready')
         return load('/')
@@ -110,7 +117,8 @@ export function RemotePane({
         setErrorMsg(err instanceof Error ? err.message : String(err))
       })
     return () => {
-      window.api.sftp.disconnect(sessionId)
+      // Keep the session alive if this pane is being torn off to another window.
+      if (!consumeDetaching(sessionId)) window.api.sftp.disconnect(sessionId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, hostId])
