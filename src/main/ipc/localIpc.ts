@@ -1,9 +1,10 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
 import { promises as fsp, createReadStream, createWriteStream, existsSync } from 'fs'
-import { homedir } from 'os'
+import { spawn } from 'child_process'
+import { homedir, tmpdir } from 'os'
 import { basename, join, extname } from 'path'
-import type { LocalListEntry, TransferProgress } from '../../shared/types'
+import type { LocalListEntry, TransferProgress, RunShellResult } from '../../shared/types'
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -133,8 +134,117 @@ async function copyRecursive(
   }
 }
 
+// ---- 智能体本机命令执行 ----------------------------------------------------
+// 每次调用都 spawn 一个全新的 shell 进程(win32 → PowerShell,posix → /bin/sh),
+// 超时语义与 SshManager.runInShell 对齐:静默 12s / 硬上限 180s / 输出 1MB 上限。
+
+const EXEC_IDLE_MS = 12_000
+const EXEC_HARD_MS = 180_000
+const EXEC_MAX_OUTPUT = 1024 * 1024
+
+async function runLocalShell(command: string): Promise<RunShellResult> {
+  const isWin = process.platform === 'win32'
+  let scriptDir: string | undefined
+  let child: ReturnType<typeof spawn>
+  if (isWin) {
+    // 用临时 .ps1 + -File 执行(而不是 -Command/-EncodedCommand):后者在 stderr 被重定向时
+    // 会把错误/进度流序列化成 CLIXML(#< CLIXML + XML 块),污染喂给模型的输出;-File 输出纯文本。
+    // 脚本文件带 UTF-8 BOM,保证 PowerShell 5.1 正确解析中文命令。
+    // [Console]::OutputEncoding=UTF8 把控制台输出代码页切到 65001,使 ipconfig/tasklist
+    // 等原生程序(中文 Windows 默认 GBK 输出)改为 UTF-8,PowerShell 也按 UTF-8 解码;
+    // $OutputEncoding=UTF8 保证管道喂给原生程序的中文不坏。
+    const script = [
+      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8',
+      '$OutputEncoding=[System.Text.Encoding]::UTF8',
+      "$ProgressPreference='SilentlyContinue'",
+      command,
+      'if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE } elseif ($?) { exit 0 } else { exit 1 }'
+    ].join('\r\n')
+    scriptDir = await fsp.mkdtemp(join(tmpdir(), 'nebu-agent-'))
+    const scriptPath = join(scriptDir, 'cmd.ps1')
+    // 字符串开头的不可见字符是 UTF-8 BOM(U+FEFF),PowerShell 5.1 据此按 UTF-8 解析脚本中的中文。
+    await fsp.writeFile(scriptPath, '﻿' + script, 'utf8')
+    child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      { cwd: homedir(), windowsHide: true }
+    )
+  } else {
+    // detached → 独立进程组,便于超时后整组 kill(命令可能派生子进程)。
+    child = spawn('/bin/sh', ['-c', command], { cwd: homedir(), detached: true })
+  }
+
+  return new Promise<RunShellResult>((resolve, reject) => {
+    let output = ''
+    let killed = false
+    let note: string | undefined
+    const start = Date.now()
+    let lastDataAt = start
+
+    const append = (chunk: string): void => {
+      output += chunk
+      lastDataAt = Date.now()
+    }
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', append)
+    child.stderr?.on('data', append)
+
+    const kill = (why: string): void => {
+      if (killed) return
+      killed = true
+      note = why
+      try {
+        if (isWin && child.pid) {
+          // /t 杀整棵进程树,避免残留孤儿进程(如 ping/长任务派生的子进程)。
+          spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true })
+        } else if (child.pid) {
+          process.kill(-child.pid, 'SIGKILL')
+        } else {
+          child.kill('SIGKILL')
+        }
+      } catch {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // 进程可能已退出
+        }
+      }
+    }
+
+    const watchdog = setInterval(() => {
+      const now = Date.now()
+      if (output.length > EXEC_MAX_OUTPUT) {
+        kill(`输出超过 ${Math.round(EXEC_MAX_OUTPUT / 1024)}KB 上限,已终止(输出已截断)`)
+      } else if (now - start >= EXEC_HARD_MS) {
+        kill(`命令超过 ${EXEC_HARD_MS / 1000}s 硬上限,已终止`)
+      } else if (now - lastDataAt >= EXEC_IDLE_MS) {
+        kill(
+          `命令静默超过 ${EXEC_IDLE_MS / 1000}s 无输出,已终止(若在等待输入,请改用非交互形式)`
+        )
+      }
+    }, 500)
+
+    child.on('error', (err) => {
+      clearInterval(watchdog)
+      reject(new Error(`本机 shell 启动失败: ${err.message}`))
+    })
+
+    child.on('close', (code) => {
+      clearInterval(watchdog)
+      if (killed) {
+        resolve({ output, exitCode: null, timedOut: true, state: 'interrupted', note })
+      } else {
+        resolve({ output, exitCode: code, timedOut: false, state: 'completed' })
+      }
+    })
+  })
+}
+
 export function registerLocalIpc(): void {
   ipcMain.handle('local:home', () => homedir())
+
+  ipcMain.handle('local:exec', (_e, command: string) => runLocalShell(command))
 
   ipcMain.handle('local:drives', () => {
     if (process.platform !== 'win32') return ['/']

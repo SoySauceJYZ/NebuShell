@@ -25,7 +25,8 @@ import {
   Square,
   Gauge,
   Paperclip,
-  FileText
+  FileText,
+  Laptop
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
@@ -38,6 +39,8 @@ import {
   READ_ATTACHMENT_TOOL,
   ASK_USER_TOOL,
   PRESENT_PLAN_TOOL,
+  buildLocalTarget,
+  localTargetName,
   type AgentTarget
 } from '../lib/agentTools'
 import {
@@ -175,6 +178,9 @@ export function AgentPanel({
   useEffect(() => {
     const ordered = [sessionId, ...attachedIds.filter((x) => x !== sessionId)]
     const seen = new Map<string, number>()
+    // 本机(宿主机)目标始终可用,排在末尾;先预占其名字,同名终端 tab 自动去重为 #2。
+    const local = buildLocalTarget()
+    seen.set(local.name, 1)
     const resolved: AgentTarget[] = []
     for (const tid of ordered) {
       const tab = terminalTabs.find((t) => t.id === tid)
@@ -188,6 +194,7 @@ export function AgentPanel({
         host: hosts.find((h) => h.id === tab.hostId)?.label ?? tab.title
       })
     }
+    resolved.push(local)
     setTargets(sessionId, resolved)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -424,7 +431,7 @@ export function AgentPanel({
 
       {!connected && (
         <div className="border-b border-[var(--panel-border)] bg-yellow-50 px-3 py-1.5 text-xs text-yellow-700">
-          终端未连接,命令将无法执行。
+          终端未连接,SSH 命令将无法执行(本机命令仍可用)。
         </div>
       )}
 
@@ -992,7 +999,7 @@ function TargetSelector({
       <DropdownMenu.Trigger asChild>
         <button className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]">
           <Server size={13} className="text-[var(--accent)]" />
-          终端 {count}
+          目标 {count + 1}
           <ChevronDown size={12} className="text-[var(--text-muted)]" />
         </button>
       </DropdownMenu.Trigger>
@@ -1005,6 +1012,15 @@ function TargetSelector({
         >
           <div className="px-2.5 pb-1 pt-1.5 text-[11px] text-[var(--text-muted)]">
             勾选让智能体可在这些终端执行命令
+          </div>
+          {/* 本机(宿主机)目标:始终可用,不可取消 */}
+          <div className="flex select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-sm">
+            <Check size={14} className="shrink-0 text-[var(--accent)]" />
+            <Laptop size={13} className="shrink-0 text-[var(--accent)]" />
+            <div className="min-w-0 flex-1 truncate text-[var(--text-dark)]">
+              {localTargetName()}
+            </div>
+            <span className="shrink-0 text-[10px] text-[var(--text-muted)]">始终可用</span>
           </div>
           {terminals.length === 0 && (
             <div className="px-2.5 py-2 text-xs text-[var(--text-muted)]">没有打开的终端</div>
@@ -1358,7 +1374,7 @@ function ToolCard({
         <span className="text-xs font-medium text-[var(--text-muted)]">建议执行命令</span>
         {target && (
           <span className="ml-auto flex items-center gap-1 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
-            <Server size={10} />
+            {target === localTargetName() ? <Laptop size={10} /> : <Server size={10} />}
             {target}
           </span>
         )}

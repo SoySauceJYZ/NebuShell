@@ -7,9 +7,15 @@ import {
   PRESENT_PLAN_TOOL,
   READ_ATTACHMENT_TOOL,
   READ_COMMAND_OUTPUT_TOOL,
+  isLocalTarget,
   type AgentTarget
 } from '../lib/agentTools'
-import { type AgentMode, disposition, isRiskyCommand } from '../lib/agentPermissions'
+import {
+  type AgentMode,
+  disposition,
+  isRiskyCommand,
+  isRiskyLocalCommand
+} from '../lib/agentPermissions'
 import { clampCommandOutput, saveCommandOutput, readSavedOutput } from '../lib/commandOutput'
 import { readSavedAttachment } from '../lib/attachments'
 import { useSessionStore } from './useSessionStore'
@@ -147,7 +153,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         .tabs.find((t) => t.id === resolved.sessionId)?.hostId
       if (targetHostId) useCommandHistoryStore.getState().add(targetHostId, command, 'agent')
       try {
-        const res = await window.api.ssh.runInShell(resolved.sessionId, command)
+        // 本机目标走 local:exec(宿主机 shell),其余走 SSH PTY。
+        const res = isLocalTarget(resolved)
+          ? await window.api.local.exec(command)
+          : await window.api.ssh.runInShell(resolved.sessionId, command)
         // 完整输出留在本地(供 read_command_output 分页检索),喂给模型的是策略裁剪版。
         const ref = saveCommandOutput({
           output: res.output,
@@ -219,7 +228,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         executeLookup(id, call)
         continue
       }
-      const risky = isRiskyCommand(parseArgs(call).command)
+      // 风险判定按目标平台分派:本机(win32 → PowerShell 规则)vs SSH 远程(Unix 规则)。
+      const { command, target } = parseArgs(call)
+      const resolved = resolveTarget(id, target)
+      const risky = isLocalTarget(resolved) ? isRiskyLocalCommand(command) : isRiskyCommand(command)
       const disp = disposition(mode, risky)
       if (disp === 'auto') {
         await executeCall(id, call)

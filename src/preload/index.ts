@@ -200,7 +200,9 @@ const api = {
     copy: (src: string, dstDir: string, transferId: string): Promise<void> =>
       ipcRenderer.invoke('local:copy', src, dstDir, transferId),
     pickDir: (): Promise<string | null> => ipcRenderer.invoke('local:pickDir'),
-    pickFiles: (): Promise<string[]> => ipcRenderer.invoke('local:pickFiles')
+    pickFiles: (): Promise<string[]> => ipcRenderer.invoke('local:pickFiles'),
+    // 智能体在本机执行命令(win32 → PowerShell,posix → /bin/sh)。
+    exec: (command: string): Promise<RunShellResult> => ipcRenderer.invoke('local:exec', command)
   },
   transfers: {
     // Subscribe to progress for one transferId (covers both sftp:* and local:* streams).

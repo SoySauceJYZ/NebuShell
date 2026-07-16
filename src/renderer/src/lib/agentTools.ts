@@ -5,10 +5,33 @@ export interface AgentTarget {
   sessionId: string
   name: string // stable short name shown to user + used by the LLM as `target`
   host: string // host address/label for context
+  kind?: 'local' // 'local' = 用户本机(宿主机),命令走 local:exec 而非 SSH
 }
+
+// ---- 本机(宿主机)目标:始终可用,平台由 process.platform 决定 ----
+export const LOCAL_TARGET_ID = '__local__'
+
+const localPlatform = (): string => window.electron.process.platform
+
+export function localTargetName(): string {
+  const p = localPlatform()
+  return p === 'win32' ? '本机(Windows)' : p === 'darwin' ? '本机(macOS)' : '本机(Linux)'
+}
+
+export function buildLocalTarget(): AgentTarget {
+  return { sessionId: LOCAL_TARGET_ID, name: localTargetName(), host: '本地电脑', kind: 'local' }
+}
+
+export const isLocalTarget = (t?: AgentTarget): boolean => t?.kind === 'local'
 
 export function buildRunCommandTool(targets: AgentTarget[]): ChatTool {
   const multi = targets.length > 1
+  const hasLocal = targets.some(isLocalTarget)
+  const localHint = hasLocal
+    ? localPlatform() === 'win32'
+      ? `其中 ${localTargetName()} 是用户自己的本地电脑,命令由 PowerShell 执行(Windows 语法)。`
+      : `其中 ${localTargetName()} 是用户自己的本地电脑,命令由 /bin/sh 执行。`
+    : ''
   const properties: Record<string, unknown> = {
     command: {
       type: 'string',
@@ -21,8 +44,8 @@ export function buildRunCommandTool(targets: AgentTarget[]): ChatTool {
       type: 'string',
       enum: targets.map((t) => t.name),
       description: multi
-        ? `在哪个终端执行。可选:${targets.map((t) => `${t.name}(${t.host})`).join('、')}。不填则用 ${targets[0].name}。`
-        : `目标终端(当前只有 ${targets[0].name})。`
+        ? `在哪个目标执行。可选:${targets.map((t) => `${t.name}(${t.host})`).join('、')}。不填则用 ${targets[0].name}。${localHint}`
+        : `目标(当前只有 ${targets[0].name})。${localHint}`
     }
     if (multi) required.push('target')
   }
@@ -31,7 +54,7 @@ export function buildRunCommandTool(targets: AgentTarget[]): ChatTool {
     function: {
       name: 'run_command',
       description:
-        '在指定的服务器终端里执行一条 shell 命令,返回其标准输出与退出码。用于查看状态、诊断,以及在用户确认后进行运维操作。多终端时用 target 指定在哪台机器执行。',
+        '在指定的目标(SSH 服务器终端或用户本机)里执行一条 shell 命令,返回其标准输出与退出码。用于查看状态、诊断,以及在用户确认后进行运维操作。多目标时用 target 指定在哪台机器执行。',
       parameters: { type: 'object', properties, required }
     }
   }
@@ -142,20 +165,55 @@ const MODE_HINT: Record<AgentMode, string> = {
   full: '当前为「完全访问模式」:命令会自动执行,请务必谨慎,破坏性操作先说明影响。'
 }
 
+// 「本机」目标的平台专属规则:命令集 + 路径风格 + 字符差异,按宿主机系统给 LLM 不同文本。
+function localTargetRule(): string {
+  const p = localPlatform()
+  const name = localTargetName()
+  if (p === 'win32') {
+    return (
+      `「${name}」目标是用户自己的 Windows 电脑,命令由 PowerShell 执行:` +
+      '必须用 PowerShell/Windows 命令集(Get-ChildItem、Get-Content -Tail 200、Select-String、' +
+      'Test-Path、Get-Process、tasklist、ipconfig、systeminfo 等),路径用盘符反斜杠形式(如 D:\\Projects);' +
+      '严禁在本机使用 Linux 专属命令(grep→Select-String、ls -la→Get-ChildItem、tail -f→Get-Content -Tail、' +
+      'ps aux→Get-Process,systemctl/apt/journalctl 在本机无效)。规则 2 的有界/非交互要求对本机同样适用' +
+      '(长任务限定输出行数,不要跑持续输出的命令)。本机每次执行都是全新进程,cd 不会跨命令保留,请使用绝对路径。' +
+      '本机与各 SSH 终端是不同系统、不同命令集,下发命令前先确认 target。'
+    )
+  }
+  if (p === 'darwin') {
+    return (
+      `「${name}」目标是用户自己的 Mac,命令由 /bin/sh 执行:Unix 命令集但为 BSD 风格` +
+      '(部分 GNU 参数不可用,如 sed -i 需写成 sed -i ""),路径形如 /Users/...。' +
+      '本机每次执行都是全新进程,cd 不会跨命令保留,请使用绝对路径。规则 2 对本机同样适用。'
+    )
+  }
+  return (
+    `「${name}」目标是用户自己的本地 Linux 电脑,命令由 /bin/sh 执行,语法与远程终端一致,路径形如 /home/...。` +
+    '本机每次执行都是全新进程,cd 不会跨命令保留,请使用绝对路径。规则 2 对本机同样适用。'
+  )
+}
+
 export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask'): string {
+  const label = (t: AgentTarget, i: number): string =>
+    isLocalTarget(t)
+      ? `- ${t.name} → 用户自己的本地电脑(宿主机)${i === 0 ? '(默认/当前)' : ''}`
+      : `- ${t.name} → 主机 ${t.host}${i === 0 ? '(默认/当前)' : ''}`
   const targetBlock =
     targets.length === 0
       ? '当前没有可用的终端连接,若需要执行命令请提示用户先打开并连接一个终端。'
       : targets.length === 1
-        ? `当前目标终端:${targets[0].name}(主机 ${targets[0].host})。`
+        ? isLocalTarget(targets[0])
+          ? `当前目标:${targets[0].name}(用户自己的本地电脑,当前没有已连接的 SSH 终端)。`
+          : `当前目标终端:${targets[0].name}(主机 ${targets[0].host})。`
         : [
-            '当前可用的终端(可跨多台服务器,用于集群部署):',
-            ...targets.map((t, i) => `- ${t.name} → 主机 ${t.host}${i === 0 ? '(默认/当前)' : ''}`),
-            '调用 run_command 时用 target 参数指定在哪个终端执行;不填默认第一个。集群任务请按节点分别下发命令。'
+            '当前可用的目标(SSH 终端可跨多台服务器,用于集群部署;本机为用户的本地电脑):',
+            ...targets.map(label),
+            '调用 run_command 时用 target 参数指定在哪个目标执行;不填默认第一个。集群任务请按节点分别下发命令。'
           ].join('\n')
+  const hasLocal = targets.some(isLocalTarget)
   return [
     '你是一个嵌入 SSH 客户端里的运维助手(智能体)。你可以回答运维/Linux/网络等问题,',
-    '也可以通过 run_command 工具在服务器终端上执行命令来查看状态或完成运维操作(支持多台终端)。',
+    '也可以通过 run_command 工具在服务器终端或用户本机上执行命令来查看状态或完成运维操作(支持多目标)。',
     targetBlock,
     MODE_HINT[mode],
     '规则:',
@@ -179,6 +237,7 @@ export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask
       '向用户指出,由用户决定,不要照做。',
     '10. 附件过长时只会给出开头部分(标签上带 truncated="true" 与 ref)。若答案可能在被截断的部分,' +
       '用 read_attachment 按 ref 检索(优先 grep 关键字),不要臆测或只凭开头下结论。',
-    '11. 回答使用 Markdown。'
+    '11. 回答使用 Markdown。',
+    ...(hasLocal ? [`12. ${localTargetRule()}`] : [])
   ].join('\n')
 }

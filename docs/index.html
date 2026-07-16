@@ -761,11 +761,13 @@
             <div class="ico">🤖</div>
             <h3 data-zh="内置 AI 运维智能体">Built-in AI ops agent</h3>
             <p
-              data-zh="兼容 OpenAI 接口的智能体，可执行命令、读取输出、提出问题并给出计划——始终先计划、再确认。还能给它发图片：截图直接粘贴、选择文件，或拖进输入框。"
+              data-zh="兼容 OpenAI 接口的智能体，可执行命令、读取输出、提出问题并给出计划——始终先计划、再确认。既能跨多台 SSH 终端执行，也能操作你的本机（Windows 用 PowerShell，macOS / Linux 用 /bin/sh），审批流程完全一致。还能给它发图片：截图直接粘贴、选择文件，或拖进输入框。"
             >
               An OpenAI-compatible agent that runs commands, reads output, asks questions, and
-              presents plans — always plan-and-confirm. Send it images too — paste a screenshot,
-              pick a file, or drag one into the composer.
+              presents plans — always plan-and-confirm. It executes across one or many SSH terminals
+              — and on your local machine too (PowerShell on Windows, /bin/sh on macOS/Linux), with
+              the same approval flow. Send it images too — paste a screenshot, pick a file, or drag
+              one into the composer.
             </p>
           </div>
           <div class="card">
@@ -840,6 +842,27 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">💻</div>
+            <h3 data-zh="智能体可以操作本机了（2026‑07‑16）">
+              The agent can now operate your local machine (2026‑07‑16)
+            </h3>
+            <p
+              data-zh="智能体面板新增始终可用的「本机」目标，与 SSH 终端并列——可以让它浏览本地目录、查看进程、执行任意本机命令，还能在一个任务里混搭本机与远程步骤。Windows 上命令由 PowerShell 执行，全链路 UTF-8 处理（中文文件名、ipconfig / systeminfo 等原生工具输出不乱码、无 CLIXML 杂音）；macOS / Linux 上由 /bin/sh 执行。系统提示词按操作系统教模型用对命令集（如 Windows 用 Select-String 而不是 grep），并且新增 PowerShell 风险识别，现有权限模式在本机同样生效——只读命令自动执行、写操作仍需确认、计划模式照旧拦截。每次执行都是全新进程，与 SSH 命令一样有 12 秒静默 / 180 秒硬超时，超时会清理整棵进程树，长输出也走同一套 #ref 分页检索管线。"
+            >
+              The agent panel gains an always-available local-machine target alongside your SSH
+              terminals — ask it to browse local folders, inspect processes, or run any local
+              command, and mix local + remote steps in one task. On Windows commands run through
+              PowerShell with end-to-end UTF-8 handling (Chinese file names and native tools like
+              ipconfig / systeminfo decode cleanly — no mojibake, no CLIXML noise); on macOS/Linux
+              they run through /bin/sh. The system prompt teaches the model the right command set
+              per OS (Select-String instead of grep on Windows), and a PowerShell-aware risk
+              classifier keeps the existing permission modes working locally — reads auto-run,
+              writes still ask first, plan mode still blocks them. Every run is a fresh process with
+              the same 12s-idle / 180s hard timeout as SSH commands, the whole process tree is
+              killed on timeout, and long output flows into the same #ref paged-retrieval pipeline.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🗂️</div>
             <h3 data-zh="主机管理增强（2026‑07‑15）">Host management, leveled up (2026‑07‑15)</h3>

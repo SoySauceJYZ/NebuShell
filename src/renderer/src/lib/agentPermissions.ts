@@ -114,3 +114,84 @@ export function isRiskyCommand(raw: string): boolean {
   }
   return false
 }
+
+// ---- 本机命令的风险判定(按宿主机平台分派) --------------------------------
+
+// PowerShell 只读命令/别名白名单(小写)。注意:rm/del/rd/ri/mv/cp 在 PowerShell 里是
+// Remove-Item/Move-Item/Copy-Item 的别名,绝不能沿用 Linux 白名单 —— 未知一律视为风险。
+const READONLY_PS = new Set([
+  // 目录/文件读取
+  'dir', 'ls', 'gci', 'get-childitem', 'cat', 'gc', 'get-content', 'type',
+  'pwd', 'gl', 'get-location', 'cd', 'sl', 'set-location', 'tree',
+  // 输出/回显
+  'echo', 'write-output', 'write-host', 'out-string', 'out-host', 'out-null',
+  // 系统/环境信息
+  'whoami', 'hostname', 'ver', 'systeminfo', 'gv', 'get-variable',
+  // 网络诊断
+  'ipconfig', 'netstat', 'ping', 'tracert', 'pathping', 'nslookup', 'route', 'arp',
+  'getmac', 'nbtstat',
+  // 进程/服务(只读)
+  'tasklist', 'gps', 'ps', 'gsv',
+  // 查找/过滤/统计
+  'where', 'where-object', 'findstr', 'sls', 'select-string', 'select', 'select-object',
+  'sort', 'sort-object', 'group', 'group-object', 'measure', 'measure-object',
+  'compare', 'compare-object',
+  // 格式化
+  'fl', 'format-list', 'ft', 'format-table', 'fw', 'format-wide',
+  // 帮助/成员
+  'help', 'get-help', 'gm', 'get-member', 'gcm', 'get-command'
+])
+
+// 以这些动词开头的 cmdlet 视为只读安全(Get-*、Test-* 等)。
+const SAFE_PS_VERBS = ['get-', 'test-', 'measure-', 'resolve-', 'compare-', 'show-', 'find-']
+
+// 有意落入默认拒绝(无需显式列出)的例子:Remove-Item/del/rd/ri/rm、Set-*/New-*/Add-*/
+// Clear-*/Move-*/Copy-*/Rename-*、Stop-Process/taskkill、Start-Process/saps、
+// Invoke-Expression(iex)/Invoke-WebRequest(iwr/curl/wget)、reg、netsh、sc、schtasks、
+// format、diskpart、bcdedit、shutdown、foreach-object/%(可调用任意命令)。
+function isRiskyPowershellCommand(raw: string): boolean {
+  const cmd = raw.trim()
+  if (!cmd) return false
+
+  // 剥掉无害重定向(丢弃输出/合并流),剩余 > / >> 视为写文件 → 风险。
+  const redir = cmd
+    .replace(/\d?>>?\s*\$null/gi, '')
+    .replace(/\*>+\s*\$null/gi, '')
+    .replace(/2>&1/g, '')
+    .replace(/\|\s*out-null/gi, '')
+  if (/>>?/.test(redir)) return true
+
+  const segments = cmd.split(/\|\||&&|[|;\n]/).map((s) => s.trim()).filter(Boolean)
+  for (const seg of segments) {
+    const tokens = seg.split(/\s+/)
+    let i = 0
+    // 段首调用符 & 后面跟的才是真正的命令
+    if (tokens[i] === '&') i++
+    let prog = tokens[i]
+    if (!prog) return true
+    // 纯变量/表达式读取(如 $env:PATH、$PSVersionTable):段内无赋值即视为只读。
+    if (/^[$(]/.test(prog)) {
+      if (/(^|[^=!<>])=([^=]|$)/.test(seg)) return true
+      continue
+    }
+    prog = prog.replace(/^&/, '').replace(/^["']|["']$/g, '')
+    prog = prog.replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase()
+
+    if (SUBCMD_SAFE[prog]) {
+      const sub = tokens[i + 1]
+      if (!sub || !SUBCMD_SAFE[prog].has(sub)) return true
+      continue
+    }
+    if (READONLY_PS.has(prog)) continue
+    if (SAFE_PS_VERBS.some((v) => prog.startsWith(v))) continue
+    return true // unknown / not clearly safe → risky
+  }
+  return false
+}
+
+/** 本机命令风险判定:win32 → PowerShell 规则,其余平台沿用 Unix 规则。 */
+export function isRiskyLocalCommand(raw: string): boolean {
+  return window.electron.process.platform === 'win32'
+    ? isRiskyPowershellCommand(raw)
+    : isRiskyCommand(raw)
+}
