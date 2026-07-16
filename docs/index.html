@@ -803,6 +803,18 @@
             </p>
           </div>
           <div class="card">
+            <div class="ico">🐳</div>
+            <h3 data-zh="Docker 容器管理">Docker container management</h3>
+            <p
+              data-zh="每台主机的容器面板：实时 docker ps、启停重启、日志、sudo 自动探测；一键打开 docker exec 容器终端；基于 docker cp tar 流的容器文件浏览器——浏览、编辑保存、在本机与任意运行中容器之间拖拽传文件。"
+            >
+              A per-host container panel (live docker ps, start/stop/restart, logs, sudo
+              auto-detect), one-click container terminals via docker exec PTY, and a container file
+              browser built on docker cp tar streaming — browse, edit-and-save, and drag files
+              between your PC and any running container.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">📝</div>
             <h3 data-zh="Monaco 编辑器">Monaco editor</h3>
             <p
@@ -842,6 +854,46 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🐳</div>
+            <h3 data-zh="Docker 容器管理（2026‑07‑17）">
+              Manage Docker containers on your hosts (2026‑07‑17)
+            </h3>
+            <p
+              data-zh="每个已连接终端新增「容器」侧边面板，实时轮询 docker ps -a：状态徽标、镜像与端口一目了然，启动 / 停止 / 重启一键完成，点「日志」直接在编辑器标签里打开 docker logs 尾部。Docker 权限自动探测——先试 docker，再试免密 sudo，都不行给出清晰提示和重新检测按钮。从列表一键打开容器终端：独立的 exec-PTY 会话（bash 优先、sh 回退），窗口缩放、退出重连、复制分屏、撕出窗口全部可用。容器文件浏览器复用 SFTP 同款双栏体验——底层走 docker cp 的 tar 流（二进制安全，不依赖容器内任何工具）加 GNU/busybox 自适应 ls 解析：编辑并保存回容器（带版本历史）、新建重命名删除、本地与容器之间直接拖拽传输并显示实时进度。容器终端右侧的文件面板浏览的就是容器内部的文件系统，而不是宿主机。主机页右键也新增「查看容器」直达入口。"
+            >
+              Every connected terminal gains a Containers side panel that live-polls docker ps -a:
+              state badges, image &amp; ports, start / stop / restart, and one-click logs (opens
+              docker logs --tail 500 in an editor tab). Docker access is auto-detected — plain
+              docker first, then passwordless sudo, with a friendly hint and a re-detect button
+              when neither works. Open a container terminal straight from the list: a dedicated
+              exec-PTY session running docker exec -it (bash with sh fallback) where resize,
+              reconnect on exit, duplicate/split and tear-off all just work. Browse container files
+              in the same dual-pane explorer as SFTP — powered by docker cp tar streaming
+              (binary-safe, no tools required inside the container) plus GNU/busybox-aware ls
+              parsing: edit and save files back into the container (with version history),
+              create/rename/delete, and drag &amp; drop between local and container with live
+              transfer progress. Inside a container terminal, the right-side file panel browses
+              the container's filesystem, not the host's. Plus a hosts-page entry: right-click a
+              host → view containers.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">⚡</div>
+            <h3 data-zh="打开 SFTP 不再卡死（2026‑07‑17）">
+              Opening SFTP no longer freezes the app (2026‑07‑17)
+            </h3>
+            <p
+              data-zh="原来的 Windows 盘符探测在主进程上同步检查 A:–Z:，一块失联的网络映射盘就能把整个应用挂住 20 秒以上（实测最差 22.3 秒 → 现在 1 秒封顶）。现在改为全盘并行异步探测、每盘 1 秒超时、结果短缓存，应用永不冻结。目录列表也从逐个串行 stat 改为并行执行——5100 项的文件夹从 435ms 降到 31ms。"
+            >
+              The Windows drive probe used to check A:–Z: with synchronous calls on the main
+              process, so one stale network drive could hang the whole app for 20+ seconds
+              (measured worst case 22.3s → now capped at 1s). It now probes all drives in
+              parallel, asynchronously, with a 1s per-drive timeout and a short cache — the app
+              never freezes. Directory listing also stats entries in parallel instead of
+              one-by-one: a 5,100-entry folder dropped from 435ms to 31ms.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">💻</div>
             <h3 data-zh="智能体可以操作本机了（2026‑07‑16）">

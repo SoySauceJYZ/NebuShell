@@ -18,10 +18,12 @@ import {
   ArrowUp,
   ArrowDown,
   Search,
-  X
+  X,
+  Container
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
+import { useTerminalStore } from '../store/useTerminalStore'
 import { HostFormModal } from './HostFormModal'
 import { Select } from './ui/Select'
 import type { Host, Group, Credential } from '@shared/types'
@@ -118,6 +120,12 @@ export function HostsView(): React.ReactElement {
       title: `${host.label} (SFTP)`,
       hostId: host.id
     })
+  }
+
+  // 连接主机并直接展开右侧「容器」面板
+  const openContainers = (host: Host): void => {
+    useTerminalStore.getState().setRightPanel('docker')
+    connect(host)
   }
 
   return (
@@ -261,6 +269,13 @@ export function HostsView(): React.ReactElement {
                         连接
                       </ContextMenu.Item>
                       <ContextMenu.Item
+                        onSelect={() => openContainers(host)}
+                        className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
+                      >
+                        <Container size={15} strokeWidth={1.75} className="text-[var(--text-muted)]" />
+                        查看容器
+                      </ContextMenu.Item>
+                      <ContextMenu.Item
                         onSelect={() => void duplicateHost(host)}
                         className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
                       >
@@ -294,6 +309,7 @@ export function HostsView(): React.ReactElement {
           credentials={credentials}
           onConnect={connect}
           onOpenSftp={openSftp}
+          onOpenContainers={openContainers}
           onEditFull={() => {
             setEditingHost(selected)
             setShowForm(true)
@@ -748,6 +764,7 @@ function HostDetailPanel({
   credentials,
   onConnect,
   onOpenSftp,
+  onOpenContainers,
   onEditFull,
   onDelete
 }: {
@@ -756,6 +773,7 @@ function HostDetailPanel({
   credentials: Credential[]
   onConnect: (h: Host) => void
   onOpenSftp: (h: Host) => void
+  onOpenContainers: (h: Host) => void
   onEditFull: () => void
   onDelete: () => void | Promise<void>
 }): React.ReactElement {
@@ -988,6 +1006,10 @@ function HostDetailPanel({
             <button onClick={() => onOpenSftp(host)} className="btn-secondary">
               <FolderOpen size={15} />
               打开 SFTP
+            </button>
+            <button onClick={() => onOpenContainers(host)} className="btn-secondary">
+              <Container size={15} />
+              查看容器
             </button>
             <div className="flex gap-2">
               <button onClick={onEditFull} className="btn-secondary flex-1">

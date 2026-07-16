@@ -1,33 +1,56 @@
 import { Fragment, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Plus, X, HardDrive, Server } from 'lucide-react'
+import { Plus, X, HardDrive, Server, Container } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { RemotePane } from './RemotePane'
 import { LocalPane } from './LocalPane'
+import { ContainerPane } from './ContainerPane'
 import { TransfersPanel } from './TransfersPanel'
 
 interface BasePane {
   paneId: string
   weight: number
 }
-type PaneState = (BasePane & { kind: 'remote'; hostId: string }) | (BasePane & { kind: 'local' })
+type PaneState =
+  | (BasePane & { kind: 'remote'; hostId: string })
+  | (BasePane & { kind: 'local' })
+  | (BasePane & {
+      kind: 'container'
+      hostId: string
+      containerId: string
+      containerName: string
+      dockerCmd: string
+    })
 
 function pid(): string {
   return crypto?.randomUUID ? crypto.randomUUID().slice(0, 8) : `p${Date.now()}${Math.random()}`
 }
 
+export interface InitialContainer {
+  hostId: string
+  containerId: string
+  containerName: string
+  dockerCmd: string
+}
+
 export function ExplorerTab({
   tabId,
-  initialHostId
+  initialHostId,
+  initialContainer
 }: {
   tabId: string
   initialHostId?: string
+  /** 从容器面板打开:预置一个「本地 + 容器」双栏。 */
+  initialContainer?: InitialContainer
 }): React.ReactElement {
   const hosts = useVaultStore((s) => s.hosts)
   const [panes, setPanes] = useState<PaneState[]>(() => {
     const init: PaneState[] = [{ paneId: pid(), kind: 'local', weight: 1 }]
-    if (initialHostId)
+    if (initialContainer) {
+      init.push({ paneId: pid(), kind: 'container', weight: 1, ...initialContainer })
+    } else if (initialHostId) {
       init.push({ paneId: pid(), kind: 'remote', hostId: initialHostId, weight: 1 })
+    }
     return init
   })
   const containerRef = useRef<HTMLDivElement>(null)
@@ -114,8 +137,13 @@ export function ExplorerTab({
 
       <div ref={containerRef} className="flex min-h-0 flex-1">
         {panes.map((pane, i) => {
-          const host = pane.kind === 'remote' ? hosts.find((h) => h.id === pane.hostId) : null
-          const title = pane.kind === 'local' ? '本地' : (host?.label ?? '远程')
+          const host = pane.kind !== 'local' ? hosts.find((h) => h.id === pane.hostId) : null
+          const title =
+            pane.kind === 'local'
+              ? '本地'
+              : pane.kind === 'container'
+                ? `${pane.containerName} @ ${host?.label ?? '主机'}`
+                : (host?.label ?? '远程')
           return (
             <Fragment key={pane.paneId}>
               <div
@@ -125,6 +153,8 @@ export function ExplorerTab({
                 <div className="flex items-center gap-1.5 border-b border-[var(--panel-border)] bg-[var(--content-bg)] px-3 py-1">
                   {pane.kind === 'local' ? (
                     <HardDrive size={12} className="text-[var(--text-muted)]" />
+                  ) : pane.kind === 'container' ? (
+                    <Container size={12} className="text-[var(--text-muted)]" />
                   ) : (
                     <Server size={12} className="text-[var(--text-muted)]" />
                   )}
@@ -144,6 +174,15 @@ export function ExplorerTab({
                 <div className="min-h-0 flex-1">
                   {pane.kind === 'local' ? (
                     <LocalPane ownerId={tabId} />
+                  ) : pane.kind === 'container' ? (
+                    <ContainerPane
+                      sessionId={`containerfs-${tabId}-${pane.paneId}`}
+                      hostId={pane.hostId}
+                      containerId={pane.containerId}
+                      containerName={pane.containerName}
+                      dockerCmd={pane.dockerCmd}
+                      ownerId={tabId}
+                    />
                   ) : (
                     <RemotePane
                       sessionId={`explorer-${tabId}-${pane.paneId}`}

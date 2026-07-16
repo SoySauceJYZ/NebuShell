@@ -13,7 +13,8 @@ import {
   Plus,
   Bot,
   X,
-  RefreshCw
+  RefreshCw,
+  Container
 } from 'lucide-react'
 import {
   useTerminalStore,
@@ -26,15 +27,17 @@ import { useCommandHistoryStore, EMPTY_ENTRIES } from '../store/useCommandHistor
 import { ENABLE_CJK_COMMAND } from '../lib/quickActions'
 import { fetchServerHistory } from '../lib/serverHistory'
 import { TERMINAL_THEMES, DEFAULT_THEME_ID } from '../lib/terminalThemes'
-import { SftpPanel } from './SftpPanel'
+import { SftpPanel, ContainerFilesPanel } from './SftpPanel'
 import { AgentPanel } from './AgentPanel'
 import { MonitorPanel } from './MonitorPanel'
+import { DockerPanel } from './DockerPanel'
 
 const TABS: { id: Exclude<RightPanelTab, null>; label: string; icon: typeof History }[] = [
   { id: 'agent', label: '智能体', icon: Bot },
   { id: 'actions', label: '快捷操作', icon: Zap },
   { id: 'history', label: '历史命令', icon: History },
   { id: 'monitor', label: '监控', icon: Activity },
+  { id: 'docker', label: '容器', icon: Container },
   { id: 'theme', label: '主题', icon: Palette },
   { id: 'sftp', label: 'SFTP', icon: FolderOpen }
 ]
@@ -42,11 +45,18 @@ const TABS: { id: Exclude<RightPanelTab, null>; label: string; icon: typeof Hist
 export function TerminalRightPanel({
   sessionId,
   hostId,
-  connected
+  connected,
+  containerId,
+  containerName,
+  dockerCmd
 }: {
   sessionId: string
   hostId: string
   connected: boolean
+  /** 有值时该终端是容器终端:SFTP 栏位换成容器内文件浏览。 */
+  containerId?: string
+  containerName?: string
+  dockerCmd?: string
 }): React.ReactElement {
   const rightPanelTab = useTerminalStore((s) => s.rightPanelTab)
   const toggleRightPanel = useTerminalStore((s) => s.toggleRightPanel)
@@ -95,10 +105,25 @@ export function TerminalRightPanel({
           {rightPanelTab === 'monitor' && (
             <MonitorPanel sessionId={sessionId} connected={connected} />
           )}
+          {rightPanelTab === 'docker' && (
+            <DockerPanel sessionId={sessionId} hostId={hostId} connected={connected} />
+          )}
           {rightPanelTab === 'theme' && <ThemeSection sessionId={sessionId} />}
           {rightPanelTab === 'sftp' && (
             <div className="min-h-0 flex-1">
-              <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
+              {containerId ? (
+                // 容器终端:文件面板浏览容器内文件系统,而不是宿主机 SFTP
+                <ContainerFilesPanel
+                  sessionId={`${sessionId}::cfs`}
+                  hostId={hostId}
+                  containerId={containerId}
+                  containerName={containerName ?? containerId.slice(0, 12)}
+                  dockerCmd={dockerCmd ?? 'docker'}
+                  ownerId={sessionId}
+                />
+              ) : (
+                <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
+              )}
             </div>
           )}
         </div>
@@ -108,10 +133,11 @@ export function TerminalRightPanel({
         {TABS.map((tab) => {
           const Icon = tab.icon
           const active = rightPanelTab === tab.id
+          const label = tab.id === 'sftp' && containerId ? '容器文件' : tab.label
           return (
             <button
               key={tab.id}
-              title={tab.label}
+              title={label}
               onClick={() => toggleRightPanel(tab.id)}
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${
                 active

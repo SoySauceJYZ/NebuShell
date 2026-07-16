@@ -79,6 +79,7 @@ export function EditorTab({
   sourceSessionId,
   initialLang,
   sftpSessionId,
+  containerFsSessionId,
   remotePath,
   fileKey,
   fileName,
@@ -89,23 +90,35 @@ export function EditorTab({
   sourceSessionId?: string
   initialLang?: string
   sftpSessionId?: string
+  /** 容器文件后端(docker exec/cp)的会话 id;与 sftpSessionId 互斥。 */
+  containerFsSessionId?: string
   remotePath?: string
   fileKey?: string
   fileName?: string
   localPath?: string
 }): React.ReactElement {
   const isSftp = !!(sftpSessionId && remotePath && fileKey)
+  const isCfs = !!(containerFsSessionId && remotePath && fileKey)
   const isLocal = !!localPath
+  // sftp 与容器后端共用同一套「远程文件 + 版本历史」逻辑,只是读写走不同 API。
+  const remoteRead = (): Promise<string> =>
+    isCfs
+      ? window.api.containerFs.readFile(containerFsSessionId as string, remotePath as string)
+      : window.api.sftp.readFile(sftpSessionId as string, remotePath as string)
+  const remoteWrite = (text: string): Promise<void> =>
+    isCfs
+      ? window.api.containerFs.writeFile(containerFsSessionId as string, remotePath as string, text)
+      : window.api.sftp.writeFile(sftpSessionId as string, remotePath as string, text)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   // Always points at the latest save() so the Monaco Ctrl+S command isn't stale.
   const saveRef = useRef<() => void>(() => {})
   const [language, setLanguage] = useState(
-    initialLang || (isSftp || isLocal ? guessLanguage(fileName) : 'plaintext')
+    initialLang || (isSftp || isCfs || isLocal ? guessLanguage(fileName) : 'plaintext')
   )
   const [value, setValue] = useState(
-    content ?? (execCommand || isSftp || isLocal ? '正在加载...' : '')
+    content ?? (execCommand || isSftp || isCfs || isLocal ? '正在加载...' : '')
   )
-  const [loading, setLoading] = useState(!!execCommand || isSftp || isLocal)
+  const [loading, setLoading] = useState(!!execCommand || isSftp || isCfs || isLocal)
   const [versions, setVersions] = useState<HistoryVersion[]>([])
   const [selectedVersion, setSelectedVersion] = useState(SERVER_VERSION)
   const [saved, setSaved] = useState(false)
@@ -132,12 +145,11 @@ export function EditorTab({
     }
   }, [execCommand, sourceSessionId])
 
-  // sftp mode: read remote content + load history versions
+  // sftp / 容器模式: read remote content + load history versions
   useEffect(() => {
-    if (!isSftp) return
+    if (!isSftp && !isCfs) return
     let cancelled = false
-    window.api.sftp
-      .readFile(sftpSessionId as string, remotePath as string)
+    remoteRead()
       .then((text) => {
         if (!cancelled) setValue(text)
       })
@@ -153,7 +165,8 @@ export function EditorTab({
     return () => {
       cancelled = true
     }
-  }, [isSftp, sftpSessionId, remotePath, fileKey])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSftp, isCfs, sftpSessionId, containerFsSessionId, remotePath, fileKey])
 
   // local-file mode: read local content
   useEffect(() => {
@@ -199,7 +212,7 @@ export function EditorTab({
   const selectVersion = async (id: string): Promise<void> => {
     setSelectedVersion(id)
     if (id === SERVER_VERSION) {
-      const text = await window.api.sftp.readFile(sftpSessionId as string, remotePath as string)
+      const text = await remoteRead()
       setValue(text)
     } else {
       const text = await window.api.history.read(fileKey as string, id)
@@ -209,22 +222,22 @@ export function EditorTab({
 
   const save = async (): Promise<void> => {
     if (loading) return
-    if (isSftp) {
+    if (isSftp || isCfs) {
       const ok = await window.api.dialog.confirm({
-        message: `是否将修改保存到服务器?`,
+        message: isCfs ? `是否将修改保存到容器?` : `是否将修改保存到服务器?`,
         detail: remotePath,
-        confirmLabel: '保存到服务器',
+        confirmLabel: isCfs ? '保存到容器' : '保存到服务器',
         cancelLabel: '否'
       })
       if (!ok) return
       const text = currentText()
       try {
-        await window.api.sftp.writeFile(sftpSessionId as string, remotePath as string, text)
+        await remoteWrite(text)
         await window.api.history.save(fileKey as string, text, fileName)
         const v = await window.api.history.list(fileKey as string)
         setVersions(v)
         setSelectedVersion(SERVER_VERSION)
-        flashStatus('已保存到服务器')
+        flashStatus(isCfs ? '已保存到容器' : '已保存到服务器')
       } catch (err) {
         flashStatus(`保存失败: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -255,7 +268,7 @@ export function EditorTab({
   })
 
   const versionOptions = [
-    { value: SERVER_VERSION, label: '服务器当前版本' },
+    { value: SERVER_VERSION, label: isCfs ? '容器当前版本' : '服务器当前版本' },
     ...versions.map((v) => ({ value: v.id, label: v.label }))
   ]
 
@@ -270,7 +283,7 @@ export function EditorTab({
             className="h-8 !py-0 text-xs"
           />
         </div>
-        {isSftp && (
+        {(isSftp || isCfs) && (
           <div className="flex items-center gap-1.5">
             <History size={15} className="text-[var(--text-muted)]" />
             <div className="w-44">
@@ -291,7 +304,7 @@ export function EditorTab({
         </button>
         <button onClick={save} className="btn-primary h-8 !py-0 text-xs">
           {saved ? <Check size={14} /> : <Save size={14} />}
-          {saved ? '已保存' : isSftp ? '保存到服务器' : '保存'}
+          {saved ? '已保存' : isSftp ? '保存到服务器' : isCfs ? '保存到容器' : '保存'}
         </button>
       </div>
       <div className="min-h-0 flex-1">

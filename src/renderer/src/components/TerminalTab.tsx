@@ -8,6 +8,7 @@ import { useTerminalStore } from '../store/useTerminalStore'
 import { useCommandHistoryStore } from '../store/useCommandHistoryStore'
 import { useSessionStore } from '../store/useSessionStore'
 import { resolveConnectOptions } from '../lib/resolveConnectOptions'
+import { buildExecShellCommand } from '../lib/dockerContainers'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
@@ -40,10 +41,17 @@ type Status = 'connecting' | 'connected' | 'error' | 'closed'
 
 export function TerminalTab({
   sessionId,
-  hostId
+  hostId,
+  containerId,
+  containerName,
+  dockerCmd
 }: {
   sessionId: string
   hostId: string
+  /** 有值时该终端是容器终端:连接后经 docker exec -it 直接进入容器。 */
+  containerId?: string
+  containerName?: string
+  dockerCmd?: string
 }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -80,6 +88,8 @@ export function TerminalTab({
     window.api.ssh.disconnect(sessionId)
     term.write('\r\n\x1b[36m[正在连接...]\x1b[0m\r\n')
     const opts = resolveConnectOptions(sessionId, host, credentials)
+    // 容器终端:不开登录 shell,直接在 exec-PTY 通道上进入容器(exit 即通道关闭 → 重连横幅)。
+    if (containerId) opts.execCommand = buildExecShellCommand(dockerCmd ?? 'docker', containerId)
     window.api.ssh
       .connect(opts)
       .then(() => {
@@ -97,7 +107,7 @@ export function TerminalTab({
         setStatus('error')
         setErrorMsg(err instanceof Error ? err.message : String(err))
       })
-  }, [sessionId, hostId, hosts, credentials])
+  }, [sessionId, hostId, hosts, credentials, containerId, dockerCmd])
 
   useEffect(() => {
     doConnectRef.current = doConnect
@@ -414,6 +424,9 @@ export function TerminalTab({
         sessionId={sessionId}
         hostId={hostId}
         connected={status === 'connected'}
+        containerId={containerId}
+        containerName={containerName}
+        dockerCmd={dockerCmd}
       />
     </div>
   )

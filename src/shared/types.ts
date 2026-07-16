@@ -200,6 +200,15 @@ export interface SshConnectOptions {
   password?: string
   privateKey?: string
   passphrase?: string
+  /** 有值时:不开登录 shell,改为在 exec 通道上以 PTY 运行该命令(容器终端等)。 */
+  execCommand?: string
+}
+
+/** 容器文件浏览会话(SSH 到宿主机后,经 docker exec / docker cp 操作容器内文件)。 */
+export interface ContainerFsConnectOptions extends SshConnectOptions {
+  containerId: string
+  /** 'docker' 或 'sudo -n docker' —— 由渲染进程探测得出。 */
+  dockerCmd: string
 }
 
 export interface SftpListEntry {

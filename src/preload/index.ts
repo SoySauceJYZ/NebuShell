@@ -7,6 +7,7 @@ import type {
   VaultData,
   VaultImportResult,
   SshConnectOptions,
+  ContainerFsConnectOptions,
   SftpListEntry,
   LocalListEntry,
   TransferProgress,
@@ -179,6 +180,45 @@ const api = {
       ipcRenderer.send('sftp:startDrag', sessionId, remotePath, name),
     disconnect: (sessionId: string) => ipcRenderer.invoke('sftp:disconnect', sessionId)
   },
+  // 容器文件后端(SSH 到宿主机后经 docker exec / docker cp 操作容器内文件)
+  containerFs: {
+    connect: (opts: ContainerFsConnectOptions): Promise<void> =>
+      ipcRenderer.invoke('containerFs:connect', opts),
+    list: (sessionId: string, path: string): Promise<SftpListEntry[]> =>
+      ipcRenderer.invoke('containerFs:list', sessionId, path),
+    readFile: (sessionId: string, path: string): Promise<string> =>
+      ipcRenderer.invoke('containerFs:readFile', sessionId, path),
+    writeFile: (sessionId: string, path: string, content: string): Promise<void> =>
+      ipcRenderer.invoke('containerFs:writeFile', sessionId, path, content),
+    mkdir: (sessionId: string, path: string): Promise<void> =>
+      ipcRenderer.invoke('containerFs:mkdir', sessionId, path),
+    rename: (sessionId: string, oldPath: string, newPath: string): Promise<void> =>
+      ipcRenderer.invoke('containerFs:rename', sessionId, oldPath, newPath),
+    remove: (sessionId: string, path: string, isDirectory: boolean): Promise<void> =>
+      ipcRenderer.invoke('containerFs:remove', sessionId, path, isDirectory),
+    uploadPaths: (
+      sessionId: string,
+      containerDir: string,
+      localPaths: string[],
+      transferId: string
+    ): Promise<void> =>
+      ipcRenderer.invoke(
+        'containerFs:uploadPaths',
+        sessionId,
+        containerDir,
+        localPaths,
+        transferId
+      ),
+    downloadTo: (
+      sessionId: string,
+      containerPath: string,
+      localDir: string,
+      transferId: string
+    ): Promise<void> =>
+      ipcRenderer.invoke('containerFs:downloadTo', sessionId, containerPath, localDir, transferId),
+    disconnect: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('containerFs:disconnect', sessionId)
+  },
   local: {
     home: (): Promise<string> => ipcRenderer.invoke('local:home'),
     drives: (): Promise<string[]> => ipcRenderer.invoke('local:drives'),
@@ -205,16 +245,19 @@ const api = {
     exec: (command: string): Promise<RunShellResult> => ipcRenderer.invoke('local:exec', command)
   },
   transfers: {
-    // Subscribe to progress for one transferId (covers both sftp:* and local:* streams).
+    // Subscribe to progress for one transferId (covers sftp:*, local:* and containerFs:* streams).
     onProgress: (transferId: string, cb: (p: TransferProgress) => void): (() => void) => {
       const ch1 = `sftp:progress:${transferId}`
       const ch2 = `local:progress:${transferId}`
+      const ch3 = `containerFs:progress:${transferId}`
       const listener = (_e: unknown, p: TransferProgress): void => cb(p)
       ipcRenderer.on(ch1, listener)
       ipcRenderer.on(ch2, listener)
+      ipcRenderer.on(ch3, listener)
       return () => {
         ipcRenderer.removeListener(ch1, listener)
         ipcRenderer.removeListener(ch2, listener)
+        ipcRenderer.removeListener(ch3, listener)
       }
     }
   },

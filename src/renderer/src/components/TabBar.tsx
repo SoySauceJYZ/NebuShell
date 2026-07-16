@@ -34,7 +34,11 @@ export function TabBar(): React.ReactElement {
       id: `terminal-${tab.hostId}-${Date.now()}`,
       kind: 'terminal',
       title: tab.title,
-      hostId: tab.hostId
+      hostId: tab.hostId,
+      // 容器终端:复制时携带容器上下文,新会话同样 exec 进容器
+      containerId: tab.containerId,
+      containerName: tab.containerName,
+      dockerCmd: tab.dockerCmd
     })
   }
 

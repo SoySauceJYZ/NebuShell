@@ -43,6 +43,16 @@ export interface Tab {
   // local-file-backed editor / image tabs
   editorLocalPath?: string
   imageLocalPath?: string
+  // 容器终端 tab(kind:'terminal' + containerId → docker exec -it 进容器)
+  containerId?: string
+  containerName?: string
+  /** 打开时探测到的 docker 调用前缀('docker' | 'sudo -n docker')。 */
+  dockerCmd?: string
+  // 容器文件浏览器:explorer tab 预置一个容器面板
+  explorerContainerId?: string
+  explorerContainerName?: string
+  // 容器文件后端的编辑器 tab
+  editorContainerFsSessionId?: string
   // Transient: set when this tab was adopted from another window. Tells TerminalTab /
   // RemotePane the session is already alive in main — replay/reuse it, don't reconnect.
   adopted?: boolean
@@ -282,7 +292,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             id: `terminal-${activeTab.hostId}-${Date.now()}`,
             kind: 'terminal',
             title: activeTab.title,
-            hostId: activeTab.hostId
+            hostId: activeTab.hostId,
+            // 容器终端分屏复制时保留容器上下文
+            containerId: activeTab.containerId,
+            containerName: activeTab.containerName,
+            dockerCmd: activeTab.dockerCmd
           }
         : {
             id: `editor-blank-${Date.now()}`,

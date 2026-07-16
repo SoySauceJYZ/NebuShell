@@ -4,7 +4,7 @@ import { baseName } from './pathUtils'
 
 const MIME = 'application/x-nebushell'
 
-export type PaneKind = 'remote' | 'local'
+export type PaneKind = 'remote' | 'local' | 'container'
 
 export interface DragPayload {
   sourceKind: PaneKind
@@ -26,6 +26,8 @@ export interface PaneDndContext {
   dir: string
   /** Reload this pane's listing after a transfer completes into it. */
   refresh: () => void
+  /** Surface a non-transfer message (e.g. unsupported drop route) in the pane. */
+  notify?: (msg: string) => void
 }
 
 interface DropEntry {
@@ -82,12 +84,14 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
         .map((f) => window.api.os.getPathForFile(f))
         .filter(Boolean)
       if (paths.length === 0) return
-      const label = `${ctx.kind === 'remote' ? '上传' : '复制'} ${
+      const label = `${ctx.kind === 'local' ? '复制' : '上传'} ${
         paths.length === 1 ? baseName(paths[0]) : `${paths.length} 项`
       }`
       void runTransfer(label, async (transferId) => {
         if (ctx.kind === 'remote' && ctx.sessionId) {
           await window.api.sftp.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
+        } else if (ctx.kind === 'container' && ctx.sessionId) {
+          await window.api.containerFs.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
         } else {
           for (const p of paths) await window.api.local.copy(p, ctx.dir, transferId)
         }
@@ -110,10 +114,20 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
       if (srcDir === ctx.dir.replace(/[\\/]+$/, '') || srcDir === ctx.dir) return
     }
 
+    // 容器面板仅支持与本地互传;容器↔远程 / 容器↔容器 需经本地中转(v1 不做流式桥接)。
+    if (
+      (src.sourceKind === 'container' || ctx.kind === 'container') &&
+      !(src.sourceKind === 'container' && ctx.kind === 'local') &&
+      !(src.sourceKind === 'local' && ctx.kind === 'container')
+    ) {
+      ctx.notify?.('暂不支持容器与远程主机面板之间直接传输,请经由本地面板中转')
+      return
+    }
+
     const verb =
-      src.sourceKind === 'remote' && ctx.kind === 'local'
+      (src.sourceKind === 'remote' || src.sourceKind === 'container') && ctx.kind === 'local'
         ? '下载'
-        : src.sourceKind === 'local' && ctx.kind === 'remote'
+        : src.sourceKind === 'local' && (ctx.kind === 'remote' || ctx.kind === 'container')
           ? '上传'
           : '复制'
     void runTransfer(`${verb} ${src.name}`, async (transferId) => {
@@ -129,6 +143,10 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
         await window.api.sftp.uploadPaths(ctx.sessionId!, ctx.dir, [src.path], transferId)
       } else if (src.sourceKind === 'remote' && ctx.kind === 'local') {
         await window.api.sftp.downloadTo(src.sessionId!, src.path, ctx.dir, transferId)
+      } else if (src.sourceKind === 'local' && ctx.kind === 'container') {
+        await window.api.containerFs.uploadPaths(ctx.sessionId!, ctx.dir, [src.path], transferId)
+      } else if (src.sourceKind === 'container' && ctx.kind === 'local') {
+        await window.api.containerFs.downloadTo(src.sessionId!, src.path, ctx.dir, transferId)
       } else {
         await window.api.local.copy(src.path, ctx.dir, transferId)
       }

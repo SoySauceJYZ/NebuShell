@@ -53,37 +53,45 @@ export class SshManager {
       const client = new Client()
       this.sessions.set(opts.sessionId, { client, channel: null })
 
+      // shell 通道与 exec-PTY 通道(容器终端等)共用同一套接线:
+      // 数据/关闭事件广播、replay 缓冲、write/resize 都是通道通用的。
+      const onChannel = (err: Error | undefined, channel: ClientChannel): void => {
+        if (err) {
+          reject(err)
+          return
+        }
+        const session = this.sessions.get(opts.sessionId)
+        if (session) session.channel = channel
+
+        channel.on('data', (chunk: Buffer) => {
+          const text = chunk.toString('utf8')
+          this.appendBuffer(opts.sessionId, text)
+          broadcast(`ssh:data:${opts.sessionId}`, text)
+        })
+        channel.stderr.on('data', (chunk: Buffer) => {
+          const text = chunk.toString('utf8')
+          this.appendBuffer(opts.sessionId, text)
+          broadcast(`ssh:data:${opts.sessionId}`, text)
+        })
+        channel.on('close', () => {
+          broadcast(`ssh:closed:${opts.sessionId}`)
+          // Only remove the map entry if it still points to THIS client — during a
+          // reconnect a newer session may already own this id, and we must not delete it.
+          if (this.sessions.get(opts.sessionId)?.client === client) {
+            this.sessions.delete(opts.sessionId)
+          }
+          client.end()
+        })
+        resolve()
+      }
+
       client
         .on('ready', () => {
-          client.shell({ term: 'xterm-256color' }, (err, channel) => {
-            if (err) {
-              reject(err)
-              return
-            }
-            const session = this.sessions.get(opts.sessionId)
-            if (session) session.channel = channel
-
-            channel.on('data', (chunk: Buffer) => {
-              const text = chunk.toString('utf8')
-              this.appendBuffer(opts.sessionId, text)
-              broadcast(`ssh:data:${opts.sessionId}`, text)
-            })
-            channel.stderr.on('data', (chunk: Buffer) => {
-              const text = chunk.toString('utf8')
-              this.appendBuffer(opts.sessionId, text)
-              broadcast(`ssh:data:${opts.sessionId}`, text)
-            })
-            channel.on('close', () => {
-              broadcast(`ssh:closed:${opts.sessionId}`)
-              // Only remove the map entry if it still points to THIS client — during a
-              // reconnect a newer session may already own this id, and we must not delete it.
-              if (this.sessions.get(opts.sessionId)?.client === client) {
-                this.sessions.delete(opts.sessionId)
-              }
-              client.end()
-            })
-            resolve()
-          })
+          if (opts.execCommand) {
+            client.exec(opts.execCommand, { pty: { term: 'xterm-256color' } }, onChannel)
+          } else {
+            client.shell({ term: 'xterm-256color' }, onChannel)
+          }
         })
         .on('error', (err) => {
           broadcast(`ssh:error:${opts.sessionId}`, err.message)

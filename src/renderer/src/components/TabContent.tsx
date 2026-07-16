@@ -21,13 +21,36 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
     case 'settings':
       return <SettingsView />
     case 'terminal':
-      return tab.hostId ? <TerminalTab sessionId={tab.id} hostId={tab.hostId} /> : null
+      return tab.hostId ? (
+        <TerminalTab
+          sessionId={tab.id}
+          hostId={tab.hostId}
+          containerId={tab.containerId}
+          containerName={tab.containerName}
+          dockerCmd={tab.dockerCmd}
+        />
+      ) : null
     case 'sftp':
       return tab.hostId ? (
         <SftpPanel sessionId={tab.id} hostId={tab.hostId} ownerId={tab.id} />
       ) : null
     case 'explorer':
-      return <ExplorerTab tabId={tab.id} initialHostId={tab.hostId} />
+      return (
+        <ExplorerTab
+          tabId={tab.id}
+          initialHostId={tab.explorerContainerId ? undefined : tab.hostId}
+          initialContainer={
+            tab.explorerContainerId && tab.hostId
+              ? {
+                  hostId: tab.hostId,
+                  containerId: tab.explorerContainerId,
+                  containerName: tab.explorerContainerName ?? tab.explorerContainerId.slice(0, 12),
+                  dockerCmd: tab.dockerCmd ?? 'docker'
+                }
+              : undefined
+          }
+        />
+      )
     case 'editor':
       return (
         <EditorTab
@@ -36,6 +59,7 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
           sourceSessionId={tab.editorSourceSessionId}
           initialLang={tab.editorLang}
           sftpSessionId={tab.editorSftpSessionId}
+          containerFsSessionId={tab.editorContainerFsSessionId}
           remotePath={tab.editorRemotePath}
           fileKey={tab.editorFileKey}
           fileName={tab.editorFileName}

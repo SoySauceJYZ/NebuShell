@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
-import { promises as fsp, createReadStream, createWriteStream, existsSync } from 'fs'
+import { promises as fsp, createReadStream, createWriteStream } from 'fs'
 import { spawn } from 'child_process'
 import { homedir, tmpdir } from 'os'
 import { basename, join, extname } from 'path'
@@ -246,42 +246,60 @@ export function registerLocalIpc(): void {
 
   ipcMain.handle('local:exec', (_e, command: string) => runLocalShell(command))
 
-  ipcMain.handle('local:drives', () => {
+  // 盘符探测必须异步 + 并行 + 超时:existsSync 是同步调用会阻塞主进程,
+  // 断连/慢的网络映射盘一次探测能挂几十秒,导致整个应用所有窗口无响应。
+  // 结果短缓存,反复打开 SFTP 面板不重复探测慢盘。
+  let drivesCache: { at: number; drives: string[] } | null = null
+  const DRIVES_CACHE_MS = 10_000
+  const DRIVE_PROBE_TIMEOUT_MS = 1_000
+  ipcMain.handle('local:drives', async (): Promise<string[]> => {
     if (process.platform !== 'win32') return ['/']
-    const drives: string[] = []
+    if (drivesCache && Date.now() - drivesCache.at < DRIVES_CACHE_MS) return drivesCache.drives
+    const checks: Promise<string | null>[] = []
     for (let c = 65; c <= 90; c++) {
       const root = `${String.fromCharCode(c)}:\\`
-      if (existsSync(root)) drives.push(root)
+      checks.push(
+        Promise.race([
+          fsp.access(root).then(
+            () => root,
+            () => null
+          ),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), DRIVE_PROBE_TIMEOUT_MS))
+        ])
+      )
     }
+    const drives = (await Promise.all(checks)).filter((d): d is string => d !== null)
+    drivesCache = { at: Date.now(), drives }
     return drives
   })
 
   ipcMain.handle('local:list', async (_e, dir: string): Promise<LocalListEntry[]> => {
     const dirents = await fsp.readdir(dir, { withFileTypes: true })
-    const entries: LocalListEntry[] = []
-    for (const d of dirents) {
-      const full = join(dir, d.name)
-      try {
-        const st = await fsp.stat(full)
-        entries.push({
-          name: d.name,
-          path: full,
-          type: typeOf(st.isDirectory(), d.isSymbolicLink()),
-          size: st.size,
-          modifyTime: st.mtimeMs
-        })
-      } catch {
-        // Unreadable entry (permissions, broken symlink) — surface name only.
-        entries.push({
-          name: d.name,
-          path: full,
-          type: typeOf(d.isDirectory(), d.isSymbolicLink()),
-          size: 0,
-          modifyTime: 0
-        })
-      }
-    }
-    return entries
+    // stat 并行执行(串行 await 在几千项的目录上就是几千次排队往返,肉眼可见地卡)。
+    return Promise.all(
+      dirents.map(async (d): Promise<LocalListEntry> => {
+        const full = join(dir, d.name)
+        try {
+          const st = await fsp.stat(full)
+          return {
+            name: d.name,
+            path: full,
+            type: typeOf(st.isDirectory(), d.isSymbolicLink()),
+            size: st.size,
+            modifyTime: st.mtimeMs
+          }
+        } catch {
+          // Unreadable entry (permissions, broken symlink) — surface name only.
+          return {
+            name: d.name,
+            path: full,
+            type: typeOf(d.isDirectory(), d.isSymbolicLink()),
+            size: 0,
+            modifyTime: 0
+          }
+        }
+      })
+    )
   })
 
   ipcMain.handle('local:stat', async (_e, p: string) => {

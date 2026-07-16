@@ -4,6 +4,7 @@ import { createAppWindow } from './windows'
 import { registerVaultIpc } from './ipc/vaultIpc'
 import { registerSshIpc } from './ipc/sshIpc'
 import { registerSftpIpc } from './ipc/sftpIpc'
+import { registerContainerFsIpc } from './ipc/containerFsIpc'
 import { registerLocalIpc } from './ipc/localIpc'
 import { registerWindowIpc } from './ipc/windowIpc'
 import { registerFileIpc } from './ipc/fileIpc'
@@ -33,6 +34,7 @@ app.whenReady().then(() => {
   registerVaultIpc()
   registerSshIpc()
   registerSftpIpc()
+  registerContainerFsIpc()
   registerLocalIpc()
   registerWindowIpc()
   registerFileIpc()
