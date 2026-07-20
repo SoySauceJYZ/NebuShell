@@ -26,19 +26,19 @@ import {
   Gauge,
   Paperclip,
   FileText,
-  Laptop
+  Laptop,
+  ArrowRightLeft,
+  ArrowDown,
+  AlertCircle
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
-import { useAgentStore, EMPTY_AGENT_SESSION } from '../store/useAgentStore'
+import { useAgentStore, EMPTY_AGENT_SESSION, type TransferMeta } from '../store/useAgentStore'
+import { formatBytes } from '../lib/agentTransfer'
 import { AGENT_MODES, modeInfo, type AgentMode } from '../lib/agentPermissions'
 import {
   buildSystemPrompt,
-  buildRunCommandTool,
-  READ_COMMAND_OUTPUT_TOOL,
-  READ_ATTACHMENT_TOOL,
-  ASK_USER_TOOL,
-  PRESENT_PLAN_TOOL,
+  buildAgentTools,
   buildLocalTarget,
   localTargetName,
   type AgentTarget
@@ -191,7 +191,11 @@ export function AgentPanel({
       resolved.push({
         sessionId: tid,
         name: n === 1 ? base : `${base} #${n}`,
-        host: hosts.find((h) => h.id === tab.hostId)?.label ?? tab.title
+        host: hosts.find((h) => h.id === tab.hostId)?.label ?? tab.title,
+        // 文件传输要用这些字段建自己的 SFTP / containerFs 会话。
+        hostId: tab.hostId,
+        containerId: tab.containerId,
+        dockerCmd: tab.dockerCmd
       })
     }
     resolved.push(local)
@@ -251,21 +255,7 @@ export function AgentPanel({
   const targetKey = currentTargets.map((t) => t.name).join('|')
   const usage = useMemo(() => {
     const sysText = buildSystemPrompt(currentTargets, mode)
-    const tools =
-      mode === 'plan'
-        ? [
-            buildRunCommandTool(currentTargets),
-            READ_COMMAND_OUTPUT_TOOL,
-            READ_ATTACHMENT_TOOL,
-            ASK_USER_TOOL,
-            PRESENT_PLAN_TOOL
-          ]
-        : [
-            buildRunCommandTool(currentTargets),
-            READ_COMMAND_OUTPUT_TOOL,
-            READ_ATTACHMENT_TOOL,
-            ASK_USER_TOOL
-          ]
+    const tools = buildAgentTools(currentTargets, mode)
     const overhead = estimateTokens(sysText) + estimateTokens(JSON.stringify(tools))
     const msgs = estimateMessagesTokens(session.messages)
     const used = overhead + msgs + estimateTokens(session.streamingText)
@@ -567,6 +557,18 @@ export function AgentPanel({
                               '用户暂不执行,希望调整方案。请询问需要修改的地方或据此改进,仍处于计划模式。'
                             )
                           }
+                        />
+                      )
+                    }
+                    if (tc.function.name === 'transfer_file') {
+                      return (
+                        <TransferCard
+                          key={tc.id}
+                          meta={session.transferMeta[tc.id]}
+                          result={resultFor(tc.id)}
+                          running={session.runningIds.includes(tc.id)}
+                          onApprove={() => resolveCall(sessionId, tc, true)}
+                          onReject={() => resolveCall(sessionId, tc, false)}
                         />
                       )
                     }
@@ -1344,6 +1346,137 @@ function PlanCard({
           >
             修改方案
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** One endpoint line of a transfer card: icon + target name + path. */
+function TransferEndpoint({ name, path }: { name: string; path: string }): React.ReactElement {
+  return (
+    <div className="flex items-baseline gap-1.5 min-w-0">
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--accent)]">
+        {name === localTargetName() ? <Laptop size={10} /> : <Server size={10} />}
+        {name}
+      </span>
+      <span className="selectable truncate font-mono text-xs text-[var(--text-dark)]" title={path}>
+        {path}
+      </span>
+    </div>
+  )
+}
+
+function TransferCard({
+  meta,
+  result,
+  running,
+  onApprove,
+  onReject
+}: {
+  meta?: TransferMeta
+  result?: string
+  running: boolean
+  onApprove: () => void
+  onReject: () => void
+}): React.ReactElement {
+  const isNote =
+    result !== undefined && (result.startsWith('用户已拒绝') || result.startsWith('【计划模式】'))
+  const failed = result !== undefined && result.startsWith('[传输失败]')
+  const notRun = result !== undefined && result.startsWith('传输未执行')
+  const p = meta?.progress
+  const pct = p && p.totalBytes > 0 ? Math.min(100, (p.doneBytes / p.totalBytes) * 100) : 0
+
+  const scope = ((): string => {
+    if (meta?.planning) return '正在统计待传输文件…'
+    if (meta?.plan === null) return '大小未知(容器内不预先扫描)'
+    if (meta?.plan) return `共 ${meta.plan.totalFiles} 个文件 · ${formatBytes(meta.plan.totalBytes)}`
+    return ''
+  })()
+
+  return (
+    <div className="self-start w-[92%] overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)]">
+      <div className="flex items-center gap-1.5 border-b border-[var(--panel-border)] px-2.5 py-1.5">
+        <ArrowRightLeft size={13} className="text-[var(--accent)]" />
+        <span className="text-xs font-medium text-[var(--text-muted)]">建议传输文件</span>
+      </div>
+
+      {meta && (
+        <div className="flex flex-col gap-1 px-2.5 py-2">
+          <TransferEndpoint name={meta.srcName} path={meta.srcPath} />
+          <div className="flex items-center gap-1 pl-0.5 text-[10px] text-[var(--text-muted)]">
+            <ArrowDown size={11} />
+            传输到
+          </div>
+          <TransferEndpoint name={meta.dstName} path={meta.dstPath} />
+          {scope && (
+            <div className="flex items-center gap-1.5 pt-0.5 text-[11px] text-[var(--text-muted)]">
+              {meta.planning && <Loader2 size={10} className="animate-spin" />}
+              {scope}
+            </div>
+          )}
+        </div>
+      )}
+
+      {result === undefined ? (
+        <div className="border-t border-[var(--panel-border)] px-2.5 py-1.5">
+          {running ? (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                <Loader2 size={12} className="animate-spin" />
+                {p?.phase === 'scan' ? '扫描中…' : '传输中…'}
+                {p && p.totalFiles > 0 && (
+                  <span className="ml-auto tabular-nums">
+                    {p.doneFiles}/{p.totalFiles} · {formatBytes(p.doneBytes)}
+                    {p.totalBytes > 0 && ` / ${formatBytes(p.totalBytes)}`}
+                  </span>
+                )}
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-[var(--nav-bg-hover)]">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-200"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {p?.currentPath && (
+                <div className="truncate font-mono text-[10px] text-[var(--text-muted)]">
+                  {p.currentPath}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onApprove}
+                className="flex items-center gap-1 rounded-md bg-[var(--accent)] px-2 py-1 text-xs font-medium text-white hover:bg-[var(--accent-hover)]"
+              >
+                <ArrowRightLeft size={11} />
+                传输
+              </button>
+              <button
+                onClick={onReject}
+                className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs hover:bg-[var(--nav-bg-hover)]"
+              >
+                <X size={11} />
+                拒绝
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="border-t border-[var(--panel-border)] px-2.5 py-2">
+          {isNote || notRun ? (
+            <div className="text-xs text-[var(--text-muted)]">{result}</div>
+          ) : (
+            <div className="flex items-start gap-1.5 text-xs text-[var(--text-dark)]">
+              {failed ? (
+                <AlertCircle size={12} className="mt-0.5 shrink-0 text-red-600" />
+              ) : (
+                <Check size={12} className="mt-0.5 shrink-0 text-green-600" />
+              )}
+              <span className="selectable">{result}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

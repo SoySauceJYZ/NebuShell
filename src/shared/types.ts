@@ -240,6 +240,15 @@ export interface TransferProgress {
   error?: string
 }
 
+/**
+ * Dry-run result for a transfer: what a recursive copy *would* move.
+ * Symlinks are skipped by the scanners, so they are excluded here too.
+ */
+export interface TransferPlan {
+  totalFiles: number
+  totalBytes: number
+}
+
 /** Persisted, non-sensitive app preferences (stored unencrypted, outside the vault). */
 export interface AppSettings {
   /** Concurrent in-flight SFTP packets per file for fastGet/fastPut transfers. */

@@ -34,6 +34,29 @@ export function disposition(mode: AgentMode, risky: boolean): Disposition {
   }
 }
 
+/** 传输方向:'download' = 写到用户本机,'upload' = 写到远程主机/容器。 */
+export type TransferKind = 'download' | 'upload'
+
+/**
+ * 文件传输的权限判定。刻意不复用 disposition() —— 传输是结构化调用,过不了
+ * isRiskyCommand 那套 shell 字符串解析;而且计划模式必须两个方向都拦住,
+ * 走 disposition(mode, false) 会让下载在计划模式下自动执行。
+ */
+export function transferDisposition(mode: AgentMode, kind: TransferKind): Disposition {
+  switch (mode) {
+    case 'full':
+      return 'auto'
+    case 'plan':
+      // 计划模式不搬任何文件 —— 下载同样会往用户磁盘写。
+      return 'block'
+    case 'auto':
+      return kind === 'download' ? 'auto' : 'ask'
+    case 'ask':
+    default:
+      return 'ask'
+  }
+}
+
 // Commands considered read-only / safe. Anything not clearly safe is treated as risky.
 const READONLY = new Set([
   'ls', 'll', 'la', 'dir', 'cat', 'tac', 'pwd', 'whoami', 'id', 'groups', 'hostname',

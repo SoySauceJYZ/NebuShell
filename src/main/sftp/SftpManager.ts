@@ -2,7 +2,12 @@ import { Client, type SFTPWrapper, type Stats } from 'ssh2'
 import { promises as fsp } from 'fs'
 import { basename as localBasename, join as localJoin } from 'path'
 import type { Readable, Writable } from 'stream'
-import type { SshConnectOptions, SftpListEntry, TransferProgress } from '../../shared/types'
+import type {
+  SshConnectOptions,
+  SftpListEntry,
+  TransferProgress,
+  TransferPlan
+} from '../../shared/types'
 import {
   DEFAULT_TRANSFER_CONCURRENCY,
   MIN_TRANSFER_CONCURRENCY,
@@ -239,6 +244,23 @@ export class SftpManager {
           onBytes
         )
     )
+  }
+
+  /**
+   * Dry run: walk a remote file/dir and report what a transfer *would* move,
+   * without moving anything. Reuses the same scanner as the real transfer, so
+   * the totals match (symlinks skipped either way). RTT-bound on deep trees.
+   */
+  async planPath(sessionId: string, remotePath: string): Promise<TransferPlan> {
+    const { sftp } = this.getSession(sessionId)
+    let totalBytes = 0
+    let totalFiles = 0
+    await this.scanRemote(sftp, remotePath, '', posixJoin, (e) => {
+      if (e.isDir) return
+      totalBytes += e.size
+      totalFiles += 1
+    })
+    return { totalFiles, totalBytes }
   }
 
   // ---- Transfer tuning ----

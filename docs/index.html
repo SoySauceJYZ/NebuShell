@@ -761,13 +761,15 @@
             <div class="ico">🤖</div>
             <h3 data-zh="内置 AI 运维智能体">Built-in AI ops agent</h3>
             <p
-              data-zh="兼容 OpenAI 接口的智能体，可执行命令、读取输出、提出问题并给出计划——始终先计划、再确认。既能跨多台 SSH 终端执行，也能操作你的本机（Windows 用 PowerShell，macOS / Linux 用 /bin/sh），审批流程完全一致。还能给它发图片：截图直接粘贴、选择文件，或拖进输入框。"
+              data-zh="兼容 OpenAI 接口的智能体，可执行命令、传输文件、读取输出、提出问题并给出计划——始终先计划、再确认。既能跨多台 SSH 终端执行，也能操作你的本机（Windows 用 PowerShell，macOS / Linux 用 /bin/sh），审批流程完全一致。还能在本机、主机与容器之间搬运文件，确认卡片会先告诉你要传多少个文件、多大。还能给它发图片：截图直接粘贴、选择文件，或拖进输入框。"
             >
-              An OpenAI-compatible agent that runs commands, reads output, asks questions, and
-              presents plans — always plan-and-confirm. It executes across one or many SSH terminals
-              — and on your local machine too (PowerShell on Windows, /bin/sh on macOS/Linux), with
-              the same approval flow. Send it images too — paste a screenshot, pick a file, or drag
-              one into the composer.
+              An OpenAI-compatible agent that runs commands, transfers files, reads output, asks
+              questions, and presents plans — always plan-and-confirm. It executes across one or many
+              SSH terminals — and on your local machine too (PowerShell on Windows, /bin/sh on
+              macOS/Linux), with the same approval flow. It also moves files between your machine,
+              your hosts and your containers — the confirm card shows the file count and total size
+              before you approve. Send it images too — paste a screenshot, pick a file, or drag one
+              into the composer.
             </p>
           </div>
           <div class="card">
@@ -854,6 +856,44 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">📦</div>
+            <h3 data-zh="智能体可以传文件了（2026‑07‑21）">
+              The agent can transfer files (2026‑07‑21)
+            </h3>
+            <p
+              data-zh="智能体新增 transfer_file 工具，可在本机、SSH 主机、容器之间搬运文件和目录，不用再拼 scp / rsync。底层直接复用应用自身的传输管线（SFTP；容器走 docker cp 的 tar 流），因此没有密码提示要应答，也不会被终端超时打断——这正是过去让模型自己拼 scp 必然失败的原因。支持的路线：本机 ↔ SSH 主机、SSH 主机 ↔ SSH 主机（在应用内 A→B 流式中转）、本机 ↔ 容器；不支持的组合（容器 ↔ SSH、容器 ↔ 容器）不会报错卡死，而是返回清晰引导，让它分两步经本机中转。确认卡片在你点之前会先做一次预扫描，明确告诉你要传多少个文件、多大，传输过程有实时进度条，记录也会进和拖拽传输同一个传输面板。权限沿用现有模式：「替我审批」下下载自动执行、上传仍需确认，计划模式两个方向都拦截。目录递归传输；dest_path 填的是目标目录，源文件名会保留。"
+            >
+              The agent gains a transfer_file tool that moves files and directories between your
+              machine, your SSH hosts and your containers — no more scp / rsync guesswork. It reuses
+              the app's own transfer pipeline (SFTP, or docker cp tar streaming for containers), so
+              there is no password prompt to answer and no terminal timeout to hit — exactly why
+              asking the model to improvise an scp never worked. Supported routes: local ↔ SSH host,
+              SSH host ↔ SSH host (streamed A→B inside the app), and local ↔ container; unsupported
+              pairs (container ↔ SSH, container ↔ container) don't fail — they return clear guidance
+              to relay via your machine in two steps. Before you approve, the confirm card runs a
+              dry-run scan and tells you exactly what you're agreeing to (N files · X MB), then
+              shows a live progress bar, and the transfer lands in the same records panel as a
+              drag-and-drop. Permissions follow the existing modes: downloads auto-run in the
+              approve-for-me mode while uploads always ask, and plan mode blocks both. Directories
+              go recursively; dest_path is a directory and the source name is preserved.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🛡️</div>
+            <h3 data-zh="智能体工具分发加固（2026‑07‑21）">
+              Agent tool-dispatch hardening (2026‑07‑21)
+            </h3>
+            <p
+              data-zh="修掉两处会静默出错的隐患。其一，未知工具名原本会掉进 shell 分支，被解析成空命令真的送到终端上执行，现在显式拒绝并告知模型。其二，传输端点改为严格解析——目标名对不上时直接报错并列出可用目标，而不是悄悄回退到第一个目标；后者意味着文件会被静默写到错误的机器上。"
+            >
+              Two silent-failure paths closed. Unknown tool names used to fall through to the shell
+              branch and get run as an empty command on a real terminal; they are now rejected
+              explicitly. And transfer endpoints now resolve strictly — a target name that doesn't
+              match is an error that lists the valid names, instead of quietly falling back to the
+              first target, which would have written your files to the wrong machine.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🐳</div>
             <h3 data-zh="Docker 容器管理（2026‑07‑17）">

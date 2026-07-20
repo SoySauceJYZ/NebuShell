@@ -11,6 +11,7 @@ import type {
   SftpListEntry,
   LocalListEntry,
   TransferProgress,
+  TransferPlan,
   HistoryVersion,
   HistoryDocument,
   ChatMessage,
@@ -138,6 +139,9 @@ const api = {
       ipcRenderer.invoke('sftp:list', sessionId, path),
     mkdir: (sessionId: string, path: string): Promise<void> =>
       ipcRenderer.invoke('sftp:mkdir', sessionId, path),
+    // Dry run: what a transfer of this path would move (agent confirmation card).
+    planPath: (sessionId: string, remotePath: string): Promise<TransferPlan> =>
+      ipcRenderer.invoke('sftp:planPath', sessionId, remotePath),
     readFile: (sessionId: string, remotePath: string): Promise<string> =>
       ipcRenderer.invoke('sftp:readFile', sessionId, remotePath),
     writeFile: (sessionId: string, remotePath: string, content: string): Promise<void> =>
@@ -239,6 +243,9 @@ const api = {
       ipcRenderer.invoke('local:readFileBase64', p),
     copy: (src: string, dstDir: string, transferId: string): Promise<void> =>
       ipcRenderer.invoke('local:copy', src, dstDir, transferId),
+    // Dry run: what a transfer of these paths would move (agent confirmation card).
+    planPaths: (paths: string[]): Promise<TransferPlan> =>
+      ipcRenderer.invoke('local:planPaths', paths),
     pickDir: (): Promise<string | null> => ipcRenderer.invoke('local:pickDir'),
     pickFiles: (): Promise<string[]> => ipcRenderer.invoke('local:pickFiles'),
     // 智能体在本机执行命令(win32 → PowerShell,posix → /bin/sh)。

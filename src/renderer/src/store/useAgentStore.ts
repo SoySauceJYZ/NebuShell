@@ -1,18 +1,19 @@
 import { create } from 'zustand'
-import type { Attachment, ChatMessage, ToolCall } from '@shared/types'
+import type { Attachment, ChatMessage, ToolCall, TransferPlan, TransferProgress } from '@shared/types'
+import { buildAgentTools, buildSystemPrompt, isLocalTarget, type AgentTarget } from '../lib/agentTools'
 import {
-  buildRunCommandTool,
-  buildSystemPrompt,
-  ASK_USER_TOOL,
-  PRESENT_PLAN_TOOL,
-  READ_ATTACHMENT_TOOL,
-  READ_COMMAND_OUTPUT_TOOL,
-  isLocalTarget,
-  type AgentTarget
-} from '../lib/agentTools'
+  describeOutcome,
+  planTransfer,
+  resolveRoute,
+  runAgentTransfer,
+  type TransferRoute
+} from '../lib/agentTransfer'
 import {
   type AgentMode,
+  type Disposition,
+  type TransferKind,
   disposition,
+  transferDisposition,
   isRiskyCommand,
   isRiskyLocalCommand
 } from '../lib/agentPermissions'
@@ -23,11 +24,30 @@ import { useCommandHistoryStore } from './useCommandHistoryStore'
 
 export type AgentStatus = 'idle' | 'streaming' | 'awaiting' | 'running'
 
+/**
+ * Per-tool-call state for a `transfer_file` call, keyed by tool_call_id.
+ * `runningIds` alone can't carry this — the card needs both endpoints, the
+ * dry-run totals, and live progress.
+ */
+export interface TransferMeta {
+  srcName: string
+  srcPath: string
+  dstName: string
+  dstPath: string
+  route?: TransferRoute
+  kind?: TransferKind
+  /** Dry run: undefined = not scanned yet, null = unknowable (container source). */
+  plan?: TransferPlan | null
+  planning: boolean
+  progress?: TransferProgress
+}
+
 export interface AgentSession {
   messages: ChatMessage[]
   status: AgentStatus
   streamingText: string
   runningIds: string[]
+  transferMeta: Record<string, TransferMeta>
   error: string
 }
 
@@ -37,6 +57,7 @@ export const EMPTY_AGENT_SESSION: AgentSession = {
   status: 'idle',
   streamingText: '',
   runningIds: [],
+  transferMeta: {},
   error: ''
 }
 
@@ -93,6 +114,27 @@ function parseArgs(call: ToolCall): { command: string; target?: string } {
   }
 }
 
+interface TransferArgs {
+  sourceTarget?: string
+  sourcePath: string
+  destTarget?: string
+  destPath: string
+}
+
+function parseTransferArgs(call: ToolCall): TransferArgs {
+  try {
+    const a = JSON.parse(call.function.arguments || '{}')
+    return {
+      sourceTarget: a.source_target,
+      sourcePath: String(a.source_path ?? ''),
+      destTarget: a.dest_target,
+      destPath: String(a.dest_path ?? '')
+    }
+  } catch {
+    return { sourcePath: '', destPath: '' }
+  }
+}
+
 export const useAgentStore = create<AgentStore>((set, get) => {
   const cur = (id: string): AgentSession => get().sessions[id] ?? EMPTY_AGENT_SESSION
 
@@ -135,6 +177,18 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       if (found) return found
     }
     return targets[0]
+  }
+
+  /**
+   * Strict resolution for transfers: a name that doesn't match is an error, never a
+   * fallback to targets[0]. run_command can fall back (its `target` is optional and
+   * a wrong guess just runs a command); a transfer endpoint cannot — falling back
+   * would silently write the files to the wrong machine.
+   */
+  const resolveTargetStrict = (agentId: string, targetName?: string): AgentTarget | undefined => {
+    const targets = get().targetsBySession[agentId] ?? EMPTY_TARGETS
+    if (!targetName) return targets.length === 1 ? targets[0] : undefined
+    return targets.find((t) => t.name === targetName)
   }
 
   const executeCall = async (id: string, call: ToolCall): Promise<void> => {
@@ -183,6 +237,119 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
   }
 
+  const patchMeta = (id: string, callId: string, p: Partial<TransferMeta>): void => {
+    const s = cur(id)
+    const prev = s.transferMeta[callId]
+    if (!prev) return
+    patch(id, { transferMeta: { ...s.transferMeta, [callId]: { ...prev, ...p } } })
+  }
+
+  /**
+   * Resolve a transfer_file call into endpoints + route, stashing the meta the card
+   * renders from. Returns the disposition, or null if the call is already answered
+   * (bad target / unsupported route both push their own tool message).
+   */
+  const prepareTransfer = (
+    id: string,
+    call: ToolCall
+  ): { disp: Disposition; kind: TransferKind } | null => {
+    const { sourceTarget, sourcePath, destTarget, destPath } = parseTransferArgs(call)
+    const src = resolveTargetStrict(id, sourceTarget)
+    const dst = resolveTargetStrict(id, destTarget)
+
+    if (!src || !dst) {
+      const available = (get().targetsBySession[id] ?? EMPTY_TARGETS).map((t) => t.name)
+      const bad = [!src ? `source_target=${sourceTarget ?? '(空)'}` : '', !dst ? `dest_target=${destTarget ?? '(空)'}` : '']
+        .filter(Boolean)
+        .join('、')
+      pushMsgs(id, [
+        {
+          role: 'tool',
+          tool_call_id: call.id,
+          content: `传输未执行: 找不到目标(${bad})。可用目标:${available.join('、') || '(无)'}。请用其中之一重试。`
+        }
+      ])
+      return null
+    }
+    if (!sourcePath || !destPath) {
+      pushMsgs(id, [
+        {
+          role: 'tool',
+          tool_call_id: call.id,
+          content: '传输未执行: source_path 与 dest_path 都必须是绝对路径,且不能为空。'
+        }
+      ])
+      return null
+    }
+
+    const routed = resolveRoute(src, dst)
+    if (!routed.ok) {
+      pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content: `传输未执行: ${routed.reason}` }])
+      return null
+    }
+
+    patch(id, {
+      transferMeta: {
+        ...cur(id).transferMeta,
+        [call.id]: {
+          srcName: src.name,
+          srcPath: sourcePath,
+          dstName: dst.name,
+          dstPath: destPath,
+          route: routed.route,
+          kind: routed.kind,
+          planning: false
+        }
+      }
+    })
+    return { disp: transferDisposition(get().mode, routed.kind), kind: routed.kind }
+  }
+
+  /** Dry run for the confirmation card. Runs detached — the card shows a spinner meanwhile. */
+  const startPlanScan = (id: string, call: ToolCall): void => {
+    const meta = cur(id).transferMeta[call.id]
+    const src = resolveTargetStrict(id, parseTransferArgs(call).sourceTarget)
+    if (!meta || !src) return
+    patchMeta(id, call.id, { planning: true })
+    void planTransfer(src, meta.srcPath)
+      .then((plan) => patchMeta(id, call.id, { plan, planning: false }))
+      // A failed scan is not fatal — the user can still approve; the real transfer
+      // will surface the same error with better context.
+      .catch(() => patchMeta(id, call.id, { plan: null, planning: false }))
+  }
+
+  const executeTransfer = async (id: string, call: ToolCall): Promise<void> => {
+    const meta = cur(id).transferMeta[call.id]
+    const { sourceTarget, destTarget } = parseTransferArgs(call)
+    const src = resolveTargetStrict(id, sourceTarget)
+    const dst = resolveTargetStrict(id, destTarget)
+    if (!meta?.route || !src || !dst) {
+      pushMsgs(id, [
+        { role: 'tool', tool_call_id: call.id, content: '传输未执行: 目标信息已失效,请重试。' }
+      ])
+      return
+    }
+
+    patch(id, { status: 'running', runningIds: [...cur(id).runningIds, call.id] })
+    const outcome = await runAgentTransfer({
+      src,
+      srcPath: meta.srcPath,
+      dst,
+      dstPath: meta.dstPath,
+      route: meta.route,
+      ownerId: id,
+      onProgress: (p) => patchMeta(id, call.id, { progress: p })
+    })
+    patch(id, { runningIds: cur(id).runningIds.filter((i) => i !== call.id) })
+    pushMsgs(id, [
+      {
+        role: 'tool',
+        tool_call_id: call.id,
+        content: describeOutcome(outcome, src, meta.srcPath, dst, meta.dstPath)
+      }
+    ])
+  }
+
   // read_command_output / read_attachment:纯本地检索已保存的完整文本,
   // 只读、无副作用,任何模式下都直接执行(不走审批)。
   const executeLookup = (id: string, call: ToolCall): void => {
@@ -226,6 +393,39 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         call.function.name === 'read_attachment'
       ) {
         executeLookup(id, call)
+        continue
+      }
+      // 文件传输:结构化调用,不走 shell,也不能用 isRiskyCommand 判定。
+      if (call.function.name === 'transfer_file') {
+        const prepared = prepareTransfer(id, call)
+        if (!prepared) continue // 已经推了说明性的 tool 消息
+        if (prepared.disp === 'auto') {
+          await executeTransfer(id, call)
+        } else if (prepared.disp === 'block') {
+          pushMsgs(id, [
+            {
+              role: 'tool',
+              tool_call_id: call.id,
+              content:
+                '【计划模式】未执行该文件传输。请把它写进方案(说明源、目标与用途),用户切换到执行模式后再传。'
+            }
+          ])
+        } else {
+          startPlanScan(id, call) // 后台预扫描,卡片先显示「正在统计…」
+          anyAsk = true
+        }
+        continue
+      }
+      // 兜底:未知工具名。没有这一条会掉进下面的 run_command 分支,
+      // 被解析成空命令后真的送到终端去执行。
+      if (call.function.name !== 'run_command') {
+        pushMsgs(id, [
+          {
+            role: 'tool',
+            tool_call_id: call.id,
+            content: `不支持的工具「${call.function.name}」,未执行。请只使用已提供的工具。`
+          }
+        ])
         continue
       }
       // 风险判定按目标平台分派:本机(win32 → PowerShell 规则)vs SSH 远程(Unix 规则)。
@@ -280,24 +480,9 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       })
       const mode = get().mode
       const sys: ChatMessage = { role: 'system', content: buildSystemPrompt(targets, mode) }
-      const tools =
-        mode === 'plan'
-          ? [
-              buildRunCommandTool(targets),
-              READ_COMMAND_OUTPUT_TOOL,
-              READ_ATTACHMENT_TOOL,
-              ASK_USER_TOOL,
-              PRESENT_PLAN_TOOL
-            ]
-          : [
-              buildRunCommandTool(targets),
-              READ_COMMAND_OUTPUT_TOOL,
-              READ_ATTACHMENT_TOOL,
-              ASK_USER_TOOL
-            ]
       window.api.llm.chat(runId, {
         messages: [sys, ...cur(id).messages],
-        tools,
+        tools: buildAgentTools(targets, mode),
         providerId: get().activeProviderId,
         model: get().activeModel
       })
@@ -426,12 +611,15 @@ export const useAgentStore = create<AgentStore>((set, get) => {
 
     resolveCall: async (id, call, approve) => {
       stopped[id] = false
+      const isTransfer = call.function.name === 'transfer_file'
       if (!approve) {
-        pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content: '用户已拒绝执行该命令。' }])
+        // Keep the 「用户已拒绝」 prefix — the cards key their "note" styling off it.
+        const content = isTransfer ? '用户已拒绝该文件传输。' : '用户已拒绝执行该命令。'
+        pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
         maybeContinue(id)
         return
       }
-      await executeCall(id, call)
+      await (isTransfer ? executeTransfer(id, call) : executeCall(id, call))
       maybeContinue(id)
     },
 

@@ -12,6 +12,7 @@ import { buildExecShellCommand } from '../lib/dockerContainers'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
+import { releaseAgentFs } from '../lib/agentTransfer'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
 import { TerminalRightPanel } from './TerminalRightPanel'
 import { TerminalContextMenu } from './TerminalContextMenu'
@@ -294,7 +295,11 @@ export function TerminalTab({
       unsubClosed()
       unsubError()
       // If this tab is being torn off, keep the session alive for the new window.
-      if (!consumeDetaching(sessionId)) window.api.ssh.disconnect(sessionId)
+      if (!consumeDetaching(sessionId)) {
+        window.api.ssh.disconnect(sessionId)
+        // The agent's file-transfer session mirrors this terminal's lifetime.
+        releaseAgentFs(sessionId)
+      }
       term.dispose()
     }
   }, [sessionId, hostId])

@@ -4,7 +4,12 @@ import { promises as fsp, createReadStream, createWriteStream } from 'fs'
 import { spawn } from 'child_process'
 import { homedir, tmpdir } from 'os'
 import { basename, join, extname } from 'path'
-import type { LocalListEntry, TransferProgress, RunShellResult } from '../../shared/types'
+import type {
+  LocalListEntry,
+  TransferProgress,
+  RunShellResult,
+  TransferPlan
+} from '../../shared/types'
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -341,6 +346,22 @@ export function registerLocalIpc(): void {
 
   ipcMain.handle('local:copy', async (e, src: string, dstDir: string, transferId: string) => {
     await copyRecursive(src, dstDir, e.sender, transferId)
+  })
+
+  // Dry run for the agent's transfer confirmation card — scans only, copies nothing.
+  // Lives here rather than on SftpManager because a local -> container upload has
+  // no SFTP session to hang the scan off.
+  ipcMain.handle('local:planPaths', async (_e, paths: string[]) => {
+    let totalFiles = 0
+    let totalBytes = 0
+    for (const p of paths) {
+      await scanLocalTree(p, '', (entry) => {
+        if (entry.isDir) return
+        totalFiles += 1
+        totalBytes += entry.size
+      })
+    }
+    return { totalFiles, totalBytes } satisfies TransferPlan
   })
 
   ipcMain.handle('local:pickDir', async (e) => {

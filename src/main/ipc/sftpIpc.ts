@@ -27,6 +27,11 @@ export function registerSftpIpc(): void {
     return sftpManager.list(sessionId, remotePath)
   })
 
+  // Dry run for the agent's transfer confirmation card — scans only, moves nothing.
+  ipcMain.handle('sftp:planPath', async (_e, sessionId: string, remotePath: string) => {
+    return sftpManager.planPath(sessionId, remotePath)
+  })
+
   ipcMain.handle('sftp:mkdir', async (_e, sessionId: string, remotePath: string) => {
     return sftpManager.mkdir(sessionId, remotePath)
   })
