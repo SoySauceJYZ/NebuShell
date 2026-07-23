@@ -31,3 +31,15 @@ export function localJoin(dir: string, name: string): string {
   const sep = dir.includes('\\') || /^[a-zA-Z]:/.test(dir) ? '\\' : '/'
   return dir.replace(/[\\/]+$/, '') + sep + name
 }
+
+/** Join a name onto a remote (POSIX) directory. */
+export function remoteJoin(dir: string, name: string): string {
+  const d = dir.replace(/\/+$/, '')
+  return d === '' ? `/${name}` : `${d}/${name}`
+}
+
+/** Drive root of a local Windows path ('D:\\foo' -> 'D:\\'); POSIX paths root at '/'. */
+export function localRoot(p: string): string {
+  const m = /^([a-zA-Z]):/.exec(p)
+  return m ? `${m[1]}:\\` : '/'
+}

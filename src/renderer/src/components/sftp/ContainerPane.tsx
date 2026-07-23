@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowUp,
   Upload,
@@ -9,22 +9,19 @@ import {
   Download,
   FilePenLine,
   Pencil,
-  Trash2
+  Trash2,
+  PanelLeft
 } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { useSessionStore } from '../../store/useSessionStore'
 import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
-import { remoteParent } from '../../lib/pathUtils'
+import { remoteParent, remoteJoin } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
+import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
 import type { SftpListEntry } from '@shared/types'
-
-function remoteJoin(dir: string, name: string): string {
-  const d = dir.replace(/\/+$/, '')
-  return d === '' ? `/${name}` : `${d}/${name}`
-}
 
 function genId(): string {
   return crypto?.randomUUID ? crypto.randomUUID() : `t-${Date.now()}-${Math.random()}`
@@ -68,6 +65,9 @@ export function ContainerPane({
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
   const [navError, setNavError] = useState('')
+  const [showTree, setShowTree] = useState(!embedded)
+  const [fsVersion, setFsVersion] = useState(0)
+  const bumpFs = (): void => setFsVersion((v) => v + 1)
   const { ask, node: promptNode } = usePromptModal()
 
   const load = useCallback(
@@ -170,6 +170,7 @@ export function ContainerPane({
     try {
       await window.api.containerFs.mkdir(sessionId, remoteJoin(path, name))
       await load(path)
+      bumpFs()
     } catch (err) {
       setNavError(err instanceof Error ? err.message : String(err))
     }
@@ -212,6 +213,7 @@ export function ContainerPane({
     if (!name || name === entry.name) return
     await window.api.containerFs.rename(sessionId, entry.path, remoteJoin(path, name))
     await load(path)
+    bumpFs()
   }
 
   const remove = async (entry: FileEntry): Promise<void> => {
@@ -224,6 +226,7 @@ export function ContainerPane({
     if (!ok) return
     await window.api.containerFs.remove(sessionId, entry.path, entry.type === 'directory')
     await load(path)
+    bumpFs()
   }
 
   const menuActions = (entry: FileEntry): MenuAction[] => {
@@ -236,6 +239,20 @@ export function ContainerPane({
     list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
     return list
   }
+
+  const treeAdapter = useMemo<TreeAdapter>(
+    () => ({
+      rootPath: '/',
+      rootLabel: '/',
+      listDir: (p) => window.api.containerFs.list(sessionId, p),
+      parentOf: remoteParent,
+      join: remoteJoin,
+      mkdir: (p) => window.api.containerFs.mkdir(sessionId, p),
+      rename: (oldPath, newPath) => window.api.containerFs.rename(sessionId, oldPath, newPath),
+      removeDir: (p) => window.api.containerFs.remove(sessionId, p, true)
+    }),
+    [sessionId]
+  )
 
   if (status === 'connecting') {
     return (
@@ -255,6 +272,15 @@ export function ContainerPane({
   return (
     <div className="relative flex h-full min-w-0 flex-col bg-[var(--panel-bg)]">
       <div className="flex items-center gap-2 border-b border-[var(--panel-border)] px-3 py-2">
+        <button
+          onClick={() => setShowTree((v) => !v)}
+          className={`rounded-lg px-2 py-1.5 hover:bg-[var(--nav-bg-hover)] ${
+            showTree ? 'text-[var(--accent)]' : 'text-[var(--text-dark)]'
+          }`}
+          title={showTree ? '隐藏目录树' : '显示目录树'}
+        >
+          <PanelLeft size={14} />
+        </button>
         <button
           onClick={() => load(remoteParent(path))}
           className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
@@ -302,14 +328,30 @@ export function ContainerPane({
         </div>
       )}
 
-      <FileTable
-        entries={entries}
-        onOpen={onOpen}
-        dnd={dnd}
-        menuActions={menuActions}
-        dragOut={() => null}
-        emptyMenuActions={emptyMenuActions}
-      />
+      <div className="flex min-h-0 flex-1">
+        {showTree && (
+          <aside className="w-56 shrink-0 overflow-auto border-r border-[var(--panel-border)]">
+            <DirectoryTree
+              adapter={treeAdapter}
+              selectedPath={path}
+              onSelect={load}
+              onChanged={() => load(path)}
+              refreshToken={fsVersion}
+              ask={ask}
+            />
+          </aside>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <FileTable
+            entries={entries}
+            onOpen={onOpen}
+            dnd={dnd}
+            menuActions={menuActions}
+            dragOut={() => null}
+            emptyMenuActions={emptyMenuActions}
+          />
+        </div>
+      </div>
       {promptNode}
     </div>
   )

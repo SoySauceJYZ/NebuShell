@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowUp, FolderPlus, FilePlus, RefreshCw, HardDrive, Pencil, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ArrowUp,
+  FolderPlus,
+  FilePlus,
+  RefreshCw,
+  HardDrive,
+  Pencil,
+  Trash2,
+  PanelLeft
+} from 'lucide-react'
 import { useSessionStore } from '../../store/useSessionStore'
 import { useFileDnd } from '../../lib/useFileDnd'
-import { localParent, localJoin } from '../../lib/pathUtils'
+import { localParent, localJoin, localRoot } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
+import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
 import type { LocalListEntry } from '@shared/types'
 
@@ -27,6 +37,9 @@ export function LocalPane({
   const [entries, setEntries] = useState<LocalListEntry[]>([])
   const [drives, setDrives] = useState<string[]>([])
   const [errorMsg, setErrorMsg] = useState('')
+  const [showTree, setShowTree] = useState(true)
+  const [fsVersion, setFsVersion] = useState(0)
+  const bumpFs = (): void => setFsVersion((v) => v + 1)
   const { ask, node: promptNode } = usePromptModal()
 
   const load = useCallback(async (targetPath: string): Promise<boolean> => {
@@ -110,6 +123,7 @@ export function LocalPane({
     try {
       await window.api.local.mkdir(localJoin(cwd, name))
       await load(cwd)
+      bumpFs()
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err))
     }
@@ -140,6 +154,7 @@ export function LocalPane({
     if (!name || name === entry.name) return
     await window.api.local.rename(entry.path, localJoin(cwd, name))
     await load(cwd)
+    bumpFs()
   }
 
   const remove = async (entry: FileEntry): Promise<void> => {
@@ -152,6 +167,7 @@ export function LocalPane({
     if (!ok) return
     await window.api.local.remove(entry.path, entry.type === 'directory')
     await load(cwd)
+    bumpFs()
   }
 
   const menuActions = (entry: FileEntry): MenuAction[] => {
@@ -164,9 +180,35 @@ export function LocalPane({
     return list
   }
 
+  // Root the tree at the current drive; recompute only when the drive (not the cwd) changes,
+  // so navigating within a drive doesn't reset the tree's expansion state.
+  const driveRoot = localRoot(cwd)
+  const treeAdapter = useMemo<TreeAdapter>(
+    () => ({
+      rootPath: driveRoot,
+      rootLabel: driveRoot,
+      listDir: (p) => window.api.local.list(p),
+      parentOf: localParent,
+      join: localJoin,
+      mkdir: (p) => window.api.local.mkdir(p),
+      rename: (oldPath, newPath) => window.api.local.rename(oldPath, newPath),
+      removeDir: (p) => window.api.local.remove(p, true)
+    }),
+    [driveRoot]
+  )
+
   return (
     <div className="relative flex h-full min-w-0 flex-col bg-[var(--panel-bg)]">
       <div className="flex items-center gap-2 border-b border-[var(--panel-border)] px-3 py-2">
+        <button
+          onClick={() => setShowTree((v) => !v)}
+          className={`rounded-lg px-2 py-1.5 hover:bg-[var(--nav-bg-hover)] ${
+            showTree ? 'text-[var(--accent)]' : 'text-[var(--text-dark)]'
+          }`}
+          title={showTree ? '隐藏目录树' : '显示目录树'}
+        >
+          <PanelLeft size={14} />
+        </button>
         <button
           onClick={() => load(localParent(cwd))}
           className="rounded-lg px-2 py-1.5 text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
@@ -226,13 +268,29 @@ export function LocalPane({
         </div>
       )}
 
-      <FileTable
-        entries={entries}
-        onOpen={onOpen}
-        dnd={dnd}
-        menuActions={menuActions}
-        emptyMenuActions={emptyMenuActions}
-      />
+      <div className="flex min-h-0 flex-1">
+        {showTree && (
+          <aside className="w-56 shrink-0 overflow-auto border-r border-[var(--panel-border)]">
+            <DirectoryTree
+              adapter={treeAdapter}
+              selectedPath={cwd}
+              onSelect={load}
+              onChanged={() => load(cwd)}
+              refreshToken={fsVersion}
+              ask={ask}
+            />
+          </aside>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <FileTable
+            entries={entries}
+            onOpen={onOpen}
+            dnd={dnd}
+            menuActions={menuActions}
+            emptyMenuActions={emptyMenuActions}
+          />
+        </div>
+      </div>
       {promptNode}
     </div>
   )
