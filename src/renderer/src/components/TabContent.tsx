@@ -1,5 +1,6 @@
 import { HostsView } from './HostsView'
 import { KeychainView } from './KeychainView'
+import { QuickCommandsView } from './QuickCommandsView'
 import { HistoryDocsView } from './HistoryDocsView'
 import { SettingsView } from './SettingsView'
 import { TerminalTab } from './TerminalTab'
@@ -16,6 +17,8 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
       return <HostsView />
     case 'keychain':
       return <KeychainView />
+    case 'quickCommands':
+      return <QuickCommandsView />
     case 'history':
       return <HistoryDocsView />
     case 'settings':
@@ -28,6 +31,7 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
           containerId={tab.containerId}
           containerName={tab.containerName}
           dockerCmd={tab.dockerCmd}
+          initialCommands={tab.initialCommands}
         />
       ) : null
     case 'sftp':

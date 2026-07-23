@@ -1,13 +1,14 @@
-import { Server, KeyRound, FileClock, Settings } from 'lucide-react'
+import { Server, KeyRound, FileClock, Settings, Zap } from 'lucide-react'
 import { useSessionStore, type TabKind } from '../store/useSessionStore'
 
 const NAV_ITEMS: {
-  id: Extract<TabKind, 'hosts' | 'keychain' | 'history' | 'settings'>
+  id: Extract<TabKind, 'hosts' | 'keychain' | 'history' | 'quickCommands' | 'settings'>
   label: string
   icon: typeof Server
 }[] = [
   { id: 'hosts', label: '主机', icon: Server },
   { id: 'keychain', label: '密钥库', icon: KeyRound },
+  { id: 'quickCommands', label: '快捷操作', icon: Zap },
   { id: 'history', label: '历史文档', icon: FileClock },
   { id: 'settings', label: '设置', icon: Settings }
 ]

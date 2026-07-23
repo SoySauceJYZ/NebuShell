@@ -176,6 +176,22 @@ export interface CommandHistoryEntry {
 }
 
 /**
+ * 一条用户自定义的「快捷命令」:保存一批命令,一键写入终端执行。
+ * hostId 有值 → 绑定该服务器(点击时新开标签并连接);为空/未设 → 在当前活跃终端执行。
+ */
+export interface QuickCommand {
+  id: string
+  title: string
+  description: string
+  /** 原始多行文本(一批命令,按行执行)。 */
+  commands: string
+  /** 绑定的服务器 vault id;为空/null 表示不绑定,在当前终端执行。 */
+  hostId?: string | null
+  /** Date.now() at creation。 */
+  createdAt: number
+}
+
+/**
  * runInShell 的终局状态,取代过去仅有的 timedOut 布尔:
  * - completed:   命令正常跑完,exitCode 有效。
  * - interrupted: 命令超时/静默/疑似等待输入,系统已自动中断并夺回提示符(终端仍可用)。

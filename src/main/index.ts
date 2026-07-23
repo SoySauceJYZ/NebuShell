@@ -12,6 +12,7 @@ import { registerHistoryIpc } from './ipc/historyIpc'
 import { registerLlmIpc } from './ipc/llmIpc'
 import { registerAgentChatIpc } from './ipc/agentChatIpc'
 import { registerCommandHistoryIpc } from './ipc/commandHistoryIpc'
+import { registerQuickCommandsIpc } from './ipc/quickCommandsIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 
 // Window creation lives in ./windows so both the initial window and torn-off tab
@@ -42,6 +43,7 @@ app.whenReady().then(() => {
   registerLlmIpc()
   registerAgentChatIpc()
   registerCommandHistoryIpc()
+  registerQuickCommandsIpc()
   registerSettingsIpc()
 
   createAppWindow()

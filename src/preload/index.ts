@@ -21,6 +21,7 @@ import type {
   LlmSettingsPublic,
   AgentConversationMeta,
   CommandHistoryEntry,
+  QuickCommand,
   AppSettings,
   AdoptPayload
 } from '../shared/types'
@@ -308,6 +309,11 @@ const api = {
     remove: (hostId: string, id: string): Promise<void> =>
       ipcRenderer.invoke('cmdHistory:remove', hostId, id),
     clear: (hostId: string): Promise<void> => ipcRenderer.invoke('cmdHistory:clear', hostId)
+  },
+  quickCommands: {
+    list: (): Promise<QuickCommand[]> => ipcRenderer.invoke('quickCommands:list'),
+    save: (items: QuickCommand[]): Promise<void> =>
+      ipcRenderer.invoke('quickCommands:save', items)
   },
   llm: {
     getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),

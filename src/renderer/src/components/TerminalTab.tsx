@@ -45,7 +45,8 @@ export function TerminalTab({
   hostId,
   containerId,
   containerName,
-  dockerCmd
+  dockerCmd,
+  initialCommands
 }: {
   sessionId: string
   hostId: string
@@ -53,6 +54,8 @@ export function TerminalTab({
   containerId?: string
   containerName?: string
   dockerCmd?: string
+  /** 服务器绑定的快捷命令:首次连接成功后自动写入并执行一次。 */
+  initialCommands?: string
 }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -60,6 +63,8 @@ export function TerminalTab({
   const selectionRef = useRef('')
   const statusRef = useRef<Status>('connecting')
   const reconnectingRef = useRef(false)
+  // Guards the server-bound quick command so it runs once (first connect), not on reconnect.
+  const ranInitialRef = useRef(false)
   const doConnectRef = useRef<() => void>(() => {})
   // Triple-tap Ctrl detection: timestamps of "pure" Ctrl taps, and whether the current
   // Ctrl press was consumed as a modifier (e.g. Ctrl+C) so it doesn't count as a tap.
@@ -102,13 +107,18 @@ export function TerminalTab({
         } catch {
           // ignore
         }
+        // Server-bound quick command: write + execute the batch once, on first connect.
+        if (initialCommands && !ranInitialRef.current) {
+          ranInitialRef.current = true
+          window.api.ssh.write(sessionId, initialCommands)
+        }
       })
       .catch((err) => {
         reconnectingRef.current = false
         setStatus('error')
         setErrorMsg(err instanceof Error ? err.message : String(err))
       })
-  }, [sessionId, hostId, hosts, credentials, containerId, dockerCmd])
+  }, [sessionId, hostId, hosts, credentials, containerId, dockerCmd, initialCommands])
 
   useEffect(() => {
     doConnectRef.current = doConnect

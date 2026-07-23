@@ -18,6 +18,7 @@ export type TabKind =
   | 'hosts'
   | 'keychain'
   | 'history'
+  | 'quickCommands'
   | 'settings'
   | 'terminal'
   | 'sftp'
@@ -53,6 +54,8 @@ export interface Tab {
   explorerContainerName?: string
   // 容器文件后端的编辑器 tab
   editorContainerFsSessionId?: string
+  // 服务器绑定的快捷命令:新开的终端首次连接成功后自动写入并执行的一批命令。
+  initialCommands?: string
   // Transient: set when this tab was adopted from another window. Tells TerminalTab /
   // RemotePane the session is already alive in main — replay/reuse it, don't reconnect.
   adopted?: boolean

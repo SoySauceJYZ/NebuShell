@@ -14,7 +14,10 @@ import {
   Bot,
   X,
   RefreshCw,
-  Container
+  Container,
+  Play,
+  Pencil,
+  Server
 } from 'lucide-react'
 import {
   useTerminalStore,
@@ -24,7 +27,13 @@ import {
   MAX_FONT_SIZE
 } from '../store/useTerminalStore'
 import { useCommandHistoryStore, EMPTY_ENTRIES } from '../store/useCommandHistoryStore'
+import { useQuickCommandsStore } from '../store/useQuickCommandsStore'
+import { useVaultStore } from '../store/useVaultStore'
+import { useSessionStore } from '../store/useSessionStore'
 import { ENABLE_CJK_COMMAND } from '../lib/quickActions'
+import { runQuickCommand, buildBatch } from '../lib/quickCommands'
+import { Select } from './ui/Select'
+import type { QuickCommand, Host } from '@shared/types'
 import { fetchServerHistory } from '../lib/serverHistory'
 import { TERMINAL_THEMES, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { SftpPanel, ContainerFilesPanel } from './SftpPanel'
@@ -176,46 +185,320 @@ function ActionsSection({
   sessionId: string
   connected: boolean
 }): React.ReactElement {
-  const [done, setDone] = useState(false)
+  const items = useQuickCommandsStore((s) => s.items)
+  const hydrate = useQuickCommandsStore((s) => s.hydrate)
+  const remove = useQuickCommandsStore((s) => s.remove)
+  const hosts = useVaultStore((s) => s.hosts)
+  const openTab = useSessionStore((s) => s.openTab)
+  // null = 列表视图;'new' = 新增表单;QuickCommand = 编辑该项。
+  const [editing, setEditing] = useState<QuickCommand | 'new' | null>(null)
 
+  useEffect(() => {
+    void hydrate()
+  }, [hydrate])
+
+  if (editing) {
+    return (
+      <QuickCommandForm
+        sessionId={sessionId}
+        connected={connected}
+        hosts={hosts}
+        initial={editing === 'new' ? null : editing}
+        onDone={() => setEditing(null)}
+      />
+    )
+  }
+
+  const deleteCmd = async (cmd: QuickCommand): Promise<void> => {
+    const ok = await window.api.dialog.confirm({
+      message: `删除快捷命令「${cmd.title}」?`,
+      confirmLabel: '删除',
+      cancelLabel: '取消'
+    })
+    if (ok) remove(cmd.id)
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <SectionHeader
+        title="快捷操作"
+        action={
+          <button
+            onClick={() => setEditing('new')}
+            title="新增快捷命令"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--text-muted)] transition hover:bg-[var(--nav-bg-hover)] hover:text-[var(--accent)]"
+          >
+            <Plus size={14} />
+            新增
+          </button>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <CjkButton sessionId={sessionId} connected={connected} />
+        {items.length > 0 && (
+          <div className="mt-3 flex flex-col gap-2">
+            {items.map((cmd) => (
+              <QuickCommandRow
+                key={cmd.id}
+                cmd={cmd}
+                hosts={hosts}
+                connected={connected}
+                onRun={() => runQuickCommand(cmd, { sessionId, openTab, hosts })}
+                onEdit={() => setEditing(cmd)}
+                onDelete={() => void deleteCmd(cmd)}
+              />
+            ))}
+          </div>
+        )}
+        <p className="mt-3 px-1 text-xs leading-relaxed text-[var(--text-muted)]">
+          「新增」可保存一批命令:不绑定服务器则在当前终端执行;绑定服务器后点击会新开标签页连接并执行。
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** 内置的「启用中文输入」快捷操作,保留自己的“已启用”反馈状态。 */
+function CjkButton({
+  sessionId,
+  connected
+}: {
+  sessionId: string
+  connected: boolean
+}): React.ReactElement {
+  const [done, setDone] = useState(false)
   const enableCjk = (): void => {
     window.api.ssh.write(sessionId, ENABLE_CJK_COMMAND + '\n')
     setDone(true)
     window.setTimeout(() => setDone(false), 2500)
   }
+  return (
+    <button
+      onClick={enableCjk}
+      disabled={!connected}
+      className="flex w-full items-start gap-3 rounded-lg border border-[var(--panel-border)] p-3 text-left transition hover:border-[var(--accent)] disabled:opacity-50"
+    >
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+        <Languages size={18} strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-dark)]">
+          启用中文输入
+          {done && (
+            <span className="flex items-center gap-1 text-xs font-normal text-[var(--accent)]">
+              <Check size={13} />
+              已启用
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+          让当前终端支持中文的输入与显示(设置 UTF-8 locale 并使 readline 8-bit 干净)。
+        </div>
+      </div>
+    </button>
+  )
+}
+
+/** 列表里的一条自定义快捷命令:点击运行,hover 显示编辑/删除。 */
+function QuickCommandRow({
+  cmd,
+  hosts,
+  connected,
+  onRun,
+  onEdit,
+  onDelete
+}: {
+  cmd: QuickCommand
+  hosts: Host[]
+  connected: boolean
+  onRun: () => void
+  onEdit: () => void
+  onDelete: () => void
+}): React.ReactElement {
+  const boundHost = cmd.hostId ? hosts.find((h) => h.id === cmd.hostId) : undefined
+  // 未绑定服务器的命令要写入当前终端,故需要活动连接;绑定服务器的命令自行新开标签,不受此限。
+  const disabled = !cmd.hostId && !connected
+  return (
+    <div className="group relative rounded-lg border border-[var(--panel-border)] transition hover:border-[var(--accent)]">
+      <button
+        onClick={onRun}
+        disabled={disabled}
+        className="flex w-full items-start gap-3 p-3 pr-16 text-left disabled:opacity-50"
+      >
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+          <Play size={16} strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-[var(--text-dark)]">{cmd.title}</div>
+          {cmd.description && (
+            <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
+              {cmd.description}
+            </div>
+          )}
+          {cmd.hostId && (
+            <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-[var(--content-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+              <Server size={11} />
+              {boundHost ? boundHost.label : '服务器已删除'}
+            </span>
+          )}
+        </div>
+      </button>
+      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+        <button
+          onClick={onEdit}
+          title="编辑"
+          className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] hover:text-[var(--text-dark)]"
+        >
+          <Pencil size={13} />
+        </button>
+        <button
+          onClick={onDelete}
+          title="删除"
+          className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] hover:text-[var(--danger,#e5484d)]"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** 新增/编辑快捷命令的表单(内联在面板内)。 */
+function QuickCommandForm({
+  sessionId,
+  connected,
+  hosts,
+  initial,
+  onDone
+}: {
+  sessionId: string
+  connected: boolean
+  hosts: Host[]
+  initial: QuickCommand | null
+  onDone: () => void
+}): React.ReactElement {
+  const add = useQuickCommandsStore((s) => s.add)
+  const update = useQuickCommandsStore((s) => s.update)
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [commands, setCommands] = useState(initial?.commands ?? '')
+  const [hostId, setHostId] = useState(initial?.hostId ?? '')
+
+  const canSave = title.trim() !== '' && commands.trim() !== ''
+
+  const save = (): void => {
+    if (!canSave) return
+    const payload = {
+      title: title.trim(),
+      description: description.trim(),
+      commands,
+      hostId: hostId || null
+    }
+    if (initial) update(initial.id, payload)
+    else add(payload)
+    onDone()
+  }
+
+  const test = (): void => {
+    const batch = buildBatch(commands)
+    if (batch && connected) window.api.ssh.write(sessionId, batch)
+  }
 
   return (
     <div className="flex h-full flex-col">
-      <SectionHeader title="快捷操作" />
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <SectionHeader
+        title={initial ? '编辑快捷命令' : '新增快捷命令'}
+        action={
+          <button
+            onClick={onDone}
+            title="返回"
+            className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]"
+          >
+            <X size={15} />
+          </button>
+        }
+      />
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        <Field label="标题">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="例如:重启服务"
+            className="input"
+          />
+        </Field>
+        <Field label="描述">
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="可选:这批命令做什么"
+            className="input"
+          />
+        </Field>
+        <Field label="命令(每行一条)">
+          <textarea
+            value={commands}
+            onChange={(e) => setCommands(e.target.value)}
+            rows={6}
+            placeholder={'cd /var/www\ngit pull\nsystemctl restart nginx'}
+            className="input resize-y font-mono"
+          />
+        </Field>
+        <Field label="服务器">
+          <Select
+            value={hostId ?? ''}
+            onChange={setHostId}
+            options={[
+              { value: '', label: '当前终端(不绑定)' },
+              ...hosts.map((h) => ({ value: h.id, label: h.label }))
+            ]}
+          />
+          <p className="mt-1 px-0.5 text-xs leading-relaxed text-[var(--text-muted)]">
+            选择服务器后,点击将新开标签页连接该服务器并执行;不选则在当前终端执行。
+          </p>
+        </Field>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--panel-border)] p-3">
         <button
-          onClick={enableCjk}
-          disabled={!connected}
-          className="flex w-full items-start gap-3 rounded-lg border border-[var(--panel-border)] p-3 text-left transition hover:border-[var(--accent)] disabled:opacity-50"
+          onClick={save}
+          disabled={!canSave}
+          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
         >
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
-            <Languages size={18} strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-dark)]">
-              启用中文输入
-              {done && (
-                <span className="flex items-center gap-1 text-xs font-normal text-[var(--accent)]">
-                  <Check size={13} />
-                  已启用
-                </span>
-              )}
-            </div>
-            <div className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
-              让当前终端支持中文的输入与显示(设置 UTF-8 locale 并使 readline 8-bit 干净)。
-            </div>
-          </div>
+          保存
         </button>
-        <p className="mt-3 px-1 text-xs leading-relaxed text-[var(--text-muted)]">
-          仅对当前会话生效。如需永久生效,可将相同设置写入服务器的 ~/.bashrc。
-        </p>
+        <button
+          onClick={test}
+          disabled={!connected || commands.trim() === ''}
+          title={connected ? '在当前终端试跑这批命令' : '需要活动连接才能测试'}
+          className="rounded-lg border border-[var(--panel-border)] px-3 py-1.5 text-sm font-medium text-[var(--text-dark)] transition hover:border-[var(--accent)] disabled:opacity-40"
+        >
+          测试
+        </button>
+        <button
+          onClick={onDone}
+          className="ml-auto rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-dark)]"
+        >
+          取消
+        </button>
       </div>
     </div>
+  )
+}
+
+function Field({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.ReactElement {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        {label}
+      </span>
+      {children}
+    </label>
   )
 }
 

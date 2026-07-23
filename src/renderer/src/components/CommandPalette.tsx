@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, History, Zap, X, CornerDownLeft } from 'lucide-react'
+import { Search, History, Zap, X, CornerDownLeft, Play, type LucideIcon } from 'lucide-react'
 import { useCommandHistoryStore, EMPTY_ENTRIES } from '../store/useCommandHistoryStore'
+import { useQuickCommandsStore } from '../store/useQuickCommandsStore'
+import { useSessionStore } from '../store/useSessionStore'
+import { useVaultStore } from '../store/useVaultStore'
 import { fetchServerHistory } from '../lib/serverHistory'
 import { QUICK_ACTIONS } from '../lib/quickActions'
-import type { CommandSource } from '@shared/types'
+import { runQuickCommand } from '../lib/quickCommands'
+import type { CommandSource, QuickCommand } from '@shared/types'
+
+// The actions tab lists built-in QUICK_ACTIONS plus user-defined quick commands.
+type ActionEntry =
+  | { kind: 'builtin'; id: string; label: string; description: string; icon: LucideIcon }
+  | { kind: 'custom'; id: string; label: string; description: string; cmd: QuickCommand }
 
 type PaletteTab = 'history' | 'actions'
 
@@ -67,10 +76,15 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null)
 
   const localEntries = useCommandHistoryStore((s) => s.byHost[hostId] ?? EMPTY_ENTRIES)
+  const quickCommands = useQuickCommandsStore((s) => s.items)
 
   useEffect(() => {
     void useCommandHistoryStore.getState().hydrate(hostId)
   }, [hostId])
+
+  useEffect(() => {
+    void useQuickCommandsStore.getState().hydrate()
+  }, [])
 
   // Fetch server-side history once on open (setState only after the await).
   useEffect(() => {
@@ -106,15 +120,44 @@ export function CommandPalette({
     return items
   }, [localEntries, serverCommands])
 
+  const actionEntries = useMemo<ActionEntry[]>(
+    () => [
+      ...QUICK_ACTIONS.map(
+        (a): ActionEntry => ({
+          kind: 'builtin',
+          id: a.id,
+          label: a.label,
+          description: a.description,
+          icon: a.icon
+        })
+      ),
+      ...quickCommands.map(
+        (c): ActionEntry => ({
+          kind: 'custom',
+          id: c.id,
+          label: c.title,
+          description: c.description,
+          cmd: c
+        })
+      )
+    ],
+    [quickCommands]
+  )
+
   const q = query.trim().toLowerCase()
   const filteredHistory = q
     ? historyItems.filter((it) => it.command.toLowerCase().includes(q))
     : historyItems
   const filteredActions = q
-    ? QUICK_ACTIONS.filter(
+    ? actionEntries.filter(
         (a) => a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
       )
-    : QUICK_ACTIONS
+    : actionEntries
+
+  // Built-ins and non-bound commands write into the current terminal (need a connection);
+  // server-bound commands open their own tab, so they stay enabled when disconnected.
+  const actionNeedsConnection = (a: ActionEntry): boolean =>
+    a.kind === 'builtin' || !a.cmd.hostId
 
   const count = tab === 'history' ? filteredHistory.length : filteredActions.length
 
@@ -139,10 +182,17 @@ export function CommandPalette({
       if (it) onFill(it.command)
     } else {
       const action = filteredActions[index]
-      if (action) {
-        action.run(sessionId)
-        onClose()
+      if (!action || (actionNeedsConnection(action) && !connected)) return
+      if (action.kind === 'builtin') {
+        QUICK_ACTIONS.find((a) => a.id === action.id)?.run(sessionId)
+      } else {
+        runQuickCommand(action.cmd, {
+          sessionId,
+          openTab: useSessionStore.getState().openTab,
+          hosts: useVaultStore.getState().hosts
+        })
       }
+      onClose()
     }
   }
 
@@ -261,7 +311,8 @@ export function CommandPalette({
             <Empty text="没有匹配的操作" />
           ) : (
             filteredActions.map((a, i) => {
-              const Icon = a.icon
+              const Icon = a.kind === 'builtin' ? a.icon : Play
+              const itemDisabled = actionNeedsConnection(a) && !connected
               return (
                 <div
                   key={a.id}
@@ -269,7 +320,7 @@ export function CommandPalette({
                   onMouseMove={() => setSelected(i)}
                   onClick={() => activate(i)}
                   className={`flex cursor-pointer items-start gap-3 px-3 py-2.5 ${
-                    !connected ? 'pointer-events-none opacity-50' : ''
+                    itemDisabled ? 'pointer-events-none opacity-50' : ''
                   } ${i === selected ? 'bg-[var(--nav-active-bg)]' : ''}`}
                 >
                   <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -277,9 +328,11 @@ export function CommandPalette({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-[var(--text-dark)]">{a.label}</div>
-                    <div className="mt-0.5 text-xs leading-relaxed text-[var(--text-muted)]">
-                      {a.description}
-                    </div>
+                    {a.description && (
+                      <div className="mt-0.5 text-xs leading-relaxed text-[var(--text-muted)]">
+                        {a.description}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
