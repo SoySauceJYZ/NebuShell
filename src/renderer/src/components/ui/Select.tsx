@@ -40,10 +40,20 @@ export function Select({
         <RSelect.Content
           position="popper"
           sideOffset={4}
+          collisionPadding={8}
           className="z-[70] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-lg"
-          style={{ minWidth: 'var(--radix-select-trigger-width)' }}
+          style={{
+            minWidth: 'var(--radix-select-trigger-width)',
+            maxHeight: 'var(--radix-select-content-available-height)'
+          }}
         >
-          <RSelect.Viewport className="p-1">
+          {/* Radix already puts `overflow: hidden auto` on the viewport, but nothing bounds its
+              height — so a long host list overflowed the window instead of scrolling. Capping it
+              at the available height turns it into a scrollable list. */}
+          <RSelect.Viewport
+            className="p-1"
+            style={{ maxHeight: 'var(--radix-select-content-available-height)' }}
+          >
             {options.map((opt) => (
               <RSelect.Item
                 key={opt.value || NONE}
