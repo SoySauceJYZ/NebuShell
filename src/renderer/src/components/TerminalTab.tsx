@@ -76,6 +76,8 @@ export function TerminalTab({
   const hosts = useVaultStore((s) => s.hosts)
   const credentials = useVaultStore((s) => s.credentials)
   const openTab = useSessionStore((s) => s.openTab)
+  // True when this tab is the focused tab — drives auto-focusing the terminal.
+  const isActive = useSessionStore((s) => s.activeTabId === sessionId)
   const themeId = useTerminalStore((s) => s.themeBySession[sessionId])
   const preset = getTheme(themeId ?? DEFAULT_THEME_ID)
   const fontSize = useTerminalStore((s) => s.fontSizeBySession[sessionId] ?? DEFAULT_FONT_SIZE)
@@ -317,6 +319,15 @@ export function TerminalTab({
   useEffect(() => {
     if (termRef.current) termRef.current.options.theme = preset.theme
   }, [preset])
+
+  // Auto-focus the terminal when this tab is active and live, so opening a new terminal
+  // (or switching to one) lets you type immediately without clicking. Only fires while
+  // active, so a background tab connecting can never steal focus from what you're using.
+  useEffect(() => {
+    if (!isActive || status !== 'connected') return
+    const t = window.setTimeout(() => termRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [isActive, status])
 
   useEffect(() => {
     const term = termRef.current
