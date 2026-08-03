@@ -62,8 +62,11 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 
 ### What's New
 
-**Recent updates (July 2026)**
+**Recent updates (July–August 2026)**
 
+- 🔌 **The agent can reconnect a dropped terminal** _(2026‑08‑03)_ — when an SSH terminal drops (a command comes back with a connection error, or a result is flagged **终端卡死,建议重连**), the agent can now call a new **`reconnect_terminal`** tool to **re-establish that terminal's connection itself** and carry on — no more asking you to click reconnect first. It reuses the tab's own connect flow (you'll see **正在连接...** in the terminal), reports success or failure back to the model, and runs in **every mode including plan mode** (reconnecting is a prerequisite for investigating, not a write operation). The tool only lists **SSH** targets — the local machine isn't a connection.
+- 🧩 **Right-side panels are now per-tab** _(2026‑08‑03)_ — with multiple tabs open, switching the right-side panel (**智能体 / 快捷操作 / 历史命令 / 监控 / 容器 / 主题 / SFTP**) in one terminal used to switch it in **every** tab, because the selection was a single shared value. Each terminal now **remembers its own open panel**: open SFTP in one tab and the others are untouched, and the hosts page **查看容器** shortcut pre-opens the container panel only for the **new** tab. (Panel width stays shared as a global size preference.)
+- 🚑 **High-frequency output no longer freezes the UI** _(2026‑08‑03)_ — running a command that redraws hundreds of times a second (e.g. `rsync --info=progress2`) could **freeze the interface**, because every tiny output chunk took its own trip through IPC plus a scrollback-buffer concatenation. Output is now **batched per frame (~16ms)**: a burst of chunks collapses into a single broadcast and terminal write, cutting hundreds of messages/sec down to ~60 and keeping the UI smooth. The agent's own command-output capture was likewise changed from repeated full-string concat + sentinel scan to **array accumulation with a bounded tail scan**, removing an O(n²) stall on long high-output commands.
 - ⌨️ **New terminals grab focus** _(2026‑07‑24)_ — opening a new terminal (or switching to an existing one) now **focuses it automatically**, so you can start typing right away without clicking first. Focus only follows the **active tab**, so a background terminal finishing its connection never steals focus from what you're doing.
 - 📜 **Scrollable dropdowns** _(2026‑07‑24)_ — long select menus (such as the server picker) no longer **overflow the window** — they now cap at the available height and **scroll** instead of being cut off.
 - ⚡ **Custom quick commands** _(2026‑07‑23)_ — the terminal's **快捷操作 (Quick actions)** panel now lets you **save your own batches of commands**: give a title, description, and a block of commands, then run the whole batch into the current terminal with one click — a **测试 (Test)** button tries it live while you edit. Pick a **server** in the form and the command becomes **server‑bound** — clicking it **opens a new tab, connects to that host, and runs the batch on connect**. A new **快捷操作** entry in the left sidebar lists every server‑bound command as a one‑click launch card, and everything shows up in the **triple‑Ctrl command palette** too. Commands are persisted locally.
@@ -230,8 +233,11 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 
 ### 更新记录
 
-**近期更新(2026 年 7 月)**
+**近期更新(2026 年 7–8 月)**
 
+- 🔌 **智能体可重连断线终端** _(2026‑08‑03)_ —— 当某个 SSH 终端掉线(命令返回连接错误,或结果被标为「**终端卡死,建议重连**」)时,智能体现在可以调用新增的 **`reconnect_terminal`** 工具**自己把该终端重新连上**再继续,不用再让你先点重连。它复用标签页原本的连接流程(终端里会显示「**正在连接...**」),把成功或失败回报给模型,并在**包括计划模式在内的所有模式下**都可执行(重连是继续调查的前提,不是写操作)。工具只列出 **SSH** 目标——本机不是网络连接。
+- 🧩 **右侧面板按标签页独立** _(2026‑08‑03)_ —— 开着多个标签页时,在一个终端里切换右侧面板(**智能体 / 快捷操作 / 历史命令 / 监控 / 容器 / 主题 / SFTP**)原本会**连带切换所有标签**,因为选中项是一个全局共享值。现在每个终端**各记各自打开的面板**:在一个标签开 SFTP,其它标签不受影响;主机页「**查看容器**」也只为**新开的那个标签**预展开容器面板。(面板宽度仍作为全局尺寸偏好共享。)
+- 🚑 **高频输出不再卡死界面** _(2026‑08‑03)_ —— 运行每秒刷新数百次的命令(如 `rsync --info=progress2`)可能**把界面卡死**,因为每个细碎输出块都要单独走一趟 IPC 加一次回放缓冲拼接。现在输出**按帧(约 16ms)合批**:一波数据块合并成一次广播和一次终端写入,把每秒数百条消息压到约 60 条,界面保持流畅。智能体自身的命令输出采集也从反复整段拼接 + 查找哨兵改为**数组累积 + 只扫尾部**,消除长时间高输出命令下的 O(n²) 卡顿。
 - ⌨️ **新终端自动聚焦** _(2026‑07‑24)_ —— 打开新终端(或切换到某个已有终端)时会**自动聚焦**,可以直接输入命令,不用再先点一下。只有**当前活动标签页**才会被聚焦,后台终端连接完成不会抢走你正在操作处的焦点。
 - 📜 **下拉框可滚动** _(2026‑07‑24)_ —— 选项很多的下拉菜单(如服务器选择)不再**顶穿窗口**——现在会按可用高度封顶并出现**滚动条**,不会被截断。
 - ⚡ **自定义快捷命令** _(2026‑07‑23)_ —— 终端右侧「**快捷操作**」面板现在可以**保存你自己的一批命令**:填标题、描述和一段命令,点一下就把整批写入**当前终端**执行——编辑时还有「**测试**」按钮当场试跑。在表单里**选一台服务器**,这条命令就变成**绑定服务器**——点击会**新开标签页、连接该主机、连上后自动执行**这批命令。左侧菜单新增「**快捷操作**」入口,把所有绑定服务器的命令做成一键启动卡片,这些命令同样出现在**三击 Ctrl 命令面板**里。命令均本地持久化保存。

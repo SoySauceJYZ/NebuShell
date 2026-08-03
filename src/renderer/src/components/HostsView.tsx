@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
-import { useTerminalStore } from '../store/useTerminalStore'
+import { useTerminalStore, type RightPanelTab } from '../store/useTerminalStore'
 import { HostFormModal } from './HostFormModal'
 import { Select } from './ui/Select'
 import type { Host, Group, Credential } from '@shared/types'
@@ -88,13 +88,17 @@ export function HostsView(): React.ReactElement {
     return ordered
   }, [hosts, groups, query])
 
-  const connect = (host: Host): void => {
+  const connect = (host: Host, panel?: Exclude<RightPanelTab, null>): void => {
+    const id = `terminal-${host.id}-${Date.now()}`
     openTab({
-      id: `terminal-${host.id}-${Date.now()}`,
+      id,
       kind: 'terminal',
       title: host.label,
       hostId: host.id
     })
+    // Pre-open a panel for THIS session only (e.g. 「查看容器」→ docker), so it doesn't
+    // leak into other tabs the way a shared global panel selection used to.
+    if (panel) useTerminalStore.getState().setRightPanel(id, panel)
   }
 
   const duplicateHost = async (host: Host): Promise<void> => {
@@ -124,8 +128,7 @@ export function HostsView(): React.ReactElement {
 
   // 连接主机并直接展开右侧「容器」面板
   const openContainers = (host: Host): void => {
-    useTerminalStore.getState().setRightPanel('docker')
-    connect(host)
+    connect(host, 'docker')
   }
 
   return (

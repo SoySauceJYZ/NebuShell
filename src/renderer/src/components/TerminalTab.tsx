@@ -12,6 +12,7 @@ import { buildExecShellCommand } from '../lib/dockerContainers'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
+import { registerReconnect } from '../lib/reconnectRegistry'
 import { releaseAgentFs } from '../lib/agentTransfer'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
 import { TerminalRightPanel } from './TerminalRightPanel'
@@ -65,7 +66,7 @@ export function TerminalTab({
   const reconnectingRef = useRef(false)
   // Guards the server-bound quick command so it runs once (first connect), not on reconnect.
   const ranInitialRef = useRef(false)
-  const doConnectRef = useRef<() => void>(() => {})
+  const doConnectRef = useRef<() => Promise<void>>(() => Promise.resolve())
   // Triple-tap Ctrl detection: timestamps of "pure" Ctrl taps, and whether the current
   // Ctrl press was consumed as a modifier (e.g. Ctrl+C) so it doesn't count as a tap.
   const ctrlTapsRef = useRef<number[]>([])
@@ -85,10 +86,12 @@ export function TerminalTab({
   statusRef.current = status
 
   // (Re)establish the SSH connection for this session. Callable again to reconnect.
-  const doConnect = useCallback(() => {
+  // Returns a promise that settles with the connection outcome so external callers
+  // (the tab menu, the AI agent) can await and report the result.
+  const doConnect = useCallback((): Promise<void> => {
     const host = hosts.find((h) => h.id === hostId)
     const term = termRef.current
-    if (!host || !term) return
+    if (!host || !term) return Promise.reject(new Error('找不到主机配置或终端尚未就绪'))
     reconnectingRef.current = true
     setStatus('connecting')
     setErrorMsg('')
@@ -98,7 +101,7 @@ export function TerminalTab({
     const opts = resolveConnectOptions(sessionId, host, credentials)
     // 容器终端:不开登录 shell,直接在 exec-PTY 通道上进入容器(exit 即通道关闭 → 重连横幅)。
     if (containerId) opts.execCommand = buildExecShellCommand(dockerCmd ?? 'docker', containerId)
-    window.api.ssh
+    return window.api.ssh
       .connect(opts)
       .then(() => {
         reconnectingRef.current = false
@@ -119,12 +122,19 @@ export function TerminalTab({
         reconnectingRef.current = false
         setStatus('error')
         setErrorMsg(err instanceof Error ? err.message : String(err))
+        throw err instanceof Error ? err : new Error(String(err))
       })
   }, [sessionId, hostId, hosts, credentials, containerId, dockerCmd, initialCommands])
 
   useEffect(() => {
     doConnectRef.current = doConnect
   }, [doConnect])
+
+  // Expose this terminal's reconnect to external callers (e.g. the AI agent) while it's
+  // mounted. Uses doConnectRef so the registered fn always runs the latest doConnect.
+  useEffect(() => {
+    return registerReconnect(sessionId, () => doConnectRef.current())
+  }, [sessionId])
 
   useEffect(() => {
     if (!containerRef.current) return

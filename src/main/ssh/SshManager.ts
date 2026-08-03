@@ -11,9 +11,22 @@ interface Session {
   channel: ClientChannel | null
 }
 
+// Per-session outbound coalescing state. High-frequency producers (e.g. `rsync
+// --info=progress2` redraws its line hundreds of times/sec via \r) would otherwise
+// emit one IPC message per tiny chunk and freeze the renderer. We batch chunks and
+// flush at most once per frame.
+interface OutQueue {
+  chunks: string[]
+  timer: ReturnType<typeof setTimeout> | null
+}
+
 // Cap on the per-session replay buffer (chars). Enough to rebuild a few screens of
 // scrollback when a tab is torn off into a new window, without unbounded growth.
 const REPLAY_CAP = 200_000
+
+// Coalescing window for outbound terminal data (ms). ~one frame at 60fps: keeps
+// latency imperceptible while collapsing bursts into a single IPC + xterm write.
+const OUTPUT_FLUSH_MS = 16
 
 /**
  * 启发式判断输出末尾是否停在一个「等待输入」的提示上(apt 的 [Y/n]、sudo 的 password:、
@@ -36,10 +49,51 @@ export class SshManager {
   // so only the window owning the tab listens), which decouples a session from the
   // window it was born in — the prerequisite for moving a tab between windows.
   private buffers = new Map<string, string>()
+  private outQueues = new Map<string, OutQueue>()
 
   private appendBuffer(sessionId: string, chunk: string): void {
     const next = (this.buffers.get(sessionId) ?? '') + chunk
     this.buffers.set(sessionId, next.length > REPLAY_CAP ? next.slice(-REPLAY_CAP) : next)
+  }
+
+  // Queue a chunk for the session's terminal and schedule a flush. Batching here means
+  // appendBuffer's string concat and the IPC broadcast each run once per frame instead
+  // of once per chunk, which is what keeps the UI responsive under high-frequency output.
+  private queueOutput(sessionId: string, text: string): void {
+    let q = this.outQueues.get(sessionId)
+    if (!q) {
+      q = { chunks: [], timer: null }
+      this.outQueues.set(sessionId, q)
+    }
+    q.chunks.push(text)
+    if (!q.timer) {
+      q.timer = setTimeout(() => this.flushOutput(sessionId), OUTPUT_FLUSH_MS)
+    }
+  }
+
+  private flushOutput(sessionId: string): void {
+    const q = this.outQueues.get(sessionId)
+    if (!q) return
+    q.timer = null
+    if (q.chunks.length === 0) return
+    const text = q.chunks.join('')
+    q.chunks = []
+    this.appendBuffer(sessionId, text)
+    broadcast(`ssh:data:${sessionId}`, text)
+  }
+
+  private disposeOutput(sessionId: string): void {
+    const q = this.outQueues.get(sessionId)
+    if (!q) return
+    if (q.timer) clearTimeout(q.timer)
+    // Flush any tail so the last bytes before close aren't dropped.
+    if (q.chunks.length > 0) {
+      const text = q.chunks.join('')
+      q.chunks = []
+      this.appendBuffer(sessionId, text)
+      broadcast(`ssh:data:${sessionId}`, text)
+    }
+    this.outQueues.delete(sessionId)
   }
 
   replay(sessionId: string): string {
@@ -64,16 +118,13 @@ export class SshManager {
         if (session) session.channel = channel
 
         channel.on('data', (chunk: Buffer) => {
-          const text = chunk.toString('utf8')
-          this.appendBuffer(opts.sessionId, text)
-          broadcast(`ssh:data:${opts.sessionId}`, text)
+          this.queueOutput(opts.sessionId, chunk.toString('utf8'))
         })
         channel.stderr.on('data', (chunk: Buffer) => {
-          const text = chunk.toString('utf8')
-          this.appendBuffer(opts.sessionId, text)
-          broadcast(`ssh:data:${opts.sessionId}`, text)
+          this.queueOutput(opts.sessionId, chunk.toString('utf8'))
         })
         channel.on('close', () => {
+          this.disposeOutput(opts.sessionId)
           broadcast(`ssh:closed:${opts.sessionId}`)
           // Only remove the map entry if it still points to THIS client — during a
           // reconnect a newer session may already own this id, and we must not delete it.
@@ -289,7 +340,12 @@ export class SshManager {
       finished: boolean
       hitHard: boolean
     }>((resolve) => {
-      let buffer = ''
+      // Accumulate output in an array (join once at the end) and scan only a rolling
+      // tail for the end sentinel, so a high-output command doesn't turn this into an
+      // O(n²) concat+indexOf hot loop that stalls the main process.
+      const parts: string[] = []
+      let tail = ''
+      const SENTINEL_SCAN = 512
       let done = false
       let lastDataAt = Date.now()
       const startedAt = Date.now()
@@ -298,16 +354,22 @@ export class SshManager {
         done = true
         channel.removeListener('data', onData)
         clearInterval(tick)
-        resolve({ raw: buffer, finished: f, hitHard: hard })
+        resolve({ raw: parts.join(''), finished: f, hitHard: hard })
       }
       const onData = (chunk: Buffer): void => {
         if (done) return
-        buffer += chunk.toString('utf8')
+        const text = chunk.toString('utf8')
+        parts.push(text)
         lastDataAt = Date.now()
-        const endIdx = buffer.indexOf(endOutPrefix)
-        if (endIdx !== -1 && buffer.indexOf('>>', endIdx + endOutPrefix.length) !== -1) {
+        // The sentinel is short and only appears at the very end; searching tail+text
+        // (tail carries enough prior bytes to span a chunk boundary) suffices.
+        const hay = tail + text
+        const endIdx = hay.indexOf(endOutPrefix)
+        if (endIdx !== -1 && hay.indexOf('>>', endIdx + endOutPrefix.length) !== -1) {
           finish(true, false)
+          return
         }
+        tail = hay.length > SENTINEL_SCAN ? hay.slice(-SENTINEL_SCAN) : hay
       }
       const tick = setInterval(() => {
         const now = Date.now()
@@ -364,6 +426,7 @@ export class SshManager {
       session.client.end()
       this.sessions.delete(sessionId)
     }
+    this.disposeOutput(sessionId)
     this.buffers.delete(sessionId)
   }
 

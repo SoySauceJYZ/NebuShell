@@ -854,8 +854,59 @@
     <section id="whats-new">
       <div class="wrap">
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
-        <p class="sec-sub" data-zh="近期更新——2026 年 7 月。">Recent updates — July 2026.</p>
+        <p class="sec-sub" data-zh="近期更新——2026 年 7–8 月。">Recent updates — July–August 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🔌</div>
+            <h3 data-zh="智能体可重连断线终端（2026‑08‑03）">
+              The agent can reconnect a dropped terminal (2026‑08‑03)
+            </h3>
+            <p
+              data-zh="当某个 SSH 终端掉线（命令返回连接错误，或结果被标为「终端卡死，建议重连」）时，智能体现在可以调用新增的 reconnect_terminal 工具自己把该终端重新连上再继续，不用再让你先点重连。它复用标签页原本的连接流程（终端里会显示「正在连接...」），把成功或失败回报给模型，并在包括计划模式在内的所有模式下都可执行（重连是继续调查的前提，不是写操作）。工具只列出 SSH 目标——本机不是网络连接。"
+            >
+              When an SSH terminal drops (a command comes back with a connection error, or a result
+              is flagged 终端卡死,建议重连), the agent can now call a new reconnect_terminal tool to
+              re-establish that terminal's connection itself and carry on — no more asking you to
+              click reconnect first. It reuses the tab's own connect flow (you'll see 正在连接... in
+              the terminal), reports success or failure back to the model, and runs in every mode
+              including plan mode. The tool only lists SSH targets — the local machine isn't a
+              connection.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🧩</div>
+            <h3 data-zh="右侧面板按标签页独立（2026‑08‑03）">
+              Right-side panels are now per-tab (2026‑08‑03)
+            </h3>
+            <p
+              data-zh="开着多个标签页时，在一个终端里切换右侧面板（智能体 / 快捷操作 / 历史命令 / 监控 / 容器 / 主题 / SFTP）原本会连带切换所有标签，因为选中项是一个全局共享值。现在每个终端各记各自打开的面板：在一个标签开 SFTP，其它标签不受影响；主机页「查看容器」也只为新开的那个标签预展开容器面板。（面板宽度仍作为全局尺寸偏好共享。）"
+            >
+              With multiple tabs open, switching the right-side panel (智能体 / 快捷操作 / 历史命令 /
+              监控 / 容器 / 主题 / SFTP) in one terminal used to switch it in every tab, because the
+              selection was a single shared value. Each terminal now remembers its own open panel:
+              open SFTP in one tab and the others are untouched, and the hosts page 查看容器 shortcut
+              pre-opens the container panel only for the new tab. (Panel width stays shared as a
+              global size preference.)
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🚑</div>
+            <h3 data-zh="高频输出不再卡死界面（2026‑08‑03）">
+              High-frequency output no longer freezes the UI (2026‑08‑03)
+            </h3>
+            <p
+              data-zh="运行每秒刷新数百次的命令（如 rsync --info=progress2）可能把界面卡死，因为每个细碎输出块都要单独走一趟 IPC 加一次回放缓冲拼接。现在输出按帧（约 16ms）合批：一波数据块合并成一次广播和一次终端写入，把每秒数百条消息压到约 60 条，界面保持流畅。智能体自身的命令输出采集也从反复整段拼接 + 查找哨兵改为数组累积 + 只扫尾部，消除长时间高输出命令下的 O(n²) 卡顿。"
+            >
+              Running a command that redraws hundreds of times a second (e.g. rsync
+              --info=progress2) could freeze the interface, because every tiny output chunk took its
+              own trip through IPC plus a scrollback-buffer concatenation. Output is now batched per
+              frame (~16ms): a burst of chunks collapses into a single broadcast and terminal write,
+              cutting hundreds of messages/sec down to ~60 and keeping the UI smooth. The agent's own
+              command-output capture was likewise changed from repeated full-string concat + sentinel
+              scan to array accumulation with a bounded tail scan, removing an O(n²) stall on long
+              high-output commands.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">⌨️</div>
             <h3 data-zh="新终端自动聚焦（2026‑07‑24）">

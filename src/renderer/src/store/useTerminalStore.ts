@@ -20,13 +20,17 @@ export const MIN_PANEL_WIDTH = 280
 export const MAX_PANEL_WIDTH = 900
 
 interface TerminalState {
-  /** Which right-side panel section is open (null = collapsed). Shared across terminals. */
-  rightPanelTab: RightPanelTab
-  toggleRightPanel: (tab: Exclude<RightPanelTab, null>) => void
+  /**
+   * Which right-side panel section is open, per session (null/absent = collapsed).
+   * Kept per-terminal so opening SFTP/容器/主题 in one tab doesn't switch the others.
+   */
+  rightPanelTabBySession: Record<string, RightPanelTab>
+  getRightPanelTab: (sessionId: string) => RightPanelTab
+  toggleRightPanel: (sessionId: string, tab: Exclude<RightPanelTab, null>) => void
   /** 显式打开某个面板(不做 toggle),用于主机页「查看容器」等直达入口。 */
-  setRightPanel: (tab: RightPanelTab) => void
+  setRightPanel: (sessionId: string, tab: RightPanelTab) => void
 
-  /** Draggable width of the right-side panel (shared). */
+  /** Draggable width of the right-side panel (shared across terminals). */
   rightPanelWidth: number
   setRightPanelWidth: (w: number) => void
 
@@ -41,10 +45,19 @@ interface TerminalState {
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
-  rightPanelTab: null,
-  toggleRightPanel: (tab) =>
-    set((state) => ({ rightPanelTab: state.rightPanelTab === tab ? null : tab })),
-  setRightPanel: (tab) => set({ rightPanelTab: tab }),
+  rightPanelTabBySession: {},
+  getRightPanelTab: (sessionId) => get().rightPanelTabBySession[sessionId] ?? null,
+  toggleRightPanel: (sessionId, tab) =>
+    set((state) => ({
+      rightPanelTabBySession: {
+        ...state.rightPanelTabBySession,
+        [sessionId]: state.rightPanelTabBySession[sessionId] === tab ? null : tab
+      }
+    })),
+  setRightPanel: (sessionId, tab) =>
+    set((state) => ({
+      rightPanelTabBySession: { ...state.rightPanelTabBySession, [sessionId]: tab }
+    })),
 
   rightPanelWidth: DEFAULT_PANEL_WIDTH,
   setRightPanelWidth: (w) =>

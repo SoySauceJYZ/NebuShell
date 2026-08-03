@@ -118,6 +118,37 @@ export function buildTransferFileTool(targets: AgentTarget[]): ChatTool {
   }
 }
 
+/**
+ * 让智能体在某个 SSH 终端掉线后自行重连该终端。仅对 SSH 终端有意义(本机目标不是连接,
+ * 无需也无法重连),所以 enum 只列出 SSH 目标。只有存在 SSH 目标时才会挂上这个工具。
+ */
+export function buildReconnectTerminalTool(targets: AgentTarget[]): ChatTool {
+  const sshTargets = targets.filter((t) => !isLocalTarget(t))
+  const multi = sshTargets.length > 1
+  const properties: Record<string, unknown> = {}
+  const required: string[] = []
+  if (sshTargets.length > 0) {
+    properties.target = {
+      type: 'string',
+      enum: sshTargets.map((t) => t.name),
+      description: multi
+        ? `要重连的 SSH 终端。可选:${sshTargets.map((t) => `${t.name}(${t.host})`).join('、')}。`
+        : `要重连的 SSH 终端(当前只有 ${sshTargets[0].name})。不填即为它。`
+    }
+    if (multi) required.push('target')
+  }
+  return {
+    type: 'function',
+    function: {
+      name: 'reconnect_terminal',
+      description:
+        '当某个 SSH 终端连接已断开(run_command 返回连接错误/连接已关闭,或命令结果提示「终端卡死,建议重连」)时,重新建立该终端的 SSH 连接。重连成功后即可继续下发命令。' +
+        '仅适用于 SSH 终端目标;本机目标不是网络连接,无需也无法重连。',
+      parameters: { type: 'object', properties, required }
+    }
+  }
+}
+
 export const READ_COMMAND_OUTPUT_TOOL: ChatTool = {
   type: 'function',
   function: {
@@ -228,6 +259,8 @@ export function buildAgentTools(targets: AgentTarget[], mode: AgentMode): ChatTo
     READ_ATTACHMENT_TOOL,
     ASK_USER_TOOL
   ]
+  // reconnect_terminal 只有在存在 SSH 终端目标时才有意义(本机目标无法重连)。
+  if (targets.some((t) => !isLocalTarget(t))) tools.push(buildReconnectTerminalTool(targets))
   // present_plan only makes sense while planning.
   return mode === 'plan' ? [...tools, PRESENT_PLAN_TOOL] : tools
 }
@@ -306,7 +339,9 @@ export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask
     '5. 若命令被拒绝或被拦截,请据此调整方案,不要重复强推。',
     '6. 命令结果可能带状态标记:「(已自动中断并恢复终端)」表示该命令超时/卡住/疑似等待输入、' +
       '系统已自动中断并恢复终端——不要原样重试,应改成有界/非交互形式(见规则 2)或换思路;' +
-      '「(终端卡死,建议重连)」表示无法自动恢复,应提示用户断开重连该终端,不要再继续下发命令。',
+      '「(终端卡死,建议重连)」或命令返回连接错误/连接已关闭时,表示该 SSH 终端已断开,' +
+      '可调用 reconnect_terminal 重连该终端(指明 target),重连成功后再继续下发命令;' +
+      '若多次重连仍失败,再提示用户检查网络或凭据,不要无限重试。',
     '7. 拿到命令输出后,用简洁中文解释结论,不要机械地照抄整段输出。',
     '8. 命令输出过长时系统会自动截断,并给出 #xxxxxx 标记与总行数。若截断部分对判断很关键(例如要看完整报错),用 read_command_output 按需检索(优先 grep 关键字或取尾部),不要让用户重跑命令。',
     '9. 用户可能附加文档(PDF/docx/文本),其内容会以 <attachment> 标签包裹出现在消息里。' +

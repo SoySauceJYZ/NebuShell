@@ -19,6 +19,7 @@ import {
 } from '../lib/agentPermissions'
 import { clampCommandOutput, saveCommandOutput, readSavedOutput } from '../lib/commandOutput'
 import { readSavedAttachment } from '../lib/attachments'
+import { requestReconnect } from '../lib/reconnectRegistry'
 import { useSessionStore } from './useSessionStore'
 import { useCommandHistoryStore } from './useCommandHistoryStore'
 
@@ -237,6 +238,38 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
   }
 
+  // reconnect_terminal:重连某个断开的 SSH 终端。走渲染层的 reconnect 注册表,
+  // 由对应的 TerminalTab 执行真正的重连并把成功/失败回给模型。
+  const executeReconnect = async (id: string, call: ToolCall): Promise<void> => {
+    patch(id, { status: 'running', runningIds: [...cur(id).runningIds, call.id] })
+    const { target } = parseArgs(call)
+    // 显式 target 按名字匹配;省略时回退到第一个 SSH 目标(而非 targets[0],那可能是本机)。
+    const targets = get().targetsBySession[id] ?? EMPTY_TARGETS
+    const resolved = target
+      ? targets.find((t) => t.name === target)
+      : targets.find((t) => !isLocalTarget(t))
+    let content = ''
+    if (!resolved) {
+      content = '重连失败: 没有匹配的目标终端。'
+    } else if (isLocalTarget(resolved)) {
+      content = `「${resolved.name}」是用户本机,不是 SSH 连接,无需也无法重连。`
+    } else {
+      const pending = requestReconnect(resolved.sessionId)
+      if (!pending) {
+        content = `重连失败: 终端「${resolved.name}」的标签页未打开(可能已被关闭),无法为其重连。请提示用户重新打开该终端。`
+      } else {
+        try {
+          await pending
+          content = `已重新连接终端「${resolved.name}」,可以继续下发命令。`
+        } catch (e) {
+          content = `重连「${resolved.name}」失败: ${e instanceof Error ? e.message : String(e)}。可提示用户检查网络或凭据。`
+        }
+      }
+    }
+    patch(id, { runningIds: cur(id).runningIds.filter((i) => i !== call.id) })
+    pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
+  }
+
   const patchMeta = (id: string, callId: string, p: Partial<TransferMeta>): void => {
     const s = cur(id)
     const prev = s.transferMeta[callId]
@@ -393,6 +426,12 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         call.function.name === 'read_attachment'
       ) {
         executeLookup(id, call)
+        continue
+      }
+      // 重连终端:恢复用户已配置好的连接、不执行任何 shell 命令,任何模式下都直接执行
+      // (包括计划模式——重连本身是继续调查的前提,不是写操作)。
+      if (call.function.name === 'reconnect_terminal') {
+        await executeReconnect(id, call)
         continue
       }
       // 文件传输:结构化调用,不走 shell,也不能用 isRiskyCommand 判定。

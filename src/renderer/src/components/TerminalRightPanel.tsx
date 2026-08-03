@@ -67,7 +67,7 @@ export function TerminalRightPanel({
   containerName?: string
   dockerCmd?: string
 }): React.ReactElement {
-  const rightPanelTab = useTerminalStore((s) => s.rightPanelTab)
+  const rightPanelTab = useTerminalStore((s) => s.rightPanelTabBySession[sessionId] ?? null)
   const toggleRightPanel = useTerminalStore((s) => s.toggleRightPanel)
   const panelWidth = useTerminalStore((s) => s.rightPanelWidth)
   const setPanelWidth = useTerminalStore((s) => s.setRightPanelWidth)
@@ -147,7 +147,7 @@ export function TerminalRightPanel({
             <button
               key={tab.id}
               title={label}
-              onClick={() => toggleRightPanel(tab.id)}
+              onClick={() => toggleRightPanel(sessionId, tab.id)}
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${
                 active
                   ? 'bg-[var(--nav-active-bg)] text-[var(--accent)]'
