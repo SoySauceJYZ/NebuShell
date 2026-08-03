@@ -23,7 +23,12 @@ import type {
   CommandHistoryEntry,
   QuickCommand,
   AppSettings,
-  AdoptPayload
+  AdoptPayload,
+  RdStartResult,
+  RdAgentStatus,
+  RdScreenSource,
+  RdSignal,
+  RdInputEvent
 } from '../shared/types'
 
 const api = {
@@ -346,6 +351,44 @@ const api = {
     onError: (runId: string, cb: (message: string) => void): (() => void) => {
       const channel = `llm:error:${runId}`
       const listener = (_e: unknown, message: string): void => cb(message)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    }
+  },
+  remoteDesktop: {
+    // 被控端
+    startAgent: (): Promise<RdStartResult> => ipcRenderer.invoke('rd:startAgent'),
+    stopAgent: (): Promise<void> => ipcRenderer.invoke('rd:stopAgent'),
+    agentStatus: (): Promise<RdAgentStatus> => ipcRenderer.invoke('rd:agentStatus'),
+    getScreenSource: (): Promise<RdScreenSource | null> =>
+      ipcRenderer.invoke('rd:getScreenSource'),
+    // 高频输入,单向直投不等回执
+    injectInput: (ev: RdInputEvent): void => ipcRenderer.send('rd:injectInput', ev),
+    // 被控端:有控制端接入(携带该会话的 rdSessionId)
+    onAgentPeer: (cb: (rdSessionId: string) => void): (() => void) => {
+      const listener = (_e: unknown, id: string): void => cb(id)
+      ipcRenderer.on('rd:agentPeer', listener)
+      return () => ipcRenderer.removeListener('rd:agentPeer', listener)
+    },
+    // 控制端
+    connect: (
+      rdSessionId: string,
+      opts: { ip: string; port: number; code: string }
+    ): Promise<void> => ipcRenderer.invoke('rd:connect', rdSessionId, opts),
+    disconnect: (rdSessionId: string): Promise<void> =>
+      ipcRenderer.invoke('rd:disconnect', rdSessionId),
+    // 共用信令
+    sendSignal: (rdSessionId: string, signal: RdSignal): Promise<void> =>
+      ipcRenderer.invoke('rd:sendSignal', rdSessionId, signal),
+    onSignal: (rdSessionId: string, cb: (signal: RdSignal) => void): (() => void) => {
+      const channel = `rd:signal:${rdSessionId}`
+      const listener = (_e: unknown, signal: RdSignal): void => cb(signal)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    onPeerDisconnect: (rdSessionId: string, cb: () => void): (() => void) => {
+      const channel = `rd:peerDisconnect:${rdSessionId}`
+      const listener = (): void => cb()
       ipcRenderer.on(channel, listener)
       return () => ipcRenderer.removeListener(channel, listener)
     }

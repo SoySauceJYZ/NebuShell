@@ -11,6 +11,8 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  # 远程桌面输入注入用的 nut.js 原生模块(.node 二进制不能打进 asar)。
+  - node_modules/@nut-tree-fork/**
 win:
   executableName: NebuShell
 nsis:

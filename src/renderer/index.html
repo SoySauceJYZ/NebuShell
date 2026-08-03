@@ -9,9 +9,11 @@
     />
     <meta name="author" content="jiayizhen" />
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!-- connect-src / media-src 放宽以允许远程桌面的 WebRTC 媒体与 MediaStream 渲染;
+         信令走 main 进程,渲染层不直连 WebSocket。脚本源保持收紧。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' ws: wss: blob:"
     />
   </head>
 

@@ -20,6 +20,7 @@ export type TabKind =
   | 'history'
   | 'quickCommands'
   | 'settings'
+  | 'remoteDesktop'
   | 'terminal'
   | 'sftp'
   | 'explorer'

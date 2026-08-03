@@ -3,6 +3,7 @@ import { KeychainView } from './KeychainView'
 import { QuickCommandsView } from './QuickCommandsView'
 import { HistoryDocsView } from './HistoryDocsView'
 import { SettingsView } from './SettingsView'
+import { RemoteDesktopView } from './RemoteDesktopView'
 import { TerminalTab } from './TerminalTab'
 import { SftpPanel } from './SftpPanel'
 import { ExplorerTab } from './sftp/ExplorerTab'
@@ -23,6 +24,8 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
       return <HistoryDocsView />
     case 'settings':
       return <SettingsView />
+    case 'remoteDesktop':
+      return <RemoteDesktopView />
     case 'terminal':
       return tab.hostId ? (
         <TerminalTab

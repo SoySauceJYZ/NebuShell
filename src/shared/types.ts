@@ -279,6 +279,54 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   transferConcurrency: DEFAULT_TRANSFER_CONCURRENCY
 }
 
+// ---- 远程桌面 (Remote Desktop) ----------------------------------------------
+
+/** 被控端服务启动后的信息:控制端据此连接。 */
+export interface RdStartResult {
+  port: number
+  /** 本机所有局域网 IPv4 地址,供控制端选用。 */
+  ips: string[]
+  /** 6 位随机访问码,控制端连接时必须提供。 */
+  accessCode: string
+}
+
+/** 被控端当前状态。 */
+export interface RdAgentStatus {
+  serving: boolean
+  port: number
+  ips: string[]
+  accessCode: string
+  /** 当前是否有控制端已连接。 */
+  peerConnected: boolean
+}
+
+/** 可序列化的 ICE 候选(避免在 main 侧依赖 DOM 的 RTCIceCandidateInit 类型)。 */
+export interface RdIceCandidate {
+  candidate?: string
+  sdpMid?: string | null
+  sdpMLineIndex?: number | null
+  usernameFragment?: string | null
+}
+
+/** WebRTC 信令消息(SDP / ICE),经 main 的 ws 通道在两端间转发。 */
+export type RdSignal =
+  | { kind: 'offer' | 'answer'; sdp: string }
+  | { kind: 'ice'; candidate: RdIceCandidate }
+
+/** 控制端捕获、转发给被控端注入的输入事件。坐标为相对画面的归一化值 0..1。 */
+export type RdInputEvent =
+  | { type: 'move'; x: number; y: number }
+  | { type: 'down' | 'up'; x: number; y: number; button: number }
+  | { type: 'wheel'; dx: number; dy: number }
+  | { type: 'key'; down: boolean; code: string }
+
+/** 被控端主屏采集源信息(经 desktopCapturer 获取,供 getUserMedia 使用)。 */
+export interface RdScreenSource {
+  id: string
+  width: number
+  height: number
+}
+
 export interface HistoryVersion {
   id: string
   label: string
