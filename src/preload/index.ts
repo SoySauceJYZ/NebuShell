@@ -28,7 +28,8 @@ import type {
   RdAgentStatus,
   RdScreen,
   RdSignal,
-  RdInputEvent
+  RdInputEvent,
+  RdShellOpts
 } from '../shared/types'
 
 const api = {
@@ -368,6 +369,26 @@ const api = {
     // 接收控制端文件,落盘到「下载」,返回路径
     saveIncomingFile: (name: string, data: ArrayBuffer): Promise<string> =>
       ipcRenderer.invoke('rd:saveFile', name, data),
+    // 远程命令行(被控端本机终端)
+    shellStart: (id: string, opts: RdShellOpts): Promise<void> =>
+      ipcRenderer.invoke('rd:shellStart', id, opts),
+    shellInput: (id: string, data: string): void =>
+      ipcRenderer.send('rd:shellInput', id, data),
+    shellResize: (id: string, cols: number, rows: number): Promise<void> =>
+      ipcRenderer.invoke('rd:shellResize', id, cols, rows),
+    shellKill: (id: string): Promise<void> => ipcRenderer.invoke('rd:shellKill', id),
+    onShellData: (id: string, cb: (data: string) => void): (() => void) => {
+      const channel = `rd:shellData:${id}`
+      const listener = (_e: unknown, data: string): void => cb(data)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    onShellExit: (id: string, cb: (code: number) => void): (() => void) => {
+      const channel = `rd:shellExit:${id}`
+      const listener = (_e: unknown, code: number): void => cb(code)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
     // 被控端:有控制端接入(携带该会话的 rdSessionId)
     onAgentPeer: (cb: (rdSessionId: string) => void): (() => void) => {
       const listener = (_e: unknown, id: string): void => cb(id)

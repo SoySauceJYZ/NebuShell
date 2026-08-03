@@ -327,6 +327,13 @@ export interface RdScreenSource {
   height: number
 }
 
+/** 远程命令行(被控端 PowerShell / cmd 终端)启动参数。 */
+export interface RdShellOpts {
+  shell: 'powershell' | 'cmd'
+  cols: number
+  rows: number
+}
+
 /** 被控端一块显示器的信息(供控制端切换显示器用)。 */
 export interface RdScreen {
   /** desktopCapturer 采集源 id(getUserMedia 的 chromeMediaSourceId)。 */

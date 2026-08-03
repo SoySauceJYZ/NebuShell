@@ -4,8 +4,9 @@ import { existsSync } from 'fs'
 import { join, basename, extname } from 'path'
 import { remoteDesktopManager } from '../remoteDesktop/RemoteDesktopManager'
 import { inputInjector } from '../remoteDesktop/InputInjector'
+import { remoteShell } from '../remoteDesktop/RemoteShell'
 import { broadcast } from '../windows'
-import type { RdSignal, RdInputEvent, RdScreen } from '../../shared/types'
+import type { RdSignal, RdInputEvent, RdScreen, RdShellOpts } from '../../shared/types'
 
 /** 把一块 Electron display 的边界换算成物理像素,配置给注入器。 */
 function applyDisplayToInjector(d: Display): void {
@@ -40,6 +41,7 @@ export function registerRemoteDesktopIpc(): void {
     return result
   })
   ipcMain.handle('rd:stopAgent', () => {
+    remoteShell.killAll()
     remoteDesktopManager.stopAgent()
   })
   ipcMain.handle('rd:agentStatus', () => remoteDesktopManager.agentStatus())
@@ -78,6 +80,27 @@ export function registerRemoteDesktopIpc(): void {
   ipcMain.on('rd:injectInput', (_e, ev: RdInputEvent) => {
     inputInjector.enqueue(ev)
   })
+
+  // 远程命令行:被控端起一个真实终端(node-pty / ConPTY),输出/退出经 sender 定向回该
+  // 被控渲染层,再由它转发到控制端的 shell DataChannel。id 由被控渲染层生成。
+  ipcMain.handle('rd:shellStart', (e, id: string, opts: RdShellOpts) => {
+    const wc = e.sender
+    remoteShell.start(
+      id,
+      opts,
+      (data) => {
+        if (!wc.isDestroyed()) wc.send(`rd:shellData:${id}`, data)
+      },
+      (code) => {
+        if (!wc.isDestroyed()) wc.send(`rd:shellExit:${id}`, code)
+      }
+    )
+  })
+  ipcMain.on('rd:shellInput', (_e, id: string, data: string) => remoteShell.write(id, data))
+  ipcMain.handle('rd:shellResize', (_e, id: string, cols: number, rows: number) =>
+    remoteShell.resize(id, cols, rows)
+  )
+  ipcMain.handle('rd:shellKill', (_e, id: string) => remoteShell.kill(id))
 
   // 接收控制端传来的文件,存到「下载」目录,返回落盘路径。
   ipcMain.handle('rd:saveFile', async (_e, name: string, data: ArrayBuffer): Promise<string> => {

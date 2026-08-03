@@ -820,13 +820,14 @@
             <div class="ico">🖥️</div>
             <h3 data-zh="远程桌面控制">Remote desktop control</h3>
             <p
-              data-zh="左侧边栏内置类似向日葵的远程桌面。在被控机上点「启动被控端」拿到局域网地址和访问码,控制端输入 IP + 访问码即可看到实时画面并完全操控鼠标键盘。画面经 WebRTC 在局域网点对点直传(无中转服务器),支持多显示器切换、文本剪贴板双向同步,以及把文件推送到被控机的「下载」目录。第一步:局域网直连、被控端仅 Windows。"
+              data-zh="左侧边栏内置类似向日葵的远程桌面。在被控机上点「启动被控端」拿到局域网地址和访问码,控制端输入 IP + 访问码即可看到实时画面并完全操控鼠标键盘。画面经 WebRTC 在局域网点对点直传(无中转服务器),支持多显示器切换、文本剪贴板双向同步、把文件推送到被控机的「下载」目录,以及远程命令行(在被控机上打开 PowerShell / cmd 终端)。第一步:局域网直连、被控端仅 Windows。"
             >
               A Sunlogin-style remote desktop in the left sidebar. On the machine to control, click
               Start agent for a LAN address and access code; on the controller, enter the IP + code
               for a live screen with full mouse &amp; keyboard control. Video streams peer-to-peer
               over WebRTC on your LAN (no relay), with multi-monitor switching, two-way clipboard
-              sync, and file push to the remote's Downloads. Windows controlled-side first.
+              sync, file push to the remote's Downloads, and a remote PowerShell / cmd command line
+              on the controlled machine. Windows controlled-side first.
             </p>
           </div>
           <div class="card">
@@ -873,7 +874,7 @@
             <div class="ico">🖥️</div>
             <h3 data-zh="远程桌面控制（2026‑08‑03）">Remote desktop control (2026‑08‑03)</h3>
             <p
-              data-zh="左侧新增「远程桌面」标签,把类似向日葵的远程控制直接做进 NebuShell。在被控机上打开该标签点「启动被控端」进入被控模式,显示本机局域网地址和随机 6 位访问码;控制端输入 IP + 访问码即可看到实时画面并完全操控鼠标键盘。画面在局域网内经 WebRTC 点对点直传(无中转服务器、不走云),输入在被控端原生注入。还支持多显示器切换(在会话右侧菜单里选远程显示器)、文本剪贴板双向同步,以及文件推送——从控制端把文件直接发到被控机的「下载」目录,带实时进度条。被控端直接复用 NebuShell 自身。第一步:局域网直连、被控端仅 Windows。"
+              data-zh="左侧新增「远程桌面」标签,把类似向日葵的远程控制直接做进 NebuShell。在被控机上打开该标签点「启动被控端」进入被控模式,显示本机局域网地址和随机 6 位访问码;控制端输入 IP + 访问码即可看到实时画面并完全操控鼠标键盘。画面在局域网内经 WebRTC 点对点直传(无中转服务器、不走云),输入在被控端原生注入。还支持多显示器切换(在会话右侧菜单里选远程显示器)、文本剪贴板双向同步,文件推送——从控制端把文件直接发到被控机的「下载」目录,带实时进度条;以及远程命令行——在会话侧边菜单打开一个运行在被控机上的真实 PowerShell / cmd 终端(基于 node-pty 的 ConPTY,支持方向键、Tab 补全、颜色)。被控端直接复用 NebuShell 自身。第一步:局域网直连、被控端仅 Windows。"
             >
               A new Remote Desktop tab in the left sidebar brings Sunlogin-style screen sharing into
               NebuShell. On the machine to control, open the tab and click Start agent — it shows the
@@ -882,8 +883,9 @@
               peer-to-peer over WebRTC on your LAN (no relay server, no cloud), and input is injected
               natively on the remote. Plus multi-monitor switching (pick the remote display from the
               session's side menu), two-way text clipboard sync, and file push — send a file from the
-              controller straight into the remote machine's Downloads with a live progress bar. First
-              step: LAN direct-connect, Windows controlled-side.
+              controller straight into the remote machine's Downloads with a live progress bar. Plus a remote command line — a real PowerShell / cmd terminal
+              (ConPTY, via node-pty) running on the controlled machine, from the session's side
+              menu. First step: LAN direct-connect, Windows controlled-side.
             </p>
           </div>
           <div class="card">

@@ -12,6 +12,15 @@ export type ControlMsg =
   | { t: 'clipboard'; text: string }
   | { t: 'file-done'; name: string }
 
+/** shell 频道上的消息(JSON):控制端 ↔ 被控端远程命令行。 */
+export type ShellMsg =
+  | { t: 'start'; shell: 'powershell' | 'cmd'; cols: number; rows: number }
+  | { t: 'input'; data: string }
+  | { t: 'resize'; cols: number; rows: number }
+  | { t: 'stop' }
+  | { t: 'data'; data: string }
+  | { t: 'exit'; code: number }
+
 export function sendControl(ch: RTCDataChannel | null, msg: ControlMsg): void {
   if (ch && ch.readyState === 'open') ch.send(JSON.stringify(msg))
 }

@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import type { RdSignal, RdIceCandidate, RdInputEvent, RdScreen } from '@shared/types'
 import { createPeer } from '../../lib/rtc'
-import { ClipboardSync, FileReceiver, sendControl, type ControlMsg } from '../../lib/rdChannels'
+import {
+  ClipboardSync,
+  FileReceiver,
+  sendControl,
+  type ControlMsg,
+  type ShellMsg
+} from '../../lib/rdChannels'
 
 interface Props {
   /** 被控端服务是否已启动。false 时本组件不做任何事。 */
@@ -40,6 +46,7 @@ export function AgentHost({ serving, onPeerChange, onError, onFileReceived }: Pr
       offSignal: () => void
       offDisc: () => void
       clipboard: ClipboardSync
+      cleanupShell: () => void
     } | null = null
 
     const teardown = (): void => {
@@ -47,6 +54,7 @@ export function AgentHost({ serving, onPeerChange, onError, onFileReceived }: Pr
       current.offSignal()
       current.offDisc()
       current.clipboard.stop()
+      current.cleanupShell()
       current.stream?.getTracks().forEach((t) => t.stop())
       current.pc.close()
       current = null
@@ -151,6 +159,53 @@ export function AgentHost({ serving, onPeerChange, onError, onFileReceived }: Pr
       )
       fileCh.onmessage = (ev): void => receiver.handle(ev.data)
 
+      // shell 频道:把控制端的远程命令行请求桥接到本机 node-pty 终端。
+      const shellCh = pc.createDataChannel('shell')
+      let shellId = ''
+      let offShellData: (() => void) | undefined
+      let offShellExit: (() => void) | undefined
+      const sendShell = (m: ShellMsg): void => {
+        if (shellCh.readyState === 'open') shellCh.send(JSON.stringify(m))
+      }
+      const cleanupShell = (): void => {
+        offShellData?.()
+        offShellExit?.()
+        offShellData = undefined
+        offShellExit = undefined
+        if (shellId) {
+          api.shellKill(shellId)
+          shellId = ''
+        }
+      }
+      shellCh.onmessage = async (ev): Promise<void> => {
+        let msg: ShellMsg
+        try {
+          msg = JSON.parse(ev.data)
+        } catch {
+          return
+        }
+        if (msg.t === 'start') {
+          cleanupShell()
+          shellId = crypto.randomUUID()
+          offShellData = api.onShellData(shellId, (data) => sendShell({ t: 'data', data }))
+          offShellExit = api.onShellExit(shellId, (code) => {
+            sendShell({ t: 'exit', code })
+            cleanupShell()
+          })
+          try {
+            await api.shellStart(shellId, { shell: msg.shell, cols: msg.cols, rows: msg.rows })
+          } catch (err) {
+            onError('启动远程命令行失败:' + String(err))
+          }
+        } else if (msg.t === 'input' && shellId) {
+          api.shellInput(shellId, msg.data)
+        } else if (msg.t === 'resize' && shellId) {
+          api.shellResize(shellId, msg.cols, msg.rows)
+        } else if (msg.t === 'stop') {
+          cleanupShell()
+        }
+      }
+
       const offSignal = api.onSignal(rdSessionId, async (signal: RdSignal) => {
         try {
           if (signal.kind === 'answer') {
@@ -170,7 +225,7 @@ export function AgentHost({ serving, onPeerChange, onError, onFileReceived }: Pr
         onPeerChange(false)
       })
 
-      current = { pc, stream, sender, offSignal, offDisc, clipboard }
+      current = { pc, stream, sender, offSignal, offDisc, clipboard, cleanupShell }
       onPeerChange(true)
 
       const offer = await pc.createOffer()

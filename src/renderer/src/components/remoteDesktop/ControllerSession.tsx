@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { MousePointer2, Loader2, AlertTriangle, Monitor, Upload, Check } from 'lucide-react'
+import {
+  MousePointer2,
+  Loader2,
+  AlertTriangle,
+  Monitor,
+  Upload,
+  Check,
+  SquareTerminal
+} from 'lucide-react'
 import type { RdInputEvent, RdSignal, RdIceCandidate, RdScreen } from '@shared/types'
 import { createPeer } from '../../lib/rtc'
 import { ClipboardSync, sendControl, sendFile, type ControlMsg } from '../../lib/rdChannels'
+import { RemoteShellPanel } from './RemoteShellPanel'
 
 interface Props {
   /** 本次连接的会话 id(已通过 remoteDesktop.connect 完成认证)。 */
@@ -36,8 +45,9 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
   const [screens, setScreens] = useState<RdScreen[]>([])
   const [activeSource, setActiveSource] = useState('')
   const [fileProgress, setFileProgress] = useState<FileProgress | null>(null)
+  const [shellChannel, setShellChannel] = useState<RTCDataChannel | null>(null)
   /** 右侧面板当前打开的分页(null 为收起)。 */
-  const [panelTab, setPanelTab] = useState<'displays' | 'file' | null>(null)
+  const [panelTab, setPanelTab] = useState<'displays' | 'file' | 'shell' | null>(null)
 
   useEffect(() => {
     const api = window.api.remoteDesktop
@@ -85,6 +95,8 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
       } else if (ch.label === 'file') {
         ch.binaryType = 'arraybuffer'
         fileChanRef.current = ch
+      } else if (ch.label === 'shell') {
+        setShellChannel(ch)
       }
     }
 
@@ -118,6 +130,7 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
       inputChanRef.current = null
       controlChanRef.current = null
       fileChanRef.current = null
+      setShellChannel(null)
       pc.close()
       api.disconnect(rdSessionId)
     }
@@ -165,7 +178,7 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
     }
   }
 
-  const toggle = (tab: 'displays' | 'file'): void =>
+  const toggle = (tab: 'displays' | 'file' | 'shell'): void =>
     setPanelTab((cur) => (cur === tab ? null : tab))
   const pct = fileProgress
     ? Math.floor((fileProgress.sent / Math.max(1, fileProgress.total)) * 100)
@@ -173,6 +186,7 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
 
   const RAIL = [
     { id: 'displays' as const, label: '显示器', icon: Monitor },
+    { id: 'shell' as const, label: '命令行', icon: SquareTerminal },
     { id: 'file' as const, label: '发送文件', icon: Upload }
   ]
 
@@ -235,7 +249,11 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
 
         {/* 右侧面板(展开时) */}
         {panelTab && (
-          <div className="flex w-64 flex-col border-l border-[var(--panel-border)] bg-[var(--panel-bg)]">
+          <div
+            className={`flex flex-col border-l border-[var(--panel-border)] bg-[var(--panel-bg)] ${
+              panelTab === 'shell' ? 'w-[460px]' : 'w-64'
+            }`}
+          >
             {panelTab === 'displays' && (
               <div className="flex min-h-0 flex-1 flex-col p-3">
                 <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[var(--text-dark)]">
@@ -299,6 +317,7 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
                 )}
               </div>
             )}
+            {panelTab === 'shell' && <RemoteShellPanel channel={shellChannel} />}
           </div>
         )}
 
