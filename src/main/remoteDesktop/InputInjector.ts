@@ -54,17 +54,33 @@ const BUTTON_MAP: Record<number, Button> = {
   2: Button.RIGHT
 }
 
+/** 当前被控显示器在「全局虚拟桌面」中的物理像素边界(支持多显示器,原点可为负)。 */
+interface DisplayBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 class InputInjector {
-  private width = 0
-  private height = 0
+  /** 归一化坐标映射到的目标显示器边界。默认整块虚拟桌面从 (0,0) 起。 */
+  private bounds: DisplayBounds = { x: 0, y: 0, width: 0, height: 0 }
   /** 串行队列:保证事件按到达顺序依次注入(避免 move 与 click 竞争)。 */
   private tail: Promise<void> = Promise.resolve()
 
-  /** 刷新主屏像素分辨率(启动被控端时调用一次)。 */
+  /** 设置当前被控显示器的边界(由 main 按 Electron display 换算成物理像素后传入)。 */
+  setActiveDisplay(bounds: DisplayBounds): void {
+    this.bounds = bounds
+  }
+
+  /** 回退:用 nut.js 量主屏分辨率作为边界(未显式 setActiveDisplay 时兜底)。 */
   async refreshScreenSize(): Promise<{ width: number; height: number }> {
-    this.width = await screen.width()
-    this.height = await screen.height()
-    return { width: this.width, height: this.height }
+    const width = await screen.width()
+    const height = await screen.height()
+    if (!this.bounds.width || !this.bounds.height) {
+      this.bounds = { x: 0, y: 0, width, height }
+    }
+    return { width, height }
   }
 
   /** 入队一个输入事件;错误只记录不抛出,避免拖垮队列。 */
@@ -75,7 +91,7 @@ class InputInjector {
   }
 
   private async apply(ev: RdInputEvent): Promise<void> {
-    if (!this.width || !this.height) await this.refreshScreenSize()
+    if (!this.bounds.width || !this.bounds.height) await this.refreshScreenSize()
     switch (ev.type) {
       case 'move':
         await mouse.setPosition(this.toPoint(ev.x, ev.y))
@@ -105,8 +121,8 @@ class InputInjector {
   }
 
   private toPoint(xNorm: number, yNorm: number): Point {
-    const x = Math.round(clamp01(xNorm) * this.width)
-    const y = Math.round(clamp01(yNorm) * this.height)
+    const x = Math.round(this.bounds.x + clamp01(xNorm) * this.bounds.width)
+    const y = Math.round(this.bounds.y + clamp01(yNorm) * this.bounds.height)
     return new Point(x, y)
   }
 }

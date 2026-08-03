@@ -10,7 +10,8 @@ import {
   Loader2,
   Link2,
   PowerOff,
-  CircleDot
+  CircleDot,
+  FileDown
 } from 'lucide-react'
 import type { RdStartResult } from '@shared/types'
 import { AgentHost } from './remoteDesktop/AgentHost'
@@ -30,6 +31,7 @@ export function RemoteDesktopView(): React.ReactElement {
   const [agentBusy, setAgentBusy] = useState(false)
   const [peerConnected, setPeerConnected] = useState(false)
   const [agentError, setAgentError] = useState<string | null>(null)
+  const [receivedFiles, setReceivedFiles] = useState<{ name: string; path: string }[]>([])
 
   // 控制端状态
   const [ip, setIp] = useState('')
@@ -97,12 +99,20 @@ export function RemoteDesktopView(): React.ReactElement {
   }
 
   const endSession = useCallback(() => setSession(null), [])
+  const onFileReceived = useCallback((name: string, path: string) => {
+    setReceivedFiles((prev) => [{ name, path }, ...prev].slice(0, 10))
+  }, [])
   const copy = (text: string): void => window.api.clipboard.writeText(text)
 
   return (
     <>
       {/* 被控端逻辑常驻(serving 为 false 时不做任何事),即便正在作为控制端查看画面也保持共享。 */}
-      <AgentHost serving={serving} onPeerChange={setPeerConnected} onError={setAgentError} />
+      <AgentHost
+        serving={serving}
+        onPeerChange={setPeerConnected}
+        onError={setAgentError}
+        onFileReceived={onFileReceived}
+      />
 
       {session ? (
         <div className="flex h-full flex-col bg-black">
@@ -263,6 +273,29 @@ export function RemoteDesktopView(): React.ReactElement {
                       </div>
                     </div>
                   </div>
+
+                  <p className="text-xs text-[var(--text-muted)]">
+                    连接后剪贴板(文本)自动双向同步;控制端发来的文件会保存到本机「下载」目录。
+                  </p>
+
+                  {receivedFiles.length > 0 && (
+                    <div>
+                      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                        <FileDown size={13} /> 已接收文件
+                      </div>
+                      <div className="space-y-1">
+                        {receivedFiles.map((f) => (
+                          <div
+                            key={f.path}
+                            className="truncate rounded-md border border-[var(--panel-border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-dark)]"
+                            title={f.path}
+                          >
+                            {f.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {agentError && <p className="text-xs text-[var(--danger)]">{agentError}</p>}
 

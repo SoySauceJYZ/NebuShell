@@ -26,7 +26,7 @@ import type {
   AdoptPayload,
   RdStartResult,
   RdAgentStatus,
-  RdScreenSource,
+  RdScreen,
   RdSignal,
   RdInputEvent
 } from '../shared/types'
@@ -360,10 +360,14 @@ const api = {
     startAgent: (): Promise<RdStartResult> => ipcRenderer.invoke('rd:startAgent'),
     stopAgent: (): Promise<void> => ipcRenderer.invoke('rd:stopAgent'),
     agentStatus: (): Promise<RdAgentStatus> => ipcRenderer.invoke('rd:agentStatus'),
-    getScreenSource: (): Promise<RdScreenSource | null> =>
-      ipcRenderer.invoke('rd:getScreenSource'),
+    listScreens: (): Promise<RdScreen[]> => ipcRenderer.invoke('rd:listScreens'),
+    setActiveDisplay: (displayId: string): Promise<void> =>
+      ipcRenderer.invoke('rd:setActiveDisplay', displayId),
     // 高频输入,单向直投不等回执
     injectInput: (ev: RdInputEvent): void => ipcRenderer.send('rd:injectInput', ev),
+    // 接收控制端文件,落盘到「下载」,返回路径
+    saveIncomingFile: (name: string, data: ArrayBuffer): Promise<string> =>
+      ipcRenderer.invoke('rd:saveFile', name, data),
     // 被控端:有控制端接入(携带该会话的 rdSessionId)
     onAgentPeer: (cb: (rdSessionId: string) => void): (() => void) => {
       const listener = (_e: unknown, id: string): void => cb(id)

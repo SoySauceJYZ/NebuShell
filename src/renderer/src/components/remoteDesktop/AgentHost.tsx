@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import type { RdSignal, RdIceCandidate, RdInputEvent } from '@shared/types'
+import type { RdSignal, RdIceCandidate, RdInputEvent, RdScreen } from '@shared/types'
 import { createPeer } from '../../lib/rtc'
+import { ClipboardSync, FileReceiver, sendControl, type ControlMsg } from '../../lib/rdChannels'
 
 interface Props {
   /** 被控端服务是否已启动。false 时本组件不做任何事。 */
@@ -9,14 +10,25 @@ interface Props {
   onPeerChange: (connected: boolean) => void
   /** 采屏或建流失败时上报错误文案。 */
   onError: (message: string | null) => void
+  /** 收到并存好一个文件时上报(文件名 + 落盘路径),供父组件展示。 */
+  onFileReceived: (name: string, path: string) => void
+}
+
+/** 桌面采集流(旧式 chromeMediaSource 约束,Electron 免弹窗)。 */
+function captureScreen(sourceId: string): Promise<MediaStream> {
+  const constraints = {
+    audio: false,
+    video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } }
+  } as unknown as MediaStreamConstraints
+  return navigator.mediaDevices.getUserMedia(constraints)
 }
 
 /**
- * 被控端主机逻辑(无独立可视 UI)。作为 WebRTC 发起方:控制端接入后采集主屏、把视频轨
- * 推给对端,并创建 input DataChannel 接收控制端的鼠标/键盘事件,转交 main 用 nut.js 注入。
- * 第一步为 1:1——同一时刻只服务一个控制端。
+ * 被控端主机逻辑(无独立可视 UI)。作为 WebRTC 发起方:控制端接入后采集显示器、推视频轨,
+ * 并建立 input / control / file 三条 DataChannel——分别承载鼠标键盘、控制消息(显示器切换、
+ * 剪贴板)、文件传输。第一步为 1:1。
  */
-export function AgentHost({ serving, onPeerChange, onError }: Props): null {
+export function AgentHost({ serving, onPeerChange, onError, onFileReceived }: Props): null {
   useEffect(() => {
     if (!serving) return
     const api = window.api.remoteDesktop
@@ -24,14 +36,17 @@ export function AgentHost({ serving, onPeerChange, onError }: Props): null {
     let current: {
       pc: RTCPeerConnection
       stream?: MediaStream
+      sender?: RTCRtpSender
       offSignal: () => void
       offDisc: () => void
+      clipboard: ClipboardSync
     } | null = null
 
     const teardown = (): void => {
       if (!current) return
       current.offSignal()
       current.offDisc()
+      current.clipboard.stop()
       current.stream?.getTracks().forEach((t) => t.stop())
       current.pc.close()
       current = null
@@ -43,47 +58,98 @@ export function AgentHost({ serving, onPeerChange, onError }: Props): null {
       const pc = createPeer()
       let remoteSet = false
       const pendingIce: RdIceCandidate[] = []
+      let screens: RdScreen[] = []
+      let activeSourceId = ''
 
       pc.onicecandidate = (e): void => {
         if (e.candidate)
           api.sendSignal(rdSessionId, { kind: 'ice', candidate: e.candidate.toJSON() })
       }
 
-      // 采集主屏为 MediaStream(Electron 桌面采集用旧式 chromeMediaSource 约束,免弹窗)。
-      const src = await api.getScreenSource()
-      if (!src) {
+      // 枚举显示器,默认采主屏(无主屏标记则取第一块)。
+      try {
+        screens = await api.listScreens()
+      } catch {
+        screens = []
+      }
+      if (screens.length === 0) {
         onError('无法获取屏幕采集源')
         pc.close()
         return
       }
-      const constraints = {
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: src.id
-          }
-        }
-      } as unknown as MediaStreamConstraints
+      const primary = screens.find((s) => s.primary) ?? screens[0]
+      activeSourceId = primary.sourceId
+      await api.setActiveDisplay(primary.displayId)
+
       let stream: MediaStream
       try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints)
+        stream = await captureScreen(primary.sourceId)
       } catch (err) {
         onError('屏幕采集失败:' + String(err))
         pc.close()
         return
       }
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+      const sender = pc.addTrack(stream.getVideoTracks()[0], stream)
 
-      // 输入通道:控制端在此通道上发来输入事件,转交 main 注入到真实桌面。
-      const channel = pc.createDataChannel('input')
-      channel.onmessage = (ev): void => {
+      // input 频道:控制端发来的鼠标/键盘,转交 main 注入。
+      const inputCh = pc.createDataChannel('input')
+      inputCh.onmessage = (ev): void => {
         try {
           api.injectInput(JSON.parse(ev.data) as RdInputEvent)
         } catch {
-          /* ignore malformed */
+          /* ignore */
         }
       }
+
+      // control 频道:显示器列表/切换、剪贴板同步。
+      const controlCh = pc.createDataChannel('control')
+      const clipboard = new ClipboardSync((text) => sendControl(controlCh, { t: 'clipboard', text }))
+      controlCh.onopen = (): void => {
+        sendControl(controlCh, { t: 'screens', screens, active: activeSourceId })
+        clipboard.start()
+      }
+      controlCh.onmessage = async (ev): Promise<void> => {
+        let msg: ControlMsg
+        try {
+          msg = JSON.parse(ev.data)
+        } catch {
+          return
+        }
+        if (msg.t === 'clipboard') {
+          clipboard.applyRemote(msg.text)
+        } else if (msg.t === 'switchDisplay') {
+          const scr = screens.find((s) => s.sourceId === msg.sourceId)
+          if (!scr || !current) return
+          try {
+            const next = await captureScreen(scr.sourceId)
+            await current.sender?.replaceTrack(next.getVideoTracks()[0])
+            current.stream?.getTracks().forEach((t) => t.stop())
+            current.stream = next
+            activeSourceId = scr.sourceId
+            await api.setActiveDisplay(scr.displayId)
+            sendControl(controlCh, { t: 'screens', screens, active: activeSourceId })
+          } catch (err) {
+            onError('切换显示器失败:' + String(err))
+          }
+        }
+      }
+
+      // file 频道:接收控制端推送的文件,落盘到「下载」。
+      const fileCh = pc.createDataChannel('file')
+      fileCh.binaryType = 'arraybuffer'
+      const receiver = new FileReceiver(
+        () => {},
+        async (name, data) => {
+          try {
+            const path = await api.saveIncomingFile(name, data)
+            onFileReceived(name, path)
+            sendControl(controlCh, { t: 'file-done', name })
+          } catch (err) {
+            onError('保存文件失败:' + String(err))
+          }
+        }
+      )
+      fileCh.onmessage = (ev): void => receiver.handle(ev.data)
 
       const offSignal = api.onSignal(rdSessionId, async (signal: RdSignal) => {
         try {
@@ -104,10 +170,9 @@ export function AgentHost({ serving, onPeerChange, onError }: Props): null {
         onPeerChange(false)
       })
 
-      current = { pc, stream, offSignal, offDisc }
+      current = { pc, stream, sender, offSignal, offDisc, clipboard }
       onPeerChange(true)
 
-      // 作为发起方创建并发送 offer。
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       api.sendSignal(rdSessionId, { kind: 'offer', sdp: offer.sdp ?? '' })
@@ -122,7 +187,7 @@ export function AgentHost({ serving, onPeerChange, onError }: Props): null {
       teardown()
       onPeerChange(false)
     }
-  }, [serving, onPeerChange, onError])
+  }, [serving, onPeerChange, onError, onFileReceived])
 
   return null
 }

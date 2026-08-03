@@ -327,6 +327,20 @@ export interface RdScreenSource {
   height: number
 }
 
+/** 被控端一块显示器的信息(供控制端切换显示器用)。 */
+export interface RdScreen {
+  /** desktopCapturer 采集源 id(getUserMedia 的 chromeMediaSourceId)。 */
+  sourceId: string
+  /** Electron display id(字符串化),供 main 计算注入坐标的显示器边界。 */
+  displayId: string
+  /** 展示名,如「显示器 1」。 */
+  name: string
+  /** 物理像素宽高。 */
+  width: number
+  height: number
+  primary: boolean
+}
+
 export interface HistoryVersion {
   id: string
   label: string
