@@ -871,6 +871,79 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–8 月。">Recent updates — July–August 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🧱</div>
+            <h3 data-zh="面板支持左中右三栏（2026‑08‑11）">
+              Left · terminal · right three-column layout (2026‑08‑11)
+            </h3>
+            <p
+              data-zh="终端侧边图标栏顶部新增「换边」按钮。先打开一个面板（智能体 / SFTP / 监控…），点它把该面板挪到左侧，再从图标栏开第二个——新的落在右侧，于是得到「左 · 终端 · 右」三栏。两侧都有面板时按钮变成互换，不会把任何一个弄丢。两个停靠位各记各自宽度（拖各自靠终端那一边，均限制在 280–900px）；停在左侧的面板在图标栏里同样是高亮的，再点一次就关掉——不论它停在哪一侧。同一个面板不会同时停在两侧，因为 SFTP 与容器文件共用一条派生会话，开两份会争抢同一个连接。"
+            >
+              The terminal's side-panel rail gains a dock-swap button at the top. Open a panel
+              (智能体 / SFTP / 监控 …), click the button to move it to the left side, then open
+              another from the rail — it lands on the right, giving you a left · terminal · right
+              three-column view. With panels on both sides the button swaps them instead of dropping
+              one. Each dock remembers its own width (drag whichever inner edge faces the terminal;
+              both clamp to 280–900px), and a panel docked on the left still shows as active in the
+              rail — click it again to close it, from whichever side it's on. The same panel can
+              never be docked on both sides at once, since SFTP and container-files share one
+              derived session and two copies would fight over the connection.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🚀</div>
+            <h3 data-zh="智能体面板长会话不再卡顿（2026‑08‑11）">
+              The agent panel no longer bogs down in long conversations (2026‑08‑11)
+            </h3>
+            <p
+              data-zh="对话一长，光是敲一个字就会把整个消息列表重渲染一遍，流式输出的每个 token 同样如此。两个原因叠加：react-markdown 完全没有记忆化，每渲染一次就把全部历史消息从头解析一遍（实测：1 条 1.9ms、100 条 84ms）；而输入框的草稿状态又和消息列表同住一个组件——按一次键，全量重解析一次（中文输入法下一个汉字还要乘以若干次 composition 事件）。两条路径都已修复：输入区拆成独立组件，消息行、工具卡片与 Markdown 全部 memo 化，已完成的消息从此一次都不会被重新解析。同时修掉的还有：上下文用量估算不再随每个 token 扫一遍整个会话；工具结果改用 Map 查表，不再每张卡片线性扫全表（原本是平方级）；视口外的消息经 content-visibility 跳过布局与绘制；滚动跟随不再每个 token 强制同步一次布局——并且上滚之后不再被强制拽回底部，模型还在输出时也能回看前文。"
+            >
+              With a long chat open, typing a single character re-rendered the entire message list,
+              and every streamed token did the same. Two causes compounding: react-markdown does no
+              memoization at all, so each render re-parsed every historical message from scratch
+              (measured: 1.9ms at 1 message, 84ms at 100), and the composer's draft state lived in
+              the same component as the list — one keystroke, one full re-parse (Chinese IME
+              multiplies that by every composition event). Both are fixed: the input box moved into
+              its own component, and message rows, tool cards and rendered Markdown are memoized, so
+              finished messages are never re-parsed again. Fixed alongside: the context-token
+              estimate no longer rescans the whole conversation on every token; tool results are
+              looked up through a Map instead of a linear scan per card (previously quadratic);
+              off-screen messages skip layout and paint via content-visibility; and the scroll-follow
+              no longer forces a synchronous layout on every token — it also stops pinning to the
+              bottom once you scroll up, so you can read back while the model is still writing.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🗂️</div>
+            <h3 data-zh="新标签页紧跟当前标签打开（2026‑08‑11）">
+              New tabs open next to the current one (2026‑08‑11)
+            </h3>
+            <p
+              data-zh="打开新标签（把 SFTP 展开成整页文件浏览器、在编辑器里打开文件、从主机页新建终端）原本一律追加到标签条最末尾，关掉之后就落到了不相干的地方。现在新标签紧挨着你从中打开它的那个标签——关掉它就回到原处。连开多个仍保持自然顺序；把标签拖到别的面板仍按原来的规则追加。"
+            >
+              Opening a tab (expanding SFTP into the full explorer, opening a file in the editor,
+              launching a terminal from the hosts page) used to append it at the far end of the tab
+              strip, so closing it dropped you somewhere unrelated. New tabs now land immediately to
+              the right of the tab you opened them from — close it and you are back where you
+              started. Opening several in a row keeps their natural order, and dragging a tab onto
+              another pane still appends as before.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🖱️</div>
+            <h3 data-zh="代码块「复制」不再整片亮起（2026‑08‑11）">
+              Code-block copy buttons no longer all light up at once (2026‑08‑11)
+            </h3>
+            <p
+              data-zh="鼠标停在智能体回复的任意位置，该条消息里每一个代码块的「复制」按钮都会一起亮，因为代码块用的是 Tailwind 的匿名 group，而 group-hover: 会穿透匹配任意一层带该类的祖先——包括消息行本身。代码块改用具名 group，现在只有光标真正停在上面的那一个才显示按钮。"
+            >
+              Hovering anywhere in an agent reply revealed the 复制 (Copy) button on every code block
+              in that message, because the block's hover group used Tailwind's unnamed group — and
+              group-hover: matches through any ancestor carrying that class, including the message
+              row itself. Code blocks now use a named group, so only the block actually under the
+              cursor shows its button.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🖥️</div>
             <h3 data-zh="远程桌面控制（2026‑08‑03）">Remote desktop control (2026‑08‑03)</h3>
             <p
