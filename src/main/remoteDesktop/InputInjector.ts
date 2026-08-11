@@ -117,6 +117,14 @@ class InputInjector {
         else await keyboard.releaseKey(key)
         break
       }
+      case 'text':
+        // 整段文本键入(Agent 用);nut.js 正确处理大小写/符号/unicode。
+        await keyboard.type(ev.text)
+        break
+      case 'double':
+        await mouse.setPosition(this.toPoint(ev.x, ev.y))
+        await mouse.doubleClick(BUTTON_MAP[ev.button] ?? Button.LEFT)
+        break
     }
   }
 

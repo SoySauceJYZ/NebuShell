@@ -271,30 +271,52 @@ export function ContainerPane({
 
   return (
     <div className="relative flex h-full min-w-0 flex-col bg-[var(--panel-bg)]">
-      <div className="flex items-center gap-2 border-b border-[var(--panel-border)] px-3 py-2">
-        <button
-          onClick={() => setShowTree((v) => !v)}
-          className={`rounded-lg px-2 py-1.5 hover:bg-[var(--nav-bg-hover)] ${
-            showTree ? 'text-[var(--accent)]' : 'text-[var(--text-dark)]'
-          }`}
-          title={showTree ? '隐藏目录树' : '显示目录树'}
-        >
-          <PanelLeft size={14} />
-        </button>
-        <button
-          onClick={() => load(remoteParent(path))}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
-          title="上级目录"
-        >
-          <ArrowUp size={14} />
-        </button>
-        <button
-          onClick={() => load(path)}
-          className="rounded-lg px-2 py-1.5 text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
-          title="刷新"
-        >
-          <RefreshCw size={14} />
-        </button>
+      {/* 两行工具栏:第一行按钮,第二行独占的路径输入框(与 RemotePane 保持一致)。 */}
+      <div className="flex flex-col gap-1.5 border-b border-[var(--panel-border)] px-3 py-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTree((v) => !v)}
+            className={`rounded-lg px-2 py-1.5 hover:bg-[var(--nav-bg-hover)] ${
+              showTree ? 'text-[var(--accent)]' : 'text-[var(--text-dark)]'
+            }`}
+            title={showTree ? '隐藏目录树' : '显示目录树'}
+          >
+            <PanelLeft size={14} />
+          </button>
+          <button
+            onClick={() => load(remoteParent(path))}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+            title="上级目录"
+          >
+            <ArrowUp size={14} />
+          </button>
+          <button
+            onClick={() => load(path)}
+            className="rounded-lg px-2 py-1.5 text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+            title="刷新"
+          >
+            <RefreshCw size={14} />
+          </button>
+          <div className="flex-1" />
+          <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+            <FilePlus size={14} />
+          </button>
+          <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">
+            <FolderPlus size={14} />
+          </button>
+          <button onClick={handleUpload} className="btn-secondary px-2.5 py-1.5" title="上传文件">
+            <Upload size={14} />
+          </button>
+          {embedded && onExpand && (
+            <button
+              onClick={onExpand}
+              className="btn-primary px-2.5 py-1.5"
+              title="展开为整页文件浏览器"
+            >
+              <Maximize2 size={14} />
+            </button>
+          )}
+        </div>
         <input
           value={editPath}
           onChange={(e) => setEditPath(e.target.value)}
@@ -304,22 +326,8 @@ export function ContainerPane({
           }}
           spellCheck={false}
           title="输入路径后回车跳转"
-          className="min-w-0 flex-1 rounded-lg bg-[var(--content-bg)] px-3 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          className="w-full min-w-0 rounded-lg bg-[var(--content-bg)] px-3 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
-        <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
-          <FilePlus size={14} />
-        </button>
-        <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">
-          <FolderPlus size={14} />
-        </button>
-        <button onClick={handleUpload} className="btn-secondary px-2.5 py-1.5" title="上传文件">
-          <Upload size={14} />
-        </button>
-        {embedded && onExpand && (
-          <button onClick={onExpand} className="btn-primary px-2.5 py-1.5" title="展开为整页文件浏览器">
-            <Maximize2 size={14} />
-          </button>
-        )}
       </div>
 
       {navError && (

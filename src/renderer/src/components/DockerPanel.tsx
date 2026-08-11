@@ -118,16 +118,12 @@ export function DockerPanel({
     }
   }
 
+  // 查看日志:在当前终端里输入并执行 docker logs -f,实时跟随(Ctrl-C 退出)。
   const openLogs = (c: ContainerInfo): void => {
-    if (!dockerCmd) return
-    openTab({
-      id: `editor-logs-${c.id.slice(0, 12)}-${Date.now()}`,
-      kind: 'editor',
-      title: `日志: ${c.name}`,
-      editorExecCommand: `${dockerCmd} logs --tail 500 ${c.id} 2>&1`,
-      editorSourceSessionId: sessionId,
-      editorLang: 'plaintext'
-    })
+    if (!dockerCmd || !connected) return
+    // 容器名可能含 shell 元字符,不安全时退回容器 id。
+    const target = /^[\w][\w.-]*$/.test(c.name) ? c.name : c.id
+    window.api.ssh.write(sessionId, `${dockerCmd} logs -f --tail 50 ${target}\n`)
   }
 
   const openTerminal = (c: ContainerInfo): void => {
@@ -321,7 +317,12 @@ function ContainerCard({
           onClick={onFiles}
           disabled={c.state !== 'running'}
         />
-        <IconBtn icon={ScrollText} title="查看日志" onClick={onLogs} disabled={busy} />
+        <IconBtn
+          icon={ScrollText}
+          title="查看日志(在当前终端执行 logs -f)"
+          onClick={onLogs}
+          disabled={busy}
+        />
         <div className="flex-1" />
         {running ? (
           <>

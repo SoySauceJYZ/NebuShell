@@ -369,6 +369,9 @@ const api = {
     // 接收控制端文件,落盘到「下载」,返回路径
     saveIncomingFile: (name: string, data: ArrayBuffer): Promise<string> =>
       ipcRenderer.invoke('rd:saveFile', name, data),
+    // 读控制端本机文件(Agent 传文件用)
+    readLocalFile: (path: string): Promise<{ name: string; data: ArrayBuffer }> =>
+      ipcRenderer.invoke('rd:readLocalFile', path),
     // 远程命令行(被控端本机终端)
     shellStart: (id: string, opts: RdShellOpts): Promise<void> =>
       ipcRenderer.invoke('rd:shellStart', id, opts),

@@ -319,6 +319,9 @@ export type RdInputEvent =
   | { type: 'down' | 'up'; x: number; y: number; button: number }
   | { type: 'wheel'; dx: number; dy: number }
   | { type: 'key'; down: boolean; code: string }
+  // 以下两种主要给「画面操控 Agent」用:整段文本键入与可靠的双击。
+  | { type: 'text'; text: string }
+  | { type: 'double'; x: number; y: number; button: number }
 
 /** 被控端主屏采集源信息(经 desktopCapturer 获取,供 getUserMedia 使用)。 */
 export interface RdScreenSource {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MousePointer2,
   Loader2,
@@ -6,12 +6,16 @@ import {
   Monitor,
   Upload,
   Check,
-  SquareTerminal
+  SquareTerminal,
+  Bot
 } from 'lucide-react'
 import type { RdInputEvent, RdSignal, RdIceCandidate, RdScreen } from '@shared/types'
 import { createPeer } from '../../lib/rtc'
 import { ClipboardSync, sendControl, sendFile, type ControlMsg } from '../../lib/rdChannels'
+import { captureFrame } from '../../lib/rdScreenshot'
+import type { RdAgentBridge } from '../../store/useRdAgentStore'
 import { RemoteShellPanel } from './RemoteShellPanel'
+import { RemoteAgentPanel } from './RemoteAgentPanel'
 
 interface Props {
   /** 本次连接的会话 id(已通过 remoteDesktop.connect 完成认证)。 */
@@ -47,7 +51,26 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
   const [fileProgress, setFileProgress] = useState<FileProgress | null>(null)
   const [shellChannel, setShellChannel] = useState<RTCDataChannel | null>(null)
   /** 右侧面板当前打开的分页(null 为收起)。 */
-  const [panelTab, setPanelTab] = useState<'displays' | 'file' | 'shell' | null>(null)
+  const [panelTab, setPanelTab] = useState<'displays' | 'file' | 'shell' | 'agent' | null>(null)
+
+  // 「画面操控 Agent」的桥:截图取当前视频帧,注入走 input 通道,发文件走 file 通道。
+  const agentBridge = useMemo<RdAgentBridge>(
+    () => ({
+      capture: () => captureFrame(videoRef.current, 1280),
+      sendInput: (ev) => {
+        const ch = inputChanRef.current
+        if (ch && ch.readyState === 'open') ch.send(JSON.stringify(ev))
+      },
+      sendFileByPath: async (path) => {
+        const ch = fileChanRef.current
+        if (!ch || ch.readyState !== 'open') throw new Error('文件通道未就绪')
+        const { name, data } = await window.api.remoteDesktop.readLocalFile(path)
+        await sendFile(ch, new File([data], name), () => {})
+      }
+    }),
+    []
+  )
+  const peerKey = `rd:${target}`
 
   useEffect(() => {
     const api = window.api.remoteDesktop
@@ -178,13 +201,14 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
     }
   }
 
-  const toggle = (tab: 'displays' | 'file' | 'shell'): void =>
+  const toggle = (tab: 'displays' | 'file' | 'shell' | 'agent'): void =>
     setPanelTab((cur) => (cur === tab ? null : tab))
   const pct = fileProgress
     ? Math.floor((fileProgress.sent / Math.max(1, fileProgress.total)) * 100)
     : 0
 
   const RAIL = [
+    { id: 'agent' as const, label: '智能体', icon: Bot },
     { id: 'displays' as const, label: '显示器', icon: Monitor },
     { id: 'shell' as const, label: '命令行', icon: SquareTerminal },
     { id: 'file' as const, label: '发送文件', icon: Upload }
@@ -251,7 +275,7 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
         {panelTab && (
           <div
             className={`flex flex-col border-l border-[var(--panel-border)] bg-[var(--panel-bg)] ${
-              panelTab === 'shell' ? 'w-[460px]' : 'w-64'
+              panelTab === 'shell' || panelTab === 'agent' ? 'w-[460px]' : 'w-64'
             }`}
           >
             {panelTab === 'displays' && (
@@ -318,6 +342,13 @@ export function ControllerSession({ rdSessionId, target, onEnd }: Props): React.
               </div>
             )}
             {panelTab === 'shell' && <RemoteShellPanel channel={shellChannel} />}
+            {panelTab === 'agent' && (
+              <RemoteAgentPanel
+                rdSessionId={rdSessionId}
+                peerKey={peerKey}
+                bridge={status === 'live' ? agentBridge : null}
+              />
+            )}
           </div>
         )}
 

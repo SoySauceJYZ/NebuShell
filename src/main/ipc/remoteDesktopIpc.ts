@@ -102,6 +102,16 @@ export function registerRemoteDesktopIpc(): void {
   )
   ipcMain.handle('rd:shellKill', (_e, id: string) => remoteShell.kill(id))
 
+  // 读控制端本机文件(供 Agent 的 transfer_file 用),返回文件名 + 字节。
+  ipcMain.handle(
+    'rd:readLocalFile',
+    async (_e, path: string): Promise<{ name: string; data: ArrayBuffer }> => {
+      const buf = await fsp.readFile(path)
+      const data = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+      return { name: basename(path), data }
+    }
+  )
+
   // 接收控制端传来的文件,存到「下载」目录,返回落盘路径。
   ipcMain.handle('rd:saveFile', async (_e, name: string, data: ArrayBuffer): Promise<string> => {
     const dir = app.getPath('downloads')
