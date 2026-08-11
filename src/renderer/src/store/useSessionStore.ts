@@ -140,7 +140,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const targetPaneId = findPane(layout, activePaneId) ? activePaneId : firstPane(layout).id
     set((state) => ({
       tabs: [...state.tabs, tab],
-      layout: addTabToPane(layout, targetPaneId, tab.id),
+      // 插在当前 tab 之后,而不是末尾 —— 关掉新 tab 就回到打开它的那个。
+      // (拖拽落到别的 pane 走 moveTabToPane,那里仍然是末尾追加。)
+      layout: addTabToPane(layout, targetPaneId, tab.id, 'afterActive'),
       activePaneId: targetPaneId,
       activeTabId: tab.id,
       ...(tab.kind === 'terminal' ? { lastActiveTerminalId: tab.id } : {})

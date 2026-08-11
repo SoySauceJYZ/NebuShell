@@ -75,16 +75,31 @@ export function setPaneActive(node: LayoutNode, paneId: string, tabId: string): 
   return mapPanes(node, (p) => (p.id === paneId ? { ...p, activeTabId: tabId } : p))
 }
 
-export function addTabToPane(node: LayoutNode, paneId: string, tabId: string): LayoutNode {
-  return mapPanes(node, (p) =>
-    p.id === paneId
-      ? {
-          ...p,
-          tabIds: p.tabIds.includes(tabId) ? p.tabIds : [...p.tabIds, tabId],
-          activeTabId: tabId
-        }
-      : p
-  )
+/**
+ * 把 tab 放进某个 pane 并激活它。
+ *
+ * `afterActive` 把新 tab 插在当前活动 tab 的**右邻**(编辑器的惯例),而不是甩到末尾。
+ * 这样关掉它时,`removeTabFromTree` 选中的前一个 tab 恰好就是打开它的那个 —— 从终端
+ * 展开 SFTP、看完关掉,焦点自己回到原来的终端。连开多个也不会倒序:每次插入后新 tab
+ * 就成了活动 tab,下一个再插在它后面。
+ */
+export function addTabToPane(
+  node: LayoutNode,
+  paneId: string,
+  tabId: string,
+  position: 'end' | 'afterActive' = 'end'
+): LayoutNode {
+  return mapPanes(node, (p) => {
+    if (p.id !== paneId) return p
+    if (p.tabIds.includes(tabId)) return { ...p, activeTabId: tabId }
+    const at = position === 'afterActive' ? p.tabIds.indexOf(p.activeTabId) : -1
+    // 活动 tab 不在本 pane 里(空 pane 或状态不同步)时退回末尾追加。
+    const tabIds =
+      at < 0
+        ? [...p.tabIds, tabId]
+        : [...p.tabIds.slice(0, at + 1), tabId, ...p.tabIds.slice(at + 1)]
+    return { ...p, tabIds, activeTabId: tabId }
+  })
 }
 
 /** Remove a tab from whichever pane holds it (does not prune empty panes). */

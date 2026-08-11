@@ -15,7 +15,7 @@ import { consumeDetaching } from '../lib/detachRegistry'
 import { registerReconnect } from '../lib/reconnectRegistry'
 import { releaseAgentFs } from '../lib/agentTransfer'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
-import { TerminalRightPanel } from './TerminalRightPanel'
+import { TerminalLeftPanel, TerminalRightPanel } from './TerminalRightPanel'
 import { TerminalContextMenu } from './TerminalContextMenu'
 import { CommandPalette } from './CommandPalette'
 
@@ -406,6 +406,14 @@ export function TerminalTab({
 
   return (
     <div className="flex h-full">
+      <TerminalLeftPanel
+        sessionId={sessionId}
+        hostId={hostId}
+        connected={status === 'connected'}
+        containerId={containerId}
+        containerName={containerName}
+        dockerCmd={dockerCmd}
+      />
       <div
         className="relative flex min-w-0 flex-1 flex-col"
         style={{ background: preset.wrapperBg }}

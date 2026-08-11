@@ -17,11 +17,15 @@ import {
   Container,
   Play,
   Pencil,
-  Server
+  Server,
+  PanelLeft,
+  PanelRight,
+  ArrowLeftRight
 } from 'lucide-react'
 import {
   useTerminalStore,
   type RightPanelTab,
+  type PanelSide,
   DEFAULT_FONT_SIZE,
   MIN_FONT_SIZE,
   MAX_FONT_SIZE
@@ -51,14 +55,8 @@ const TABS: { id: Exclude<RightPanelTab, null>; label: string; icon: typeof Hist
   { id: 'sftp', label: 'SFTP', icon: FolderOpen }
 ]
 
-export function TerminalRightPanel({
-  sessionId,
-  hostId,
-  connected,
-  containerId,
-  containerName,
-  dockerCmd
-}: {
+/** 一个终端标签页里,两侧停靠位都要用到的上下文。 */
+interface PanelContext {
   sessionId: string
   hostId: string
   connected: boolean
@@ -66,19 +64,66 @@ export function TerminalRightPanel({
   containerId?: string
   containerName?: string
   dockerCmd?: string
-}): React.ReactElement {
-  const rightPanelTab = useTerminalStore((s) => s.rightPanelTabBySession[sessionId] ?? null)
-  const toggleRightPanel = useTerminalStore((s) => s.toggleRightPanel)
-  const panelWidth = useTerminalStore((s) => s.rightPanelWidth)
-  const setPanelWidth = useTerminalStore((s) => s.setRightPanelWidth)
+}
+
+/** 面板正文。左右两个停靠位共用同一份,只是外壳不同。 */
+function PanelBody({
+  tab,
+  sessionId,
+  hostId,
+  connected,
+  containerId,
+  containerName,
+  dockerCmd
+}: PanelContext & { tab: Exclude<RightPanelTab, null> }): React.ReactElement | null {
+  if (tab === 'agent')
+    return <AgentPanel sessionId={sessionId} hostId={hostId} connected={connected} />
+  if (tab === 'actions') return <ActionsSection sessionId={sessionId} connected={connected} />
+  if (tab === 'history')
+    return <HistorySection sessionId={sessionId} hostId={hostId} connected={connected} />
+  if (tab === 'monitor') return <MonitorPanel sessionId={sessionId} connected={connected} />
+  if (tab === 'docker')
+    return <DockerPanel sessionId={sessionId} hostId={hostId} connected={connected} />
+  if (tab === 'theme') return <ThemeSection sessionId={sessionId} />
+  if (tab === 'sftp')
+    return (
+      <div className="min-h-0 flex-1">
+        {containerId ? (
+          // 容器终端:文件面板浏览容器内文件系统,而不是宿主机 SFTP
+          <ContainerFilesPanel
+            sessionId={`${sessionId}::cfs`}
+            hostId={hostId}
+            containerId={containerId}
+            containerName={containerName ?? containerId.slice(0, 12)}
+            dockerCmd={dockerCmd ?? 'docker'}
+            ownerId={sessionId}
+          />
+        ) : (
+          <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
+        )}
+      </div>
+    )
+  return null
+}
+
+/** 一侧的停靠位:定宽外壳 + 贴着终端那一边的拖拽手柄。 */
+function SideDock({
+  side,
+  tab,
+  ...ctx
+}: PanelContext & { side: PanelSide; tab: Exclude<RightPanelTab, null> }): React.ReactElement {
+  const isLeft = side === 'left'
+  const width = useTerminalStore((s) => (isLeft ? s.leftPanelWidth : s.rightPanelWidth))
+  const setWidth = useTerminalStore((s) => (isLeft ? s.setLeftPanelWidth : s.setRightPanelWidth))
 
   const startResize = (e: React.MouseEvent): void => {
     e.preventDefault()
     const startX = e.clientX
-    const startW = useTerminalStore.getState().rightPanelWidth
+    const st = useTerminalStore.getState()
+    const startW = isLeft ? st.leftPanelWidth : st.rightPanelWidth
     const onMove = (ev: MouseEvent): void => {
-      // panel is on the right; dragging its left edge leftwards widens it.
-      setPanelWidth(startW + (startX - ev.clientX))
+      // 手柄总在靠终端的那一侧:右侧面板往左拖变宽,左侧面板往右拖变宽。
+      setWidth(startW + (isLeft ? ev.clientX - startX : startX - ev.clientX))
     }
     const onUp = (): void => {
       window.removeEventListener('mousemove', onMove)
@@ -91,57 +136,79 @@ export function TerminalRightPanel({
   }
 
   return (
+    <div
+      className={`relative flex h-full shrink-0 flex-col bg-[var(--panel-bg)] ${
+        isLeft ? 'border-r' : 'border-l'
+      } border-[var(--panel-border)]`}
+      style={{ width }}
+    >
+      <div
+        onMouseDown={startResize}
+        title="拖动调整宽度"
+        className={`absolute top-0 z-10 h-full w-2 cursor-col-resize hover:bg-[var(--accent)]/20 ${
+          isLeft ? '-right-1' : '-left-1'
+        }`}
+      />
+      <PanelBody tab={tab} {...ctx} />
+    </div>
+  )
+}
+
+/**
+ * 图标栏顶部的「换边」按钮。把当前面板挪到另一侧后,再点一个图标就会在右侧开出新面板,
+ * 于是得到「左 · 终端 · 右」三栏。两侧都开着时它变成互换。
+ */
+function DockSwapButton({ sessionId }: { sessionId: string }): React.ReactElement {
+  const left = useTerminalStore((s) => s.leftPanelTabBySession[sessionId] ?? null)
+  const right = useTerminalStore((s) => s.rightPanelTabBySession[sessionId] ?? null)
+  const movePanel = useTerminalStore((s) => s.movePanel)
+  const disabled = !left && !right
+  const [Icon, title] =
+    left && right
+      ? [ArrowLeftRight, '左右面板互换']
+      : right
+        ? [PanelLeft, '把面板移到左侧(再开一个就是左中右三栏)']
+        : [PanelRight, '把面板移回右侧']
+
+  return (
+    <>
+      <button
+        disabled={disabled}
+        title={disabled ? '先打开一个面板,再把它移到左侧' : title}
+        onClick={() => movePanel(sessionId, right ? 'right' : 'left')}
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--nav-bg-hover)] hover:text-[var(--text-dark)] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--text-muted)]"
+      >
+        <Icon size={17} strokeWidth={1.75} />
+      </button>
+      <div className="my-1 h-px w-6 shrink-0 bg-[var(--panel-border)]" />
+    </>
+  )
+}
+
+/** 左侧停靠位。没有面板停在左边时不占任何空间。 */
+export function TerminalLeftPanel(ctx: PanelContext): React.ReactElement | null {
+  const tab = useTerminalStore((s) => s.leftPanelTabBySession[ctx.sessionId] ?? null)
+  if (!tab) return null
+  return <SideDock side="left" tab={tab} {...ctx} />
+}
+
+/** 右侧停靠位 + 图标栏(图标栏是唯一的面板入口,始终在最右)。 */
+export function TerminalRightPanel(ctx: PanelContext): React.ReactElement {
+  const { sessionId, containerId } = ctx
+  const rightPanelTab = useTerminalStore((s) => s.rightPanelTabBySession[sessionId] ?? null)
+  const leftPanelTab = useTerminalStore((s) => s.leftPanelTabBySession[sessionId] ?? null)
+  const toggleRightPanel = useTerminalStore((s) => s.toggleRightPanel)
+
+  return (
     <div className="flex h-full shrink-0">
-      {rightPanelTab && (
-        <div
-          className="relative flex h-full flex-col border-l border-[var(--panel-border)] bg-[var(--panel-bg)]"
-          style={{ width: panelWidth }}
-        >
-          <div
-            onMouseDown={startResize}
-            title="拖动调整宽度"
-            className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-[var(--accent)]/20"
-          />
-          {rightPanelTab === 'agent' && (
-            <AgentPanel sessionId={sessionId} hostId={hostId} connected={connected} />
-          )}
-          {rightPanelTab === 'actions' && (
-            <ActionsSection sessionId={sessionId} connected={connected} />
-          )}
-          {rightPanelTab === 'history' && (
-            <HistorySection sessionId={sessionId} hostId={hostId} connected={connected} />
-          )}
-          {rightPanelTab === 'monitor' && (
-            <MonitorPanel sessionId={sessionId} connected={connected} />
-          )}
-          {rightPanelTab === 'docker' && (
-            <DockerPanel sessionId={sessionId} hostId={hostId} connected={connected} />
-          )}
-          {rightPanelTab === 'theme' && <ThemeSection sessionId={sessionId} />}
-          {rightPanelTab === 'sftp' && (
-            <div className="min-h-0 flex-1">
-              {containerId ? (
-                // 容器终端:文件面板浏览容器内文件系统,而不是宿主机 SFTP
-                <ContainerFilesPanel
-                  sessionId={`${sessionId}::cfs`}
-                  hostId={hostId}
-                  containerId={containerId}
-                  containerName={containerName ?? containerId.slice(0, 12)}
-                  dockerCmd={dockerCmd ?? 'docker'}
-                  ownerId={sessionId}
-                />
-              ) : (
-                <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {rightPanelTab && <SideDock side="right" tab={rightPanelTab} {...ctx} />}
 
       <div className="flex w-11 flex-col items-center gap-1 border-l border-[var(--panel-border)] bg-[var(--nav-bg)] py-2">
+        <DockSwapButton sessionId={sessionId} />
         {TABS.map((tab) => {
           const Icon = tab.icon
-          const active = rightPanelTab === tab.id
+          // 停在哪一侧都算「打开中」,再点一次就关掉它。
+          const active = rightPanelTab === tab.id || leftPanelTab === tab.id
           const label = tab.id === 'sftp' && containerId ? '容器文件' : tab.label
           return (
             <button
