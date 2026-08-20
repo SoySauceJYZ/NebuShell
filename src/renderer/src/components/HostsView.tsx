@@ -38,6 +38,7 @@ export function HostsView(): React.ReactElement {
     updateGroup,
     deleteGroup,
     reorderGroups,
+    reorderHosts,
     deleteHost,
     exportVault,
     importPickFile,
@@ -52,6 +53,11 @@ export function HostsView(): React.ReactElement {
   const [showExport, setShowExport] = useState(false)
   const [importContent, setImportContent] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // 拖动排序:被拖的主机 id,以及当前悬停位置(插到某张卡片的前面还是后面)。
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropHint, setDropHint] = useState<{ id: string; side: 'before' | 'after' } | null>(null)
+  // 搜索时看到的只是子集,拖动的位置没有意义,直接禁用。
+  const dragEnabled = !query.trim()
 
   const startImport = async (): Promise<void> => {
     const content = await importPickFile()
@@ -87,6 +93,25 @@ export function HostsView(): React.ReactElement {
     if (ungrouped && ungrouped.length) ordered.push({ groupId: null, hosts: ungrouped })
     return ordered
   }, [hosts, groups, query])
+
+  const endDrag = (): void => {
+    setDragId(null)
+    setDropHint(null)
+  }
+
+  /** 把 dragId 挪到 targetId 的前/后。跨分组不处理 —— 分组归属只在编辑主机里改。 */
+  const dropOn = (targetId: string, side: 'before' | 'after'): void => {
+    const sourceId = dragId
+    endDrag()
+    if (!sourceId || sourceId === targetId) return
+    const source = hosts.find((h) => h.id === sourceId)
+    const target = hosts.find((h) => h.id === targetId)
+    if (!source || !target || (source.groupId ?? null) !== (target.groupId ?? null)) return
+    const ids = hosts.map((h) => h.id).filter((id) => id !== sourceId)
+    const at = ids.indexOf(targetId)
+    ids.splice(side === 'before' ? at : at + 1, 0, sourceId)
+    void reorderHosts(ids)
+  }
 
   const connect = (host: Host, panel?: Exclude<RightPanelTab, null>): void => {
     const id = `terminal-${host.id}-${Date.now()}`
@@ -243,10 +268,44 @@ export function HostsView(): React.ReactElement {
                       onClick={() => setSelectedId(host.id)}
                       onDoubleClick={() => connect(host)}
                       onContextMenu={() => setSelectedId(host.id)}
+                      draggable={dragEnabled}
+                      onDragStart={(e) => {
+                        setDragId(host.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                        // 有些平台不带数据的拖动会被直接取消。
+                        e.dataTransfer.setData('text/plain', host.id)
+                      }}
+                      onDragEnd={endDrag}
+                      onDragOver={(e) => {
+                        if (!dragId || dragId === host.id) return
+                        const src = hosts.find((h) => h.id === dragId)
+                        if ((src?.groupId ?? null) !== (host.groupId ?? null)) return
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        const box = e.currentTarget.getBoundingClientRect()
+                        const side = e.clientX < box.left + box.width / 2 ? 'before' : 'after'
+                        setDropHint((cur) =>
+                          cur?.id === host.id && cur.side === side ? cur : { id: host.id, side }
+                        )
+                      }}
+                      onDragLeave={() =>
+                        setDropHint((cur) => (cur?.id === host.id ? null : cur))
+                      }
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const box = e.currentTarget.getBoundingClientRect()
+                        dropOn(host.id, e.clientX < box.left + box.width / 2 ? 'before' : 'after')
+                      }}
                       className={`card cursor-pointer p-3 transition ${
                         selectedId === host.id
                           ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]'
                           : 'hover:border-[var(--accent)]'
+                      } ${dragId === host.id ? 'opacity-40' : ''} ${
+                        dropHint?.id === host.id
+                          ? dropHint.side === 'before'
+                            ? 'shadow-[inset_3px_0_0_0_var(--accent)]'
+                            : 'shadow-[inset_-3px_0_0_0_var(--accent)]'
+                          : ''
                       }`}
                     >
                       <div className="flex items-center gap-2.5">

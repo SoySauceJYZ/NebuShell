@@ -88,6 +88,8 @@ const api = {
     updateHost: (id: string, patch: Partial<Host>): Promise<Host> =>
       ipcRenderer.invoke('vault:host:update', id, patch),
     deleteHost: (id: string): Promise<void> => ipcRenderer.invoke('vault:host:delete', id),
+    reorderHosts: (orderedIds: string[]): Promise<Host[]> =>
+      ipcRenderer.invoke('vault:host:reorder', orderedIds),
 
     addGroup: (group: Omit<Group, 'id'>): Promise<Group> =>
       ipcRenderer.invoke('vault:group:add', group),

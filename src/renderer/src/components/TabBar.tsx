@@ -171,7 +171,7 @@ export function TabBar(): React.ReactElement {
               className="z-[70] min-w-[180px] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-lg"
             >
               <DropdownMenu.Item
-                onSelect={() => setActiveTab('hosts')}
+                onSelect={() => openTab({ id: 'hosts', kind: 'hosts', title: 'Hosts' })}
                 className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
               >
                 <Server size={15} strokeWidth={1.75} className="text-[var(--text-muted)]" />

@@ -20,6 +20,7 @@ interface VaultState {
   addHost: (host: Omit<Host, 'id'>) => Promise<void>
   updateHost: (id: string, patch: Partial<Host>) => Promise<void>
   deleteHost: (id: string) => Promise<void>
+  reorderHosts: (orderedIds: string[]) => Promise<void>
 
   addGroup: (group: Omit<Group, 'id'>) => Promise<Group>
   updateGroup: (id: string, patch: Partial<Group>) => Promise<void>
@@ -96,6 +97,15 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
   deleteHost: async (id) => {
     await window.api.vault.deleteHost(id)
+    await get().refresh()
+  },
+  reorderHosts: async (orderedIds) => {
+    // 先本地重排,拖放松手时列表立刻定位,不用等落盘 + refresh 往返。
+    const byId = new Map(get().hosts.map((h) => [h.id, h]))
+    const next = orderedIds.map((id) => byId.get(id)).filter((h): h is Host => !!h)
+    for (const h of get().hosts) if (!orderedIds.includes(h.id)) next.push(h)
+    set({ hosts: next })
+    await window.api.vault.reorderHosts(orderedIds)
     await get().refresh()
   },
 

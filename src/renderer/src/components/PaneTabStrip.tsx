@@ -51,7 +51,7 @@ export function PaneTabStrip({
             >
               <Icon size={12} strokeWidth={1.75} className="shrink-0" />
               <span className="flex-1 truncate">{tab.title}</span>
-              {tab.id !== 'hosts' && (
+              {(tab.id !== 'hosts' || tabs.length > 1) && (
                 <button
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {

@@ -1,5 +1,6 @@
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
+import { recallDir } from '../lib/dirMemory'
 import { RemotePane } from './sftp/RemotePane'
 import { ContainerPane } from './sftp/ContainerPane'
 import { TransfersPanel } from './sftp/TransfersPanel'
@@ -29,7 +30,9 @@ export function SftpPanel({
       id: `explorer-${hostId}-${Date.now()}`,
       kind: 'explorer',
       title: `${host?.label ?? 'SFTP'} (SFTP)`,
-      hostId
+      hostId,
+      // 整页视图接着侧边栏当前的目录继续浏览。
+      explorerInitialPath: recallDir(sessionId)
     })
   }
 

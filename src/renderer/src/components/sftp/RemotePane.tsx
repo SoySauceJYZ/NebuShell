@@ -39,11 +39,14 @@ export function RemotePane({
   sessionId,
   hostId,
   ownerId,
+  initialPath,
   embedded,
   onExpand
 }: {
   sessionId: string
   hostId: string
+  /** 首次打开时定位到的目录(本会话已有浏览记录时以记录为准)。 */
+  initialPath?: string
   /** Tab/window that owns transfers started here (scopes the records panel). */
   ownerId: string
   embedded?: boolean
@@ -54,7 +57,7 @@ export function RemotePane({
   const openTab = useSessionStore((s) => s.openTab)
   const track = useTransfersStore((s) => s.track)
   // 面板重开时直接从上次的目录起步,地址栏不会先闪一下 '/'。
-  const [path, setPath] = useState(() => recallDir(sessionId) ?? '/')
+  const [path, setPath] = useState(() => recallDir(sessionId) ?? initialPath ?? '/')
   const [editPath, setEditPath] = useState(path)
   const [entries, setEntries] = useState<SftpListEntry[]>([])
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
@@ -114,9 +117,9 @@ export function RemotePane({
     ready
       .then(async () => {
         setStatus('ready')
-        // 上次的目录可能已被删除/权限变化,列不出来就退回根目录。
-        const remembered = recallDir(sessionId)
-        if (remembered && remembered !== '/' && (await load(remembered))) return
+        // 目录可能已被删除/权限变化,列不出来就退回根目录。
+        const start = recallDir(sessionId) ?? initialPath
+        if (start && start !== '/' && (await load(start))) return
         await load('/')
       })
       .catch((err) => {

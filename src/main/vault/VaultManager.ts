@@ -258,6 +258,25 @@ export class VaultManager {
     return data.hosts[idx]
   }
 
+  /** 按给定的 id 顺序重排主机。列表里没有的 id 会被忽略,没被列到的主机追加在末尾,
+   * 因此不会有主机在重排中丢失。 */
+  reorderHosts(orderedIds: string[]): Host[] {
+    const data = this.getData()
+    const byId = new Map(data.hosts.map((h) => [h.id, h]))
+    const next: Host[] = []
+    for (const id of orderedIds) {
+      const h = byId.get(id)
+      if (h) {
+        next.push(h)
+        byId.delete(id)
+      }
+    }
+    for (const h of byId.values()) next.push(h)
+    data.hosts = next
+    this.persist()
+    return data.hosts
+  }
+
   deleteHost(id: string): void {
     const data = this.getData()
     data.hosts = data.hosts.filter((h) => h.id !== id)

@@ -52,6 +52,8 @@ export interface Tab {
   containerName?: string
   /** 打开时探测到的 docker 调用前缀('docker' | 'sudo -n docker')。 */
   dockerCmd?: string
+  /** 整页文件浏览器里,预置的远程面板打开时定位到的目录(由侧边栏「展开」带过来)。 */
+  explorerInitialPath?: string
   // 容器文件浏览器:explorer tab 预置一个容器面板
   explorerContainerId?: string
   explorerContainerName?: string
@@ -152,9 +154,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   closeTab: (id) => {
-    if (id === 'hosts') return
     const { tabs, layout, activeTabId, activePaneId, lastActiveTerminalId } = get()
+    // Hosts 是「首页」,平时不给关;分屏后它占着一整个 pane,允许关掉 —— 但不能关成空窗口。
+    // 侧边栏「主机」和标签栏「+ → 打开新主机」都走 openTab,随时能把它开回来。
+    if (id === 'hosts' && tabs.length <= 1) return
     const newTabs = tabs.filter((t) => t.id !== id)
+    // 关掉最后一个 tab(Hosts 先前被关掉时才可能发生):回到只有 Hosts 的初始布局,
+    // 而不是留一个空窗口。
+    if (newTabs.length === 0) {
+      set({
+        tabs: [HOSTS_TAB],
+        layout: makeRootLayout(),
+        activePaneId: ROOT_PANE_ID,
+        activeTabId: 'hosts',
+        lastActiveTerminalId: undefined
+      })
+      return
+    }
     const pruned = pruneEmpty(removeTabFromTree(layout, id))
     const newLayout = pruned ?? makeRootLayout()
 

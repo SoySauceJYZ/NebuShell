@@ -44,6 +44,9 @@ export function registerVaultIpc(): void {
     vaultManager.updateHost(id, patch)
   )
   ipcMain.handle('vault:host:delete', (_e, id: string) => vaultManager.deleteHost(id))
+  ipcMain.handle('vault:host:reorder', (_e, orderedIds: string[]) =>
+    vaultManager.reorderHosts(orderedIds)
+  )
 
   ipcMain.handle('vault:group:add', (_e, group: Omit<Group, 'id'>) => vaultManager.addGroup(group))
   ipcMain.handle('vault:group:update', (_e, id: string, patch: Partial<Group>) =>

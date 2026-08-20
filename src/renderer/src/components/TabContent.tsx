@@ -46,6 +46,7 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
         <ExplorerTab
           tabId={tab.id}
           initialHostId={tab.explorerContainerId ? undefined : tab.hostId}
+          initialPath={tab.explorerInitialPath}
           initialContainer={
             tab.explorerContainerId && tab.hostId
               ? {

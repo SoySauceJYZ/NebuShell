@@ -12,7 +12,7 @@ interface BasePane {
   weight: number
 }
 type PaneState =
-  | (BasePane & { kind: 'remote'; hostId: string })
+  | (BasePane & { kind: 'remote'; hostId: string; initialPath?: string })
   | (BasePane & { kind: 'local' })
   | (BasePane & {
       kind: 'container'
@@ -36,10 +36,13 @@ export interface InitialContainer {
 export function ExplorerTab({
   tabId,
   initialHostId,
+  initialPath,
   initialContainer
 }: {
   tabId: string
   initialHostId?: string
+  /** 预置远程面板的起始目录(侧边栏「展开为整页 SFTP」时带上当前目录)。 */
+  initialPath?: string
   /** 从容器面板打开:预置一个「本地 + 容器」双栏。 */
   initialContainer?: InitialContainer
 }): React.ReactElement {
@@ -49,7 +52,7 @@ export function ExplorerTab({
     if (initialContainer) {
       init.push({ paneId: pid(), kind: 'container', weight: 1, ...initialContainer })
     } else if (initialHostId) {
-      init.push({ paneId: pid(), kind: 'remote', hostId: initialHostId, weight: 1 })
+      init.push({ paneId: pid(), kind: 'remote', hostId: initialHostId, weight: 1, initialPath })
     }
     return init
   })
@@ -188,6 +191,7 @@ export function ExplorerTab({
                       sessionId={`explorer-${tabId}-${pane.paneId}`}
                       hostId={pane.hostId}
                       ownerId={tabId}
+                      initialPath={pane.initialPath}
                     />
                   )}
                 </div>
