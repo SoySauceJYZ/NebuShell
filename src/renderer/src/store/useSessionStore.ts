@@ -37,6 +37,8 @@ export interface Tab {
   editorExecCommand?: string
   editorSourceSessionId?: string
   editorLang?: string
+  /** 只读编辑器(如容器日志):禁止编辑,只能查看/刷新/复制。 */
+  editorReadOnly?: boolean
   // sftp-backed editor tabs
   editorSftpSessionId?: string
   editorRemotePath?: string

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { Copy, Save, Check, History } from 'lucide-react'
+import { Copy, Save, Check, History, RefreshCw } from 'lucide-react'
 import { Select } from './ui/Select'
 import type { HistoryVersion } from '@shared/types'
 
@@ -77,6 +77,7 @@ export function EditorTab({
   content,
   execCommand,
   sourceSessionId,
+  readOnly,
   initialLang,
   sftpSessionId,
   containerFsSessionId,
@@ -88,6 +89,8 @@ export function EditorTab({
   content?: string
   execCommand?: string
   sourceSessionId?: string
+  /** 只读模式:内容不可编辑,工具栏只保留刷新/复制。 */
+  readOnly?: boolean
   initialLang?: string
   sftpSessionId?: string
   /** 容器文件后端(docker exec/cp)的会话 id;与 sftpSessionId 互斥。 */
@@ -124,6 +127,9 @@ export function EditorTab({
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
+  // 每次 +1 重跑 execCommand(刷新)
+  const [execTick, setExecTick] = useState(0)
+  const isExec = !!(execCommand && sourceSessionId)
 
   // exec-result mode
   useEffect(() => {
@@ -143,7 +149,18 @@ export function EditorTab({
     return () => {
       cancelled = true
     }
-  }, [execCommand, sourceSessionId])
+  }, [execCommand, sourceSessionId, execTick])
+
+  // 只读的命令输出(日志)加载后滚到末尾。value 落到 Monaco model 是异步的,故延后一拍。
+  useEffect(() => {
+    if (!isExec || !readOnly || loading) return
+    const t = window.setTimeout(() => {
+      const ed = editorRef.current
+      const lines = ed?.getModel()?.getLineCount()
+      if (ed && lines) ed.revealLine(lines)
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [value, isExec, readOnly, loading])
 
   // sftp / 容器模式: read remote content + load history versions
   useEffect(() => {
@@ -221,7 +238,7 @@ export function EditorTab({
   }
 
   const save = async (): Promise<void> => {
-    if (loading) return
+    if (loading || readOnly) return
     if (isSftp || isCfs) {
       const ok = await window.api.dialog.confirm({
         message: isCfs ? `是否将修改保存到容器?` : `是否将修改保存到服务器?`,
@@ -298,14 +315,30 @@ export function EditorTab({
         )}
         <div className="flex-1" />
         {statusMsg && <span className="text-xs text-[var(--accent)]">{statusMsg}</span>}
+        {readOnly && <span className="text-xs text-[var(--text-muted)]">只读</span>}
+        {isExec && (
+          <button
+            onClick={() => {
+              setLoading(true)
+              setExecTick((n) => n + 1)
+            }}
+            disabled={loading}
+            className="btn-secondary h-8 !py-0 text-xs disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            {loading ? '刷新中' : '刷新'}
+          </button>
+        )}
         <button onClick={copyAll} className="btn-secondary h-8 !py-0 text-xs">
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? '已复制' : '复制全部'}
         </button>
-        <button onClick={save} className="btn-primary h-8 !py-0 text-xs">
-          {saved ? <Check size={14} /> : <Save size={14} />}
-          {saved ? '已保存' : isSftp ? '保存到服务器' : isCfs ? '保存到容器' : '保存'}
-        </button>
+        {!readOnly && (
+          <button onClick={save} className="btn-primary h-8 !py-0 text-xs">
+            {saved ? <Check size={14} /> : <Save size={14} />}
+            {saved ? '已保存' : isSftp ? '保存到服务器' : isCfs ? '保存到容器' : '保存'}
+          </button>
+        )}
       </div>
       <div className="min-h-0 flex-1">
         <Editor
@@ -319,7 +352,7 @@ export function EditorTab({
             fontSize: 13,
             fontFamily: 'Consolas, "Courier New", monospace',
             minimap: { enabled: true },
-            readOnly: loading,
+            readOnly: loading || !!readOnly,
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 2,

@@ -5,6 +5,7 @@ import {
   Square,
   RotateCw,
   ScrollText,
+  FileText,
   Terminal,
   FolderOpen,
   RefreshCw,
@@ -129,6 +130,21 @@ export function DockerPanel({
     window.api.ssh.write(sessionId, `${dockerCmd} logs -f --tail 50 ${target}\n`)
   }
 
+  // 在只读编辑器 tab 里查看日志快照(可刷新),与上面写进终端的 logs -f 互补。
+  const openLogsEditor = (c: ContainerInfo): void => {
+    if (!dockerCmd) return
+    const target = /^[\w][\w.-]*$/.test(c.name) ? c.name : c.id
+    openTab({
+      id: `editor-logs-${c.id.slice(0, 12)}-${Date.now()}`,
+      kind: 'editor',
+      title: `${c.name} (日志)`,
+      editorExecCommand: `${dockerCmd} logs --tail 1000 ${target} 2>&1`,
+      editorSourceSessionId: sessionId,
+      editorLang: 'log',
+      editorReadOnly: true
+    })
+  }
+
   const openTerminal = (c: ContainerInfo): void => {
     if (!dockerCmd) return
     openTab({
@@ -238,6 +254,7 @@ export function DockerPanel({
                 busy={busyId === c.id}
                 onAction={(verb) => void runAction(c, verb)}
                 onLogs={() => openLogs(c)}
+                onLogsEditor={() => openLogsEditor(c)}
                 onTerminal={() => openTerminal(c)}
                 onFiles={() => openFiles(c)}
               />
@@ -302,6 +319,7 @@ function ContainerCard({
   busy,
   onAction,
   onLogs,
+  onLogsEditor,
   onTerminal,
   onFiles
 }: {
@@ -309,6 +327,7 @@ function ContainerCard({
   busy: boolean
   onAction: (verb: 'start' | 'stop' | 'restart') => void
   onLogs: () => void
+  onLogsEditor: () => void
   onTerminal: () => void
   onFiles: () => void
 }): React.ReactElement {
@@ -353,6 +372,12 @@ function ContainerCard({
           icon={ScrollText}
           title="查看日志(在当前终端执行 logs -f)"
           onClick={onLogs}
+          disabled={busy}
+        />
+        <IconBtn
+          icon={FileText}
+          title="查看日志(在编辑器中打开,只读,可刷新)"
+          onClick={onLogsEditor}
           disabled={busy}
         />
         <div className="flex-1" />

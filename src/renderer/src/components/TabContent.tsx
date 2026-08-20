@@ -64,6 +64,7 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
           content={tab.editorContent}
           execCommand={tab.editorExecCommand}
           sourceSessionId={tab.editorSourceSessionId}
+          readOnly={tab.editorReadOnly}
           initialLang={tab.editorLang}
           sftpSessionId={tab.editorSftpSessionId}
           containerFsSessionId={tab.editorContainerFsSessionId}
