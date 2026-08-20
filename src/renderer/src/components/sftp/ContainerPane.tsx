@@ -10,7 +10,8 @@ import {
   FilePenLine,
   Pencil,
   Trash2,
-  PanelLeft
+  PanelLeft,
+  SquareTerminal
 } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { useSessionStore } from '../../store/useSessionStore'
@@ -18,7 +19,7 @@ import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { registerPane, unregisterPane } from '../../lib/dirMemory'
-import { remoteParent, remoteJoin } from '../../lib/pathUtils'
+import { remoteParent, remoteJoin, shellQuotePath } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
@@ -46,7 +47,8 @@ export function ContainerPane({
   ownerId,
   initialPath,
   embedded,
-  onExpand
+  onExpand,
+  terminalSessionId
 }: {
   sessionId: string
   hostId: string
@@ -58,6 +60,8 @@ export function ContainerPane({
   initialPath?: string
   embedded?: boolean
   onExpand?: () => void
+  /** 该面板贴着的容器终端会话;有值时右键菜单多一条「输入路径到终端」。 */
+  terminalSessionId?: string
 }): React.ReactElement {
   const hosts = useVaultStore((s) => s.hosts)
   const credentials = useVaultStore((s) => s.credentials)
@@ -252,12 +256,22 @@ export function ContainerPane({
     bumpFs()
   }
 
+  // 容器终端跑在容器里,所以这里填的容器内路径正好对得上。不回车,留给用户补命令。
+  const insertIntoTerminal = (entry: FileEntry): void => {
+    if (!terminalSessionId) return
+    // 末尾留个空格,和终端里拖放文件的习惯一致,方便接着拼下一个参数。
+    window.api.ssh.write(terminalSessionId, shellQuotePath(entry.path) + ' ')
+  }
+
   const menuActions = (entry: FileEntry): MenuAction[] => {
     const list: MenuAction[] = []
     if (entry.type !== 'directory') {
       list.push({ label: '用编辑器打开', icon: FilePenLine, onSelect: onOpen })
     }
     list.push({ label: '下载到…', icon: Download, onSelect: downloadTo })
+    if (terminalSessionId) {
+      list.push({ label: '输入路径到终端', icon: SquareTerminal, onSelect: insertIntoTerminal })
+    }
     list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
     list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
     return list
@@ -321,7 +335,11 @@ export function ContainerPane({
             <RefreshCw size={14} />
           </button>
           <div className="flex-1" />
-          <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+          <button
+            onClick={handleCreateFile}
+            className="btn-secondary px-2.5 py-1.5"
+            title="新建文件"
+          >
             <FilePlus size={14} />
           </button>
           <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">

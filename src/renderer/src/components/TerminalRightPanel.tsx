@@ -97,9 +97,15 @@ function PanelBody({
             containerName={containerName ?? containerId.slice(0, 12)}
             dockerCmd={dockerCmd ?? 'docker'}
             ownerId={sessionId}
+            terminalSessionId={sessionId}
           />
         ) : (
-          <SftpPanel sessionId={`${sessionId}::sftp`} hostId={hostId} ownerId={sessionId} />
+          <SftpPanel
+            sessionId={`${sessionId}::sftp`}
+            hostId={hostId}
+            ownerId={sessionId}
+            terminalSessionId={sessionId}
+          />
         )}
       </div>
     )

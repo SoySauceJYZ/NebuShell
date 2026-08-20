@@ -50,7 +50,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 🖥️ **Multi‑tab terminals & flexible split view** — xterm.js terminals with a fit addon, web links, and per‑theme styling. Split any pane **right or down** from the tab‑strip buttons, keep splitting the split‑out panes **recursively** into any grid, **drag tabs** between panes (drop on an edge to make a new split, on the center to merge), **drag a tab out of the window** to tear it off into its own window (the live session moves with it), and drag the dividers to resize.
 - 🤖 **Built‑in AI ops agent** — an OpenAI‑compatible agent that can `run_command`, `transfer_file`, `read_command_output`, `ask_user`, and `present_plan`. It proposes a plan, asks for confirmation, then executes across one or many terminals — **and on your local machine** (PowerShell on Windows, `/bin/sh` on macOS/Linux), with the same approval flow. It can also **move files** between your machine, your hosts, and your containers — the confirm card tells you the file count and total size before you approve. **Send it images** too — paste a screenshot, pick a file, or drag one into the composer.
 - 🔐 **Encrypted vault** — hosts, passwords, and SSH keys are protected behind a master password; the keychain never leaves your machine. **Trust this device** to skip the password on future launches.
-- 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing.
+- 📁 **SFTP file browser** — dual‑pane remote/local file management with drag‑and‑drop transfers and a live transfer queue. **Create files and folders** from the toolbar or by **right‑clicking blank space** in the listing, and right‑click any entry to **type its full path into the terminal** next to it.
 - 🐳 **Docker container management** — a per‑host container panel (live `docker ps`, start/stop/restart, logs, sudo auto‑detect), one‑click **container terminals** via `docker exec` PTY, and a **container file browser** built on `docker cp` tar streaming — browse, edit‑and‑save, and drag files between your PC and any running container.
 - 📝 **Built‑in editor** — a Monaco (VS Code) editor for quickly editing remote and local files, with syntax highlighting. **Ctrl+S** saves a remote file straight back to the server (and snapshots a history version).
 - 🖼️ **Image preview** — open remote images directly in a tab.
@@ -59,12 +59,15 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - ⌨️ **Command history & command palette** — every command you type is saved locally per server (tagged **User** / **Agent**) and shared across that host's tabs; a history panel splits **Local** vs the server's own `~/.bash_history`. Triple‑tap **Ctrl** to open a tabbed palette that searches history and runs quick actions — picking a command drops it into the prompt **without executing**.
 - 📜 **History docs** — keep track of past sessions and documents.
 - 📊 **System monitor** — per‑core CPU with a live sparkline, a memory donut, network up/down rates, per‑mount disk usage with read/write I/O, and a process manager you can search and kill from.
+- 🔄 **Update check** — Settings checks **GitHub Releases** for a newer version and hands you the installer for your platform; it can also check quietly at startup and flag the result on the sidebar.
 - 🎨 **Light / dark themes** — a clean, modern UI that adapts to your OS.
 
 ### What's New
 
 **Recent updates (July–August 2026)**
 
+- 🖱️ **Right-click a file to type its path into the terminal** _(2026‑08‑20)_ — the sidebar **SFTP** panel (and the container file panel) gains an **输入路径到终端 (Type path into terminal)** item in the right-click menu of any file or folder. It writes the item's **full path into the terminal beside it, at the current input line, without pressing Enter**, so you can put `tail -f` or `cd` in front and run it yourself. Paths containing spaces or shell metacharacters are **quoted automatically**, and a trailing space is appended the way dropping a file onto a terminal does, so a second path can follow straight after. The item appears only in a panel **docked beside a terminal** — the full-page explorer has no terminal to type into, so it isn't offered there.
+- 🔄 **Check GitHub for a new release** _(2026‑08‑20)_ — **Settings** gains a **软件更新 (Software update)** card. It shows the running version, and **检查更新 (Check for updates)** asks the GitHub Releases API for the latest published release: if it is newer you get the version, publish date and release notes, plus one-click download of the **installer matching your platform and architecture** (falling back to the release page when that release has no matching asset). It also checks **quietly a few seconds after startup** — a red dot appears on the sidebar's **设置** entry and clears once you open it — and that startup check can be switched off from the same card. Download links are restricted to GitHub hosts, and a failed startup check stays silent rather than nagging.
 - 🗂️ **Drag hosts to reorder them** _(2026‑08‑20)_ — the hosts page now lets you **drag a card to move it**. Hovering over another card shows an insertion line on its left or right half, and dropping commits the whole new order to the vault, so it survives a restart. Dragging is limited to **within a group** (group membership is still changed from the host editor), and it's disabled while the search box has text, where the visible list is only a subset and a drop position would mean nothing.
 - 🔎 **Search containers by name** _(2026‑08‑20)_ — the container panel gains a **search box** under its title, filtering the list by container name as you type (case-insensitive substring). It only appears once a host actually has containers, and it's a pure client-side filter — the 4-second `docker ps` polling keeps running underneath and the filter stays applied across refreshes.
 - 📄 **Container logs in a read-only editor** _(2026‑08‑20)_ — container cards keep the existing log button (which types `logs -f` into the current terminal to follow live) and add a second one that opens the logs in an **editor tab instead**: `docker logs --tail 1000`, with a **刷新 (Refresh)** button to re-run it, the content **read-only** (Ctrl+S is disabled too, and the save button is hidden), and the view auto-scrolled to the end on load. Handy for reading and copying a log without giving up your terminal.
@@ -233,7 +236,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 🖥️ **多标签终端与灵活分屏** —— 基于 xterm.js,支持自适应、网页链接识别和主题化。可在标签条上点击**向右/向下分屏**,并对分出来的屏**递归继续分屏**组成任意网格;支持**拖动标签页**在各屏之间移动(拖到边缘新建分屏,拖到中间合并到该屏),还能**把标签页拖出窗口**撕成独立窗口(会话原样跟着搬走),分隔条可拖动调整大小。
 - 🤖 **内置 AI 运维智能体** —— 兼容 OpenAI 接口,支持 `run_command`(执行命令)、`transfer_file`(传输文件)、`read_command_output`(读取输出)、`ask_user`(向你提问)、`present_plan`(给出计划)。先出方案、征得确认,再在一个或多个终端上执行——**也能操作你的本机**(Windows 用 PowerShell,macOS/Linux 用 `/bin/sh`),审批流程完全一致。还能在**本机、主机与容器之间搬运文件**——确认卡片会先告诉你要传多少个文件、多大。还可以**给它发图片**——截图直接粘贴、选择文件,或拖进输入框。
 - 🔐 **加密保险库** —— 主机、密码和 SSH 密钥都由主密码保护,密钥库永不离开本机。可勾选「**信任此设备**」,下次打开免输主密码。
-- 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**。
+- 📁 **SFTP 文件浏览器** —— 远程/本地双栏文件管理,支持拖拽传输和实时传输队列。可从工具栏或**右键空白处**新建**文件 / 文件夹**,右键任意条目还能把它的**完整路径输入到旁边的终端**。
 - 🐳 **Docker 容器管理** —— 每台主机的容器面板(实时 `docker ps`、启停重启、日志、sudo 自动探测);一键打开 `docker exec` **容器终端**;基于 `docker cp` tar 流的**容器文件浏览器**——浏览、编辑保存、在本机与任意运行中容器之间拖拽传文件。
 - 📝 **内置编辑器** —— 集成 Monaco(VS Code 同款)编辑器,快速编辑远程与本地文件,支持语法高亮。打开服务器文件后按 **Ctrl+S** 即可直接保存回服务器(并自动存一个历史版本)。
 - 🖼️ **图片预览** —— 直接在标签页中打开远程图片。
@@ -242,12 +245,15 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - ⌨️ **命令历史与命令面板** —— 你输入的每条命令都会**按服务器本地持久化**(标记 **User / Agent**),并在该主机的所有标签页间共享;历史面板分「**本地 / 服务器**」两个子标签,服务器标签直接读取机器自身的 `~/.bash_history`。在终端里**连按三次 Ctrl** 可呼出分标签命令面板,搜索历史或执行快捷操作——选中的命令只**填入输入行、不自动执行**。
 - 📜 **历史文档** —— 记录过往会话与文档。
 - 📊 **系统监控** —— 每核心 CPU 占用与实时折线、内存环形图、网络上下行速率、按挂载点的磁盘用量及读写 IO,以及可搜索、可结束进程的进程管理器。
+- 🔄 **更新检查** —— 设置页可查询 **GitHub Releases** 上的最新版本,并直接给出匹配你系统的安装包;也可在启动时静默检查,并在侧边栏提示结果。
 - 🎨 **明暗主题** —— 简洁现代的界面,随系统自动切换。
 
 ### 更新记录
 
 **近期更新(2026 年 7–8 月)**
 
+- 🖱️ **右键把文件路径输入到终端** _(2026‑08‑20)_ —— 侧边栏的 **SFTP** 面板(以及容器文件面板)在文件/文件夹的右键菜单里新增「**输入路径到终端**」。点它就把该项的**完整路径写进旁边那个终端的当前输入行,并且不回车**——你可以在前面补 `tail -f`、`cd` 之类再自己执行。含空格或 shell 特殊字符的路径会**自动加引号**;末尾留一个空格,和往终端里拖文件的习惯一致,方便接着拼第二个路径。这条只在**贴着终端的面板**里出现:整页文件浏览器没有配套终端,菜单里也就不会有它。
+- 🔄 **检查 GitHub 上的最新发布包** _(2026‑08‑20)_ —— **设置**页新增「**软件更新**」卡片:显示当前运行的版本,点「**检查更新**」向 GitHub Releases 查询最新发布版本。有更新时列出版本号、发布日期和更新说明,并可一键下载**与你的系统 / 架构匹配的安装包**(该发布没有匹配产物时退回发布页自行挑选)。启动后几秒还会**静默检查一次**——有新版本时左侧边栏「**设置**」上出现一个小红点,进设置页即消——这次自动检查可以在同一张卡片里关掉。下载链接只允许 GitHub 域名;启动时的检查失败保持静默,不会打扰你。
 - 🗂️ **主机页支持拖动排序** _(2026‑08‑20)_ —— 主机卡片现在可以**直接拖着挪位置**。拖到另一张卡片上时,按鼠标落在它的左半还是右半,显示一条插入线提示落点;松手即把整份新顺序写回密码库,重启后依然保持。拖动限制在**同一分组内**(改分组归属仍在编辑主机里做);搜索框里有内容时禁用拖动——那时看到的只是子集,拖出来的位置没有意义。
 - 🔎 **容器支持按名称搜索** _(2026‑08‑20)_ —— 容器面板标题下新增**搜索框**,按容器名实时过滤(大小写不敏感的子串匹配)。只在该主机确实有容器时才出现;它是纯前端过滤,底层 4 秒一次的 `docker ps` 轮询照常进行,刷新后过滤依然生效。
 - 📄 **容器日志可在只读编辑器里看** _(2026‑08‑20)_ —— 容器卡片保留原有的日志按钮(在当前终端里执行 `logs -f` 实时跟随),并新增一个按钮改为**在编辑器标签页里打开**:执行 `docker logs --tail 1000`,带一个「**刷新**」按钮重新拉取,内容**只读**(Ctrl+S 一并禁用、保存按钮隐藏),加载完成自动滚到末尾。适合安静地翻阅和复制日志,而不用占着终端。

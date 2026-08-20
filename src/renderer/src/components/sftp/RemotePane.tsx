@@ -10,7 +10,8 @@ import {
   FilePenLine,
   Pencil,
   Trash2,
-  PanelLeft
+  PanelLeft,
+  SquareTerminal
 } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { useSessionStore } from '../../store/useSessionStore'
@@ -19,7 +20,7 @@ import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { consumeDetaching } from '../../lib/detachRegistry'
 import { recallDir, registerPane, rememberDir, unregisterPane } from '../../lib/dirMemory'
-import { remoteParent, remoteJoin } from '../../lib/pathUtils'
+import { remoteParent, remoteJoin, shellQuotePath } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
@@ -41,7 +42,8 @@ export function RemotePane({
   ownerId,
   initialPath,
   embedded,
-  onExpand
+  onExpand,
+  terminalSessionId
 }: {
   sessionId: string
   hostId: string
@@ -51,6 +53,11 @@ export function RemotePane({
   ownerId: string
   embedded?: boolean
   onExpand?: () => void
+  /**
+   * 该面板贴着的终端会话。有值时右键菜单多一条「输入路径到终端」;整页 SFTP
+   * 标签页没有配套终端,不传即可,菜单里也就不会出现这条。
+   */
+  terminalSessionId?: string
 }): React.ReactElement {
   const hosts = useVaultStore((s) => s.hosts)
   const credentials = useVaultStore((s) => s.credentials)
@@ -252,12 +259,23 @@ export function RemotePane({
     bumpFs()
   }
 
+  // 把整条路径填进终端的当前输入行(不回车),用户可以在前面补命令再执行。
+  // 走和「历史命令」面板一样的写入方式,含空格等特殊字符的路径会自动加引号。
+  const insertIntoTerminal = (entry: FileEntry): void => {
+    if (!terminalSessionId) return
+    // 末尾留个空格,和终端里拖放文件的习惯一致,方便接着拼下一个参数。
+    window.api.ssh.write(terminalSessionId, shellQuotePath(entry.path) + ' ')
+  }
+
   const menuActions = (entry: FileEntry): MenuAction[] => {
     const list: MenuAction[] = []
     if (entry.type !== 'directory') {
       list.push({ label: '用编辑器打开', icon: FilePenLine, onSelect: onOpen })
     }
     list.push({ label: '下载到…', icon: Download, onSelect: downloadTo })
+    if (terminalSessionId) {
+      list.push({ label: '输入路径到终端', icon: SquareTerminal, onSelect: insertIntoTerminal })
+    }
     list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
     list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
     return list
@@ -326,7 +344,11 @@ export function RemotePane({
             <RefreshCw size={14} />
           </button>
           <div className="flex-1" />
-          <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+          <button
+            onClick={handleCreateFile}
+            className="btn-secondary px-2.5 py-1.5"
+            title="新建文件"
+          >
             <FilePlus size={14} />
           </button>
           <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">
@@ -336,7 +358,11 @@ export function RemotePane({
             <Upload size={14} />
           </button>
           {embedded && onExpand && (
-            <button onClick={onExpand} className="btn-primary px-2.5 py-1.5" title="展开为整页 SFTP">
+            <button
+              onClick={onExpand}
+              className="btn-primary px-2.5 py-1.5"
+              title="展开为整页 SFTP"
+            >
               <Maximize2 size={14} />
             </button>
           )}

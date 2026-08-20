@@ -798,10 +798,11 @@
             <div class="ico">📁</div>
             <h3 data-zh="SFTP 文件浏览器">SFTP file browser</h3>
             <p
-              data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。可从工具栏或右键空白处新建文件 / 文件夹。"
+              data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。可从工具栏或右键空白处新建文件 / 文件夹；右键任意条目还能把它的完整路径输入到旁边的终端。"
             >
               Dual-pane remote/local management with drag-and-drop transfers and a live transfer
-              queue. Create files and folders from the toolbar or by right-clicking blank space.
+              queue. Create files and folders from the toolbar or by right-clicking blank space,
+              and right-click any entry to type its full path into the terminal next to it.
             </p>
           </div>
           <div class="card">
@@ -861,6 +862,17 @@
               and runs quick actions; picks drop into the prompt without executing.
             </p>
           </div>
+          <div class="card">
+            <div class="ico">🔄</div>
+            <h3 data-zh="更新检查">Update check</h3>
+            <p
+              data-zh="设置页可查询 GitHub Releases 上的最新发布版本，并直接给出匹配你系统与架构的安装包；也可在启动时静默检查，有新版本时在侧边栏「设置」上点一个小红点。"
+            >
+              Settings checks GitHub Releases for a newer version and hands you the installer
+              matching your platform and architecture. It can also check quietly at startup and
+              flag a new release with a dot on the sidebar’s Settings entry.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -870,6 +882,28 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7–8 月。">Recent updates — July–August 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🖱️</div>
+            <h3 data-zh="右键把文件路径输入到终端（2026‑08‑20）">
+              Right-click a file to type its path into the terminal (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="侧边栏的 SFTP 面板（以及容器文件面板）在文件/文件夹的右键菜单里新增「输入路径到终端」。点它就把该项的完整路径写进旁边那个终端的当前输入行，并且不回车——你可以在前面补 <code>tail -f</code>、<code>cd</code> 之类再自己执行。含空格或 shell 特殊字符的路径会自动加引号；末尾留一个空格，和往终端里拖文件的习惯一致，方便接着拼第二个路径。这条只在贴着终端的面板里出现：整页文件浏览器没有配套终端，菜单里也就不会有它。"
+            >
+              The sidebar SFTP panel (and the container file panel) gains an 输入路径到终端 (Type path into terminal) item in the right-click menu of any file or folder. It writes the item’s full path into the terminal beside it, at the current input line, without pressing Enter — so you can put <code>tail -f</code> or <code>cd</code> in front and run it yourself. Paths containing spaces or shell metacharacters are quoted automatically, and a trailing space is appended the way dropping a file onto a terminal does, so a second path can follow straight after. The item appears only in a panel docked beside a terminal — the full-page explorer has no terminal to type into, so it isn’t offered there.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔄</div>
+            <h3 data-zh="检查 GitHub 上的最新发布包（2026‑08‑20）">
+              Check GitHub for a new release (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="设置页新增「软件更新」卡片：显示当前运行的版本，点「检查更新」向 GitHub Releases 查询最新发布版本。有更新时列出版本号、发布日期和更新说明，并可一键下载与你的系统 / 架构匹配的安装包（该发布没有匹配产物时退回发布页自行挑选）。启动后几秒还会静默检查一次——有新版本时左侧边栏「设置」上出现一个小红点，进设置页即消——这次自动检查可以在同一张卡片里关掉。下载链接只允许 GitHub 域名；启动时的检查失败保持静默，不会打扰你。"
+            >
+              Settings gains a 软件更新 (Software update) card. It shows the running version, and 检查更新 (Check for updates) asks the GitHub Releases API for the latest published release: if it is newer you get the version, publish date and release notes, plus one-click download of the installer matching your platform and architecture (falling back to the release page when that release has no matching asset). It also checks quietly a few seconds after startup — a red dot appears on the sidebar’s 设置 entry and clears once you open it — and that startup check can be switched off from the same card. Download links are restricted to GitHub hosts, and a failed startup check stays silent rather than nagging.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🗂️</div>
             <h3 data-zh="主机页支持拖动排序（2026‑08‑20）">

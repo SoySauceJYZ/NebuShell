@@ -14,12 +14,15 @@ import { TransfersPanel } from './sftp/TransfersPanel'
 export function SftpPanel({
   sessionId,
   hostId,
-  ownerId
+  ownerId,
+  terminalSessionId
 }: {
   sessionId: string
   hostId: string
   /** Tab/window that owns transfers here (scopes the records panel + close prompt). */
   ownerId: string
+  /** 停靠在终端旁边时传入该终端的会话 id,右键菜单据此提供「输入路径到终端」。 */
+  terminalSessionId?: string
 }): React.ReactElement {
   const hosts = useVaultStore((s) => s.hosts)
   const openTab = useSessionStore((s) => s.openTab)
@@ -44,6 +47,7 @@ export function SftpPanel({
         ownerId={ownerId}
         embedded
         onExpand={onExpand}
+        terminalSessionId={terminalSessionId}
       />
       <TransfersPanel ownerId={ownerId} />
     </div>
@@ -60,7 +64,8 @@ export function ContainerFilesPanel({
   containerId,
   containerName,
   dockerCmd,
-  ownerId
+  ownerId,
+  terminalSessionId
 }: {
   sessionId: string
   hostId: string
@@ -68,6 +73,8 @@ export function ContainerFilesPanel({
   containerName: string
   dockerCmd: string
   ownerId: string
+  /** 停靠在容器终端旁边时传入该终端的会话 id。 */
+  terminalSessionId?: string
 }): React.ReactElement {
   const openTab = useSessionStore((s) => s.openTab)
 
@@ -94,6 +101,7 @@ export function ContainerFilesPanel({
         ownerId={ownerId}
         embedded
         onExpand={onExpand}
+        terminalSessionId={terminalSessionId}
       />
       <TransfersPanel ownerId={ownerId} />
     </div>
