@@ -4,6 +4,7 @@ import type { ToolCall, LlmSettingsPublic, AgentConversationMeta } from '@shared
 import { AGENT_MODES, type AgentMode } from '../../lib/agentPermissions'
 import { useRdAgentStore, type RdAgentBridge } from '../../store/useRdAgentStore'
 import { AgentSettingsModal } from '../AgentSettingsModal'
+import { ModeSelector, ModelSelector } from '../agent/AgentSelectors'
 
 interface Props {
   rdSessionId: string
@@ -82,20 +83,15 @@ export function RemoteAgentPanel({ rdSessionId, peerKey, bridge }: Props): React
   const resultFor = (id: string): string | undefined =>
     session.messages.find((m) => m.role === 'tool' && m.tool_call_id === id)?.content
 
-  const pickModel = (value: string): void => {
-    const [pid, mid] = value.split('::')
-    const provider = settings?.providers.find((p) => p.id === pid)
-    const model = provider?.models.find((m) => m.id === mid)
-    if (provider && model) {
-      window.api.llm.setActive(provider.id, model.id)
-      store.setActiveModel(provider.id, model.name)
-    }
+  const pickModel = (providerId: string, modelId: string, modelName: string): void => {
+    window.api.llm.setActive(providerId, modelId)
+    store.setActiveModel(providerId, modelName)
   }
-  const currentModelValue = `${store.activeProviderId ?? ''}::${
+  // 打勾项按本会话记录的模型判定(store 里存的是模型 name,菜单里比对的是 id)。
+  const activeModelId =
     settings?.providers
       .find((p) => p.id === store.activeProviderId)
-      ?.models.find((m) => m.name === store.activeModel)?.id ?? ''
-  }`
+      ?.models.find((m) => m.name === store.activeModel)?.id ?? null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -151,35 +147,18 @@ export function RemoteAgentPanel({ rdSessionId, peerKey, bridge }: Props): React
         </div>
       </div>
 
-      {/* 模式 + 模型 */}
+      {/* 模式 + 模型:与终端智能体面板共用同一套下拉框 */}
       <div className="flex items-center gap-2 border-b border-[var(--panel-border)] px-2.5 py-1.5">
-        <select
-          value={store.mode}
-          onChange={(e) => store.setMode(e.target.value as AgentMode)}
-          className="rounded border border-[var(--panel-border)] bg-white px-1.5 py-1 text-[11px]"
-          title="权限模式"
-        >
-          {AGENT_MODES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={currentModelValue}
-          onChange={(e) => pickModel(e.target.value)}
-          className="min-w-0 flex-1 rounded border border-[var(--panel-border)] bg-white px-1.5 py-1 text-[11px]"
-          title="模型"
-        >
-          {!settings?.providers.length && <option>未配置模型</option>}
-          {settings?.providers.flatMap((p) =>
-            p.models.map((m) => (
-              <option key={`${p.id}::${m.id}`} value={`${p.id}::${m.id}`}>
-                {p.name} · {m.label || m.name}
-              </option>
-            ))
-          )}
-        </select>
+        <ModeSelector mode={store.mode} onChange={store.setMode} side="bottom" />
+        <ModelSelector
+          settings={settings}
+          activeLabel={store.activeModel || '选择模型'}
+          activeProviderId={store.activeProviderId ?? null}
+          activeModelId={activeModelId}
+          onPick={pickModel}
+          onManage={() => setShowSettings(true)}
+          side="bottom"
+        />
       </div>
 
       {/* 消息列表 */}

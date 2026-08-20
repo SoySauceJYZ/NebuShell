@@ -871,6 +871,72 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–8 月。">Recent updates — July–August 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🗂️</div>
+            <h3 data-zh="主机页支持拖动排序（2026‑08‑20）">
+              Drag hosts to reorder them (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="主机卡片现在可以直接拖着挪位置。拖到另一张卡片上时，按鼠标落在它的左半还是右半，显示一条插入线提示落点；松手即把整份新顺序写回密码库，重启后依然保持。拖动限制在同一分组内（改分组归属仍在编辑主机里做）；搜索框里有内容时禁用拖动——那时看到的只是子集，拖出来的位置没有意义。"
+            >
+              The hosts page now lets you drag a card to move it. Hovering over another card shows an insertion line on its left or right half, and dropping commits the whole new order to the vault, so it survives a restart. Dragging is limited to within a group (group membership is still changed from the host editor), and it's disabled while the search box has text, where the visible list is only a subset and a drop position would mean nothing.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔎</div>
+            <h3 data-zh="容器支持按名称搜索（2026‑08‑20）">
+              Search containers by name (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="容器面板标题下新增搜索框，按容器名实时过滤（大小写不敏感的子串匹配）。只在该主机确实有容器时才出现；它是纯前端过滤，底层 4 秒一次的 <code>docker ps</code> 轮询照常进行，刷新后过滤依然生效。"
+            >
+              The container panel gains a search box under its title, filtering the list by container name as you type (case-insensitive substring). It only appears once a host actually has containers, and it's a pure client-side filter — the 4-second <code>docker ps</code> polling keeps running underneath and the filter stays applied across refreshes.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📄</div>
+            <h3 data-zh="容器日志可在只读编辑器里看（2026‑08‑20）">
+              Container logs in a read-only editor (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="容器卡片保留原有的日志按钮（在当前终端里执行 <code>logs -f</code> 实时跟随），并新增一个按钮改为在编辑器标签页里打开：执行 <code>docker logs --tail 1000</code>，带一个「刷新」按钮重新拉取，内容只读（Ctrl+S 一并禁用、保存按钮隐藏），加载完成自动滚到末尾。适合安静地翻阅和复制日志，而不用占着终端。"
+            >
+              Container cards keep the existing log button (which types <code>logs -f</code> into the current terminal to follow live) and add a second one that opens the logs in an editor tab instead: <code>docker logs --tail 1000</code>, with a 刷新 (Refresh) button to re-run it, the content read-only (Ctrl+S is disabled too, and the save button is hidden), and the view auto-scrolled to the end on load. Handy for reading and copying a log without giving up your terminal.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📁</div>
+            <h3 data-zh="文件面板按会话记住目录（2026‑08‑20）">
+              File panels remember their directory per session (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="关掉侧边栏的 SFTP 面板会断开该会话，再打开原本只会回到 <code>/</code>。现在每条会话都记住它最后成功列出的目录，重开时直接回到那里（目录已删除或不可读时退回 <code>/</code>）。「展开为整页 SFTP」也会把当前目录带过去，整页视图接着你刚才的位置继续浏览，而不是从根目录开始。"
+            >
+              Closing the sidebar SFTP panel disconnects its session, so reopening it used to dump you back at <code>/</code>. Each session now remembers the last directory it successfully listed and returns there (falling back to <code>/</code> if the directory is gone or no longer readable). 展开为整页 SFTP (Expand) carries the current directory over too, so the full-page explorer opens where you were rather than at the root.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🧩</div>
+            <h3 data-zh="「添加面板」可加入已打开的文件面板（2026‑08‑20）">
+              Add an already-open file panel to the explorer (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="文件浏览器的「添加面板」菜单现在会列出你已经打开的文件面板——侧边栏的 SFTP 面板和容器文件面板都算——每条显示所在主机（容器则是「容器名 @ 主机」）和它当前所在目录。选中即在本页加一个指向同一目标、同一目录的面板；本页自己的面板会被排除。需要说明的是它是另开一条连接而非把原面板搬过来：一条 SFTP / <code>docker exec</code> 会话由持有它的面板独占，无法共用。"
+            >
+              The explorer's 添加面板 (Add panel) menu now lists the file panels you already have open — sidebar SFTP panels and container-file panels alike — each showing its host (or container @ host) and its current directory. Picking one adds a panel pointed at the same target and the same directory. Panels belonging to the page you're on are filtered out. Note it opens a second connection rather than moving the live one: an SFTP / <code>docker exec</code> session is owned by the panel holding it and can't be shared.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🪟</div>
+            <h3 data-zh="分栏后 Hosts 标签可以关闭（2026‑08‑20）">
+              The Hosts tab can be closed in a split view (2026‑08‑20)
+            </h3>
+            <p
+              data-zh="Hosts 是首页标签，平时不带关闭按钮；但一旦分栏，它就占着一整个 pane 而没法收回。现在分栏后每个 pane 的标签条也给它关闭按钮；它是最后一个标签时仍然拦下（否则会关成空窗口），而左侧边栏的「主机」或「+ → 打开新主机」随时能把它开回来。"
+            >
+              Hosts is the home tab and normally has no close button, but once the view is split it occupies a whole pane with no way to reclaim it. Each pane's tab strip now offers a close button for it as well; it's still refused when it is the last tab (which would leave an empty window), and the sidebar 主机 entry or + → 打开新主机 brings it right back.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🧱</div>
             <h3 data-zh="面板支持左中右三栏（2026‑08‑11）">
               Left · terminal · right three-column layout (2026‑08‑11)
