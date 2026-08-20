@@ -18,7 +18,7 @@ import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { consumeDetaching } from '../../lib/detachRegistry'
-import { recallDir, rememberDir } from '../../lib/dirMemory'
+import { recallDir, registerPane, rememberDir, unregisterPane } from '../../lib/dirMemory'
 import { remoteParent, remoteJoin } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
@@ -82,6 +82,7 @@ export function RemotePane({
         setEntries(list)
         setPath(targetPath)
         rememberDir(sessionId, targetPath)
+        registerPane(sessionId, { ownerId, hostId, path: targetPath })
         setNavError('')
         return true
       } catch (err) {
@@ -89,13 +90,23 @@ export function RemotePane({
         return false
       }
     },
-    [sessionId]
+    [sessionId, hostId, ownerId]
   )
 
   // Keep the editable address bar in sync with the current directory.
   useEffect(() => {
     setEditPath(path)
   }, [path])
+
+  // 让别的文件浏览器能在「添加面板」里看到这个面板(卸载即消失)。
+  useEffect(() => {
+    registerPane(sessionId, {
+      ownerId,
+      hostId,
+      path: recallDir(sessionId) ?? initialPath ?? '/'
+    })
+    return () => unregisterPane(sessionId)
+  }, [sessionId, hostId, ownerId, initialPath])
 
   const submitPath = async (): Promise<void> => {
     const target = editPath.trim() || '/'

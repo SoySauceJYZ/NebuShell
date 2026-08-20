@@ -2,6 +2,7 @@ import { Fragment, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Plus, X, HardDrive, Server, Container } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
+import { listOpenPanes, type OpenPane } from '../../lib/dirMemory'
 import { RemotePane } from './RemotePane'
 import { LocalPane } from './LocalPane'
 import { ContainerPane } from './ContainerPane'
@@ -20,6 +21,7 @@ type PaneState =
       containerId: string
       containerName: string
       dockerCmd: string
+      initialPath?: string
     })
 
 function pid(): string {
@@ -57,6 +59,14 @@ export function ExplorerTab({
     return init
   })
   const containerRef = useRef<HTMLDivElement>(null)
+  // 打开菜单时才取快照:登记表是普通 Map,不会触发重渲染。
+  // 本 tab 自己的面板排掉 —— 它们就在旁边,没必要再"添加"一次。
+  // 打开菜单时才取快照:登记表是普通 Map,不会触发重渲染。
+  // 排掉本页自己的面板(ownerId 就是所属 tab)—— 它们已经在旁边了。
+  const [openPanes, setOpenPanes] = useState<OpenPane[]>([])
+  const snapshotOpenPanes = (open: boolean): void => {
+    if (open) setOpenPanes(listOpenPanes().filter((op) => op.ownerId !== tabId))
+  }
 
   const addPane = (p: PaneState): void => setPanes((ps) => [...ps, p])
   const removePane = (paneId: string): void =>
@@ -98,7 +108,7 @@ export function ExplorerTab({
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
           文件浏览器
         </span>
-        <DropdownMenu.Root>
+        <DropdownMenu.Root onOpenChange={snapshotOpenPanes}>
           <DropdownMenu.Trigger asChild>
             <button className="btn-secondary ml-1 px-2.5 py-1">
               <Plus size={14} />
@@ -118,6 +128,59 @@ export function ExplorerTab({
                 <HardDrive size={15} className="text-[var(--text-muted)]" />
                 本地文件
               </DropdownMenu.Item>
+              {openPanes.length > 0 && (
+                <>
+                  <DropdownMenu.Separator className="my-1 h-px bg-[var(--panel-border)]" />
+                  <DropdownMenu.Label className="px-2.5 py-1 text-[11px] text-[var(--text-muted)]">
+                    已打开的面板
+                  </DropdownMenu.Label>
+                  {openPanes.map((op) => {
+                    const hostLabel = hosts.find((h) => h.id === op.hostId)?.label ?? '远程'
+                    return (
+                      <DropdownMenu.Item
+                        key={op.sessionId}
+                        onSelect={() =>
+                          addPane(
+                            op.container
+                              ? {
+                                  paneId: pid(),
+                                  kind: 'container',
+                                  weight: 1,
+                                  hostId: op.hostId,
+                                  ...op.container,
+                                  initialPath: op.path
+                                }
+                              : {
+                                  paneId: pid(),
+                                  kind: 'remote',
+                                  weight: 1,
+                                  hostId: op.hostId,
+                                  initialPath: op.path
+                                }
+                          )
+                        }
+                        className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
+                      >
+                        {op.container ? (
+                          <Container size={15} className="shrink-0 text-[var(--text-muted)]" />
+                        ) : (
+                          <Server size={15} className="shrink-0 text-[var(--text-muted)]" />
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate">
+                            {op.container
+                              ? `${op.container.containerName} @ ${hostLabel}`
+                              : `${hostLabel} (SFTP)`}
+                          </span>
+                          <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                            {op.path}
+                          </span>
+                        </span>
+                      </DropdownMenu.Item>
+                    )
+                  })}
+                </>
+              )}
               {hosts.length > 0 && (
                 <DropdownMenu.Separator className="my-1 h-px bg-[var(--panel-border)]" />
               )}
@@ -185,6 +248,7 @@ export function ExplorerTab({
                       containerName={pane.containerName}
                       dockerCmd={pane.dockerCmd}
                       ownerId={tabId}
+                      initialPath={pane.initialPath}
                     />
                   ) : (
                     <RemotePane

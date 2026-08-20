@@ -17,6 +17,7 @@ import { useSessionStore } from '../../store/useSessionStore'
 import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
+import { registerPane, unregisterPane } from '../../lib/dirMemory'
 import { remoteParent, remoteJoin } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
@@ -43,6 +44,7 @@ export function ContainerPane({
   containerName,
   dockerCmd,
   ownerId,
+  initialPath,
   embedded,
   onExpand
 }: {
@@ -52,6 +54,8 @@ export function ContainerPane({
   containerName: string
   dockerCmd: string
   ownerId: string
+  /** 首次打开时定位到的目录(从别处「添加已打开的面板」时带过来)。 */
+  initialPath?: string
   embedded?: boolean
   onExpand?: () => void
 }): React.ReactElement {
@@ -59,8 +63,8 @@ export function ContainerPane({
   const credentials = useVaultStore((s) => s.credentials)
   const openTab = useSessionStore((s) => s.openTab)
   const track = useTransfersStore((s) => s.track)
-  const [path, setPath] = useState('/')
-  const [editPath, setEditPath] = useState('/')
+  const [path, setPath] = useState(initialPath ?? '/')
+  const [editPath, setEditPath] = useState(path)
   const [entries, setEntries] = useState<SftpListEntry[]>([])
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
@@ -80,6 +84,12 @@ export function ContainerPane({
         })
         setEntries(list)
         setPath(targetPath)
+        registerPane(sessionId, {
+          ownerId,
+          hostId,
+          path: targetPath,
+          container: { containerId, containerName, dockerCmd }
+        })
         setNavError('')
         return true
       } catch (err) {
@@ -87,12 +97,23 @@ export function ContainerPane({
         return false
       }
     },
-    [sessionId]
+    [sessionId, ownerId, hostId, containerId, containerName, dockerCmd]
   )
 
   useEffect(() => {
     setEditPath(path)
   }, [path])
+
+  // 让别的文件浏览器能在「添加面板」里看到这个容器面板(卸载即消失)。
+  useEffect(() => {
+    registerPane(sessionId, {
+      ownerId,
+      hostId,
+      path: initialPath ?? '/',
+      container: { containerId, containerName, dockerCmd }
+    })
+    return () => unregisterPane(sessionId)
+  }, [sessionId, ownerId, hostId, containerId, containerName, dockerCmd, initialPath])
 
   const submitPath = async (): Promise<void> => {
     const target = editPath.trim() || '/'
@@ -106,9 +127,11 @@ export function ContainerPane({
     // 会话按 pane 生成、撕出窗口后重建,因此总是新建连接(无 adopted 复用分支)。
     window.api.containerFs
       .connect({ ...resolveConnectOptions(sessionId, host, credentials), containerId, dockerCmd })
-      .then(() => {
+      .then(async () => {
+        // 目录可能已不存在(权限/被删),列不出来就退回根目录。
         setStatus('ready')
-        return load('/')
+        if (initialPath && initialPath !== '/' && (await load(initialPath))) return
+        await load('/')
       })
       .catch((err) => {
         setStatus('error')

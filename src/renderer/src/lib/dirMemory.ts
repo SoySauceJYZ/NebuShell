@@ -13,3 +13,32 @@ export function rememberDir(sessionId: string, path: string): void {
 export function recallDir(sessionId: string): string | undefined {
   return lastDir.get(sessionId)
 }
+
+/** 此刻挂载着的远程面板 —— SFTP 与容器文件都算,侧边栏那份 + 各个文件浏览器里的。 */
+export interface OpenPaneInfo {
+  /** 面板所属的 tab(侧边栏面板就是那个终端 tab),用于排掉「自己这一页」。 */
+  ownerId: string
+  hostId: string
+  /** 该面板当前所在目录。 */
+  path: string
+  /** 容器文件面板才有;缺省即普通 SFTP 面板。 */
+  container?: { containerId: string; containerName: string; dockerCmd: string }
+}
+export interface OpenPane extends OpenPaneInfo {
+  sessionId: string
+}
+
+const openPanes = new Map<string, OpenPaneInfo>()
+
+export function registerPane(sessionId: string, info: OpenPaneInfo): void {
+  openPanes.set(sessionId, info)
+}
+
+export function unregisterPane(sessionId: string): void {
+  openPanes.delete(sessionId)
+}
+
+/** 快照,按登记顺序。调用方自行过滤(比如排掉自己那一页的面板)。 */
+export function listOpenPanes(): OpenPane[] {
+  return [...openPanes].map(([sessionId, info]) => ({ sessionId, ...info }))
+}
