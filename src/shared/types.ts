@@ -269,6 +269,8 @@ export interface TransferPlan {
 export interface AppSettings {
   /** Concurrent in-flight SFTP packets per file for fastGet/fastPut transfers. */
   transferConcurrency: number
+  /** Ask GitHub for a newer release shortly after startup. */
+  autoCheckUpdate: boolean
 }
 
 export const DEFAULT_TRANSFER_CONCURRENCY = 64
@@ -276,7 +278,44 @@ export const MIN_TRANSFER_CONCURRENCY = 1
 export const MAX_TRANSFER_CONCURRENCY = 256
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  transferConcurrency: DEFAULT_TRANSFER_CONCURRENCY
+  transferConcurrency: DEFAULT_TRANSFER_CONCURRENCY,
+  autoCheckUpdate: true
+}
+
+// ---- 更新检查 (Update check) -------------------------------------------------
+
+/** 发布包所在的 GitHub 仓库(owner/repo)。 */
+export const UPDATE_GITHUB_REPO = 'SoySauceJYZ/NebuShell'
+
+/** Release 里与当前平台匹配的安装包。 */
+export interface UpdateAsset {
+  name: string
+  /** 浏览器下载直链。 */
+  url: string
+  /** 字节数。 */
+  size: number
+}
+
+/** 一次更新检查的结果。 */
+export interface UpdateInfo {
+  /** 当前运行的版本。 */
+  currentVersion: string
+  /** GitHub 上最新发布的版本号(已去掉 v 前缀)。 */
+  latestVersion: string
+  /** 最新版本是否比当前版本新。 */
+  hasUpdate: boolean
+  /** Release 页面地址;没有匹配安装包时回退到这里。 */
+  releaseUrl: string
+  /** Release 标题。 */
+  releaseName: string
+  /** Release 说明(Markdown 原文)。 */
+  notes: string
+  /** 发布时间(ISO 字符串)。 */
+  publishedAt: string
+  /** 与当前平台/架构匹配的安装包;无匹配项时为 null。 */
+  asset: UpdateAsset | null
+  /** 本次检查完成的时间戳。 */
+  checkedAt: number
 }
 
 // ---- 远程桌面 (Remote Desktop) ----------------------------------------------
@@ -310,8 +349,7 @@ export interface RdIceCandidate {
 
 /** WebRTC 信令消息(SDP / ICE),经 main 的 ws 通道在两端间转发。 */
 export type RdSignal =
-  | { kind: 'offer' | 'answer'; sdp: string }
-  | { kind: 'ice'; candidate: RdIceCandidate }
+  { kind: 'offer' | 'answer'; sdp: string } | { kind: 'ice'; candidate: RdIceCandidate }
 
 /** 控制端捕获、转发给被控端注入的输入事件。坐标为相对画面的归一化值 0..1。 */
 export type RdInputEvent =

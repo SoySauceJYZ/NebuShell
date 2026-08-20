@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { SplitLayout } from './components/SplitLayout'
 import { useSessionStore, type Tab } from './store/useSessionStore'
+import { useUpdateStore } from './store/useUpdateStore'
 
 function Shell(): React.ReactElement {
   const adoptTab = useSessionStore((s) => s.adoptTab)
@@ -31,6 +32,13 @@ function Shell(): React.ReactElement {
     })
     return window.api.window.onAdoptTab((payload) => adoptTab(payload.tab as unknown as Tab))
   }, [adoptTab])
+
+  // 更新检查:主进程启动后会自动查一次 GitHub,发现新版本就广播过来;
+  // 后开的窗口用缓存补上结果,免得每个窗口都去请求一遍。
+  useEffect(() => {
+    void useUpdateStore.getState().hydrate()
+    return window.api.update.onAvailable((info) => useUpdateStore.getState().receive(info))
+  }, [])
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">

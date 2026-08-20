@@ -38,7 +38,11 @@ export class SettingsManager {
     return {
       transferConcurrency: clampConcurrency(
         raw.transferConcurrency ?? DEFAULT_APP_SETTINGS.transferConcurrency
-      )
+      ),
+      autoCheckUpdate:
+        typeof raw.autoCheckUpdate === 'boolean'
+          ? raw.autoCheckUpdate
+          : DEFAULT_APP_SETTINGS.autoCheckUpdate
     }
   }
 

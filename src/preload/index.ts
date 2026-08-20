@@ -23,6 +23,7 @@ import type {
   CommandHistoryEntry,
   QuickCommand,
   AppSettings,
+  UpdateInfo,
   AdoptPayload,
   RdStartResult,
   RdAgentStatus,
@@ -282,6 +283,21 @@ const api = {
     set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:set', patch)
   },
+  update: {
+    /** 主动向 GitHub 查询最新发布版本(失败时 reject)。 */
+    check: (): Promise<UpdateInfo> => ipcRenderer.invoke('update:check'),
+    /** 本次运行内最近一次成功的检查结果,没查过则为 null。 */
+    getCached: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:getCached'),
+    currentVersion: (): Promise<string> => ipcRenderer.invoke('update:currentVersion'),
+    /** 用系统浏览器打开安装包/Release 链接(只接受 GitHub 域名)。 */
+    openDownload: (url: string): Promise<void> => ipcRenderer.invoke('update:openDownload', url),
+    /** 启动时自动检查发现新版本。 */
+    onAvailable: (cb: (info: UpdateInfo) => void): (() => void) => {
+      const listener = (_e: unknown, info: UpdateInfo): void => cb(info)
+      ipcRenderer.on('update:available', listener)
+      return () => ipcRenderer.removeListener('update:available', listener)
+    }
+  },
   history: {
     save: (fileKey: string, content: string, fileName?: string): Promise<HistoryVersion> =>
       ipcRenderer.invoke('history:save', fileKey, content, fileName),
@@ -320,8 +336,7 @@ const api = {
   },
   quickCommands: {
     list: (): Promise<QuickCommand[]> => ipcRenderer.invoke('quickCommands:list'),
-    save: (items: QuickCommand[]): Promise<void> =>
-      ipcRenderer.invoke('quickCommands:save', items)
+    save: (items: QuickCommand[]): Promise<void> => ipcRenderer.invoke('quickCommands:save', items)
   },
   llm: {
     getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),
@@ -377,8 +392,7 @@ const api = {
     // 远程命令行(被控端本机终端)
     shellStart: (id: string, opts: RdShellOpts): Promise<void> =>
       ipcRenderer.invoke('rd:shellStart', id, opts),
-    shellInput: (id: string, data: string): void =>
-      ipcRenderer.send('rd:shellInput', id, data),
+    shellInput: (id: string, data: string): void => ipcRenderer.send('rd:shellInput', id, data),
     shellResize: (id: string, cols: number, rows: number): Promise<void> =>
       ipcRenderer.invoke('rd:shellResize', id, cols, rows),
     shellKill: (id: string): Promise<void> => ipcRenderer.invoke('rd:shellKill', id),

@@ -1,5 +1,6 @@
 import { Server, KeyRound, FileClock, Settings, Zap, Monitor } from 'lucide-react'
 import { useSessionStore, type TabKind } from '../store/useSessionStore'
+import { useUpdateStore } from '../store/useUpdateStore'
 
 const NAV_ITEMS: {
   id: Extract<
@@ -19,6 +20,8 @@ const NAV_ITEMS: {
 
 export function Sidebar(): React.ReactElement {
   const { activeTabId, openTab } = useSessionStore()
+  // 设置页里放着更新检查,有未看过的新版本就在图标上点个红点。
+  const updateBadge = useUpdateStore((s) => Boolean(s.info?.hasUpdate) && !s.seen)
 
   return (
     <div className="flex w-16 flex-col items-center gap-1.5 border-r border-[var(--nav-border)] bg-[var(--nav-bg)] py-3">
@@ -36,7 +39,7 @@ export function Sidebar(): React.ReactElement {
               })
             }
             title={item.label}
-            className={`flex w-12 flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] transition ${
+            className={`relative flex w-12 flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] transition ${
               active
                 ? 'bg-[var(--nav-active-bg)] text-[var(--accent)]'
                 : 'text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)] hover:text-[var(--text-dark)]'
@@ -44,6 +47,12 @@ export function Sidebar(): React.ReactElement {
           >
             <Icon size={19} strokeWidth={1.75} />
             {item.label}
+            {item.id === 'settings' && updateBadge && (
+              <span
+                className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-[var(--danger)]"
+                title="有新版本可用"
+              />
+            )}
           </button>
         )
       })}

@@ -15,6 +15,7 @@ import { registerCommandHistoryIpc } from './ipc/commandHistoryIpc'
 import { registerQuickCommandsIpc } from './ipc/quickCommandsIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 import { registerRemoteDesktopIpc } from './ipc/remoteDesktopIpc'
+import { registerUpdateIpc } from './ipc/updateIpc'
 
 // Window creation lives in ./windows so both the initial window and torn-off tab
 // windows go through the same path (and get registered for broadcast/hit-testing).
@@ -47,6 +48,7 @@ app.whenReady().then(() => {
   registerQuickCommandsIpc()
   registerSettingsIpc()
   registerRemoteDesktopIpc()
+  registerUpdateIpc()
 
   createAppWindow()
 

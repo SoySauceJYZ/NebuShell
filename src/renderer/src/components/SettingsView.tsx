@@ -1,19 +1,39 @@
 import { useEffect, useState } from 'react'
-import { Gauge, RotateCcw, Check, ShieldCheck } from 'lucide-react'
+import {
+  Gauge,
+  RotateCcw,
+  Check,
+  ShieldCheck,
+  Download,
+  RefreshCw,
+  ExternalLink,
+  Sparkles
+} from 'lucide-react'
 import {
   DEFAULT_TRANSFER_CONCURRENCY,
   MIN_TRANSFER_CONCURRENCY,
-  MAX_TRANSFER_CONCURRENCY
+  MAX_TRANSFER_CONCURRENCY,
+  UPDATE_GITHUB_REPO
 } from '@shared/types'
 import { useVaultStore } from '../store/useVaultStore'
+import { useUpdateStore } from '../store/useUpdateStore'
+import { formatBytes } from '../lib/agentTransfer'
 
 function clamp(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_TRANSFER_CONCURRENCY
   return Math.min(MAX_TRANSFER_CONCURRENCY, Math.max(MIN_TRANSFER_CONCURRENCY, Math.round(n)))
 }
 
+/** ISO 时间 -> 「2026-08-20」。空串照原样返回。 */
+function formatDate(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
+}
+
 export function SettingsView(): React.ReactElement {
   const [concurrency, setConcurrency] = useState(DEFAULT_TRANSFER_CONCURRENCY)
+  const [autoCheckUpdate, setAutoCheckUpdate] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -21,13 +41,34 @@ export function SettingsView(): React.ReactElement {
   const [trustSupported, setTrustSupported] = useState(true)
   const [trustError, setTrustError] = useState('')
 
+  const { info, checking, error: updateError, check, markSeen } = useUpdateStore()
+  const [currentVersion, setCurrentVersion] = useState('')
+
   useEffect(() => {
     window.api.settings.get().then((s) => {
       setConcurrency(s.transferConcurrency)
+      setAutoCheckUpdate(s.autoCheckUpdate)
       setLoaded(true)
     })
     window.api.vault.isTrustSupported().then(setTrustSupported)
-  }, [])
+    window.api.update.currentVersion().then(setCurrentVersion)
+    // 进到设置页就算看过更新提示了,侧边栏的红点可以消掉。
+    markSeen()
+  }, [markSeen])
+
+  const toggleAutoCheck = (next: boolean): void => {
+    setAutoCheckUpdate(next)
+    void window.api.settings.set({ autoCheckUpdate: next }).then(() => {
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 1500)
+    })
+  }
+
+  // 有匹配当前平台的安装包就直接给下载直链,否则打开 Release 页面自己挑。
+  const openDownload = (): void => {
+    if (!info) return
+    void window.api.update.openDownload(info.asset?.url ?? info.releaseUrl)
+  }
 
   const toggleTrust = async (next: boolean): Promise<void> => {
     setTrustError('')
@@ -58,6 +99,102 @@ export function SettingsView(): React.ReactElement {
             已保存
           </span>
         )}
+      </div>
+
+      <div className="card mb-4 max-w-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Download size={16} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-dark)]">软件更新</div>
+                <div className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  当前版本 v{currentVersion || '—'}
+                </div>
+              </div>
+              <button onClick={() => void check()} disabled={checking} className="btn-secondary">
+                <RefreshCw size={14} className={checking ? 'animate-spin' : undefined} />
+                {checking ? '检查中…' : '检查更新'}
+              </button>
+            </div>
+
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
+              从 GitHub 仓库 {UPDATE_GITHUB_REPO} 的 Releases 里读取最新发布包。
+            </p>
+
+            {updateError && <div className="mt-3 text-xs text-[var(--danger)]">{updateError}</div>}
+
+            {info && !updateError && !info.hasUpdate && (
+              <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-500">
+                <Check size={13} />
+                已是最新版本(GitHub 最新发布 v{info.latestVersion})
+              </div>
+            )}
+
+            {info?.hasUpdate && !updateError && (
+              <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--content-bg)] p-3">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--text-dark)]">
+                  <Sparkles size={14} className="text-[var(--accent)]" />
+                  发现新版本 v{info.latestVersion}
+                  {info.publishedAt && (
+                    <span className="text-[11px] font-normal text-[var(--text-muted)]">
+                      · {formatDate(info.publishedAt)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Release 标题常常就是版本号本身,重复了就不显示。 */}
+                {info.releaseName && info.releaseName.replace(/^v/i, '') !== info.latestVersion && (
+                  <div className="mt-1 text-xs text-[var(--text-dark)]">{info.releaseName}</div>
+                )}
+
+                {info.notes && (
+                  <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--text-muted)]">
+                    {info.notes}
+                  </pre>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button onClick={openDownload} className="btn-primary">
+                    <Download size={14} />
+                    {info.asset ? '下载安装包' : '打开发布页'}
+                  </button>
+                  <button
+                    onClick={() => void window.api.update.openDownload(info.releaseUrl)}
+                    className="btn-secondary"
+                  >
+                    <ExternalLink size={14} />
+                    发布说明
+                  </button>
+                  {info.asset && (
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      {info.asset.name} · {formatBytes(info.asset.size)}
+                    </span>
+                  )}
+                </div>
+
+                {!info.asset && (
+                  <div className="mt-2 text-[11px] text-[var(--text-muted)]">
+                    该发布里没有适配当前系统的安装包,请到发布页手动选择。
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label className="mt-4 flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={autoCheckUpdate}
+                disabled={!loaded}
+                onChange={(e) => toggleAutoCheck(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--accent)]"
+              />
+              <span className="text-sm text-[var(--text-dark)]">启动时自动检查更新</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div className="card max-w-xl p-4">
