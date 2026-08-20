@@ -18,6 +18,7 @@ import { useTransfersStore } from '../../store/useTransfersStore'
 import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { consumeDetaching } from '../../lib/detachRegistry'
+import { recallDir, rememberDir } from '../../lib/dirMemory'
 import { remoteParent, remoteJoin } from '../../lib/pathUtils'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
@@ -52,8 +53,9 @@ export function RemotePane({
   const credentials = useVaultStore((s) => s.credentials)
   const openTab = useSessionStore((s) => s.openTab)
   const track = useTransfersStore((s) => s.track)
-  const [path, setPath] = useState('/')
-  const [editPath, setEditPath] = useState('/')
+  // 面板重开时直接从上次的目录起步,地址栏不会先闪一下 '/'。
+  const [path, setPath] = useState(() => recallDir(sessionId) ?? '/')
+  const [editPath, setEditPath] = useState(path)
   const [entries, setEntries] = useState<SftpListEntry[]>([])
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
@@ -76,6 +78,7 @@ export function RemotePane({
         })
         setEntries(list)
         setPath(targetPath)
+        rememberDir(sessionId, targetPath)
         setNavError('')
         return true
       } catch (err) {
@@ -109,9 +112,12 @@ export function RemotePane({
       ? Promise.resolve()
       : window.api.sftp.connect(resolveConnectOptions(sessionId, host, credentials))
     ready
-      .then(() => {
+      .then(async () => {
         setStatus('ready')
-        return load('/')
+        // 上次的目录可能已被删除/权限变化,列不出来就退回根目录。
+        const remembered = recallDir(sessionId)
+        if (remembered && remembered !== '/' && (await load(remembered))) return
+        await load('/')
       })
       .catch((err) => {
         setStatus('error')
