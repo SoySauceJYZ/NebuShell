@@ -28,6 +28,9 @@ const REPLAY_CAP = 200_000
 // latency imperceptible while collapsing bursts into a single IPC + xterm write.
 const OUTPUT_FLUSH_MS = 16
 
+// 探测终端当前目录的上限:拿不到就退回默认目录,别让 SFTP 面板干等。
+const CWD_PROBE_TIMEOUT_MS = 4000
+
 /**
  * 启发式判断输出末尾是否停在一个「等待输入」的提示上(apt 的 [Y/n]、sudo 的 password:、
  * yes/no、以 : ? > 结尾且无换行等)。仅用于给模型一个「疑似等待输入」的提示,不作硬判定。
@@ -417,6 +420,63 @@ export class SshManager {
       state: 'stuck',
       note: reasons.filter(Boolean).join(';')
     }
+  }
+
+  /**
+   * 探测该终端会话里「用户此刻所在的目录」,用于 SFTP 面板首次打开时对齐命令行位置。
+   *
+   * 不往用户的 shell 里写任何东西(不打扰、不留痕),而是在同一条 SSH 连接上另开一个
+   * exec 通道,从 /proc 里反查:exec 进程与交互 shell 是同一个 sshd 会话进程的兄弟,
+   * 于是「父进程的其它带 pty 的子进程」就是这个终端的 shell,它的 /proc/<pid>/cwd
+   * 即当前目录。再顺着同一 pty 向下走几层(su / 嵌套 shell / 前台程序),取能读到的
+   * 最深一层,这样 `sudo -i` 之后 cd 过的目录也能对上。
+   *
+   * 非 Linux(无 /proc)、权限不足或任何异常都返回 null,由调用方退回默认目录。
+   */
+  async shellCwd(sessionId: string): Promise<string | null> {
+    const script = [
+      'P=$(sed -n "s/^PPid:[[:space:]]*//p" /proc/$$/status 2>/dev/null)',
+      '[ -n "$P" ] || exit 0',
+      'kids() { for f in $(grep -ls "^PPid:[[:space:]]*$1$" /proc/[0-9]*/status 2>/dev/null); do',
+      '  f=${f%/status}; echo ${f#/proc/}; done; }',
+      'ttyof() { readlink /proc/$1/fd/0 2>/dev/null; }',
+      'cur=; dir=',
+      'for k in $(kids "$P"); do',
+      '  [ "$k" = "$$" ] && continue',
+      '  case "$(ttyof $k)" in /dev/pts/*|/dev/tty*) ;; *) continue ;; esac',
+      '  d=$(readlink /proc/$k/cwd 2>/dev/null)',
+      '  [ -n "$d" ] && { cur=$k; dir=$d; break; }',
+      'done',
+      '[ -n "$cur" ] || exit 0',
+      'n=0',
+      'while [ $n -lt 8 ]; do',
+      '  n=$((n+1)); next=',
+      '  for k in $(kids "$cur"); do',
+      '    case "$(ttyof $k)" in /dev/pts/*|/dev/tty*) ;; *) continue ;; esac',
+      '    d=$(readlink /proc/$k/cwd 2>/dev/null)',
+      '    [ -n "$d" ] && { next=$k; dir=$d; break; }',
+      '  done',
+      '  [ -n "$next" ] || break',
+      '  cur=$next',
+      'done',
+      'echo "$dir"'
+    ].join('\n')
+
+    let out: string
+    try {
+      out = await Promise.race([
+        this.exec(sessionId, script),
+        new Promise<string>((_r, reject) =>
+          setTimeout(() => reject(new Error('cwd probe timeout')), CWD_PROBE_TIMEOUT_MS)
+        )
+      ])
+    } catch {
+      return null
+    }
+    // 只认干净的绝对路径:探测失败时远端可能回一段错误提示,别把它当目录用。
+    const line = out.split('\n')[0].trim()
+    if (!line.startsWith('/') || /[\r\n]/.test(line)) return null
+    return line
   }
 
   disconnect(sessionId: string): void {

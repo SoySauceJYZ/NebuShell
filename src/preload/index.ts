@@ -122,6 +122,8 @@ const api = {
       ipcRenderer.invoke('ssh:exec', sessionId, command),
     runInShell: (sessionId: string, command: string): Promise<RunShellResult> =>
       ipcRenderer.invoke('ssh:runInShell', sessionId, command),
+    // 终端命令行此刻所在的目录;探测不到(非 Linux / 权限不足)时为 null。
+    cwd: (sessionId: string): Promise<string | null> => ipcRenderer.invoke('ssh:cwd', sessionId),
     disconnect: (sessionId: string) => ipcRenderer.invoke('ssh:disconnect', sessionId),
     replay: (sessionId: string): Promise<string> => ipcRenderer.invoke('ssh:replay', sessionId),
     onData: (sessionId: string, cb: (data: string) => void): (() => void) => {

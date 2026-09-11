@@ -11,7 +11,8 @@ import {
   Pencil,
   Trash2,
   PanelLeft,
-  SquareTerminal
+  SquareTerminal,
+  Terminal
 } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { useSessionStore } from '../../store/useSessionStore'
@@ -132,11 +133,18 @@ export function RemotePane({
     const ready = adopted
       ? Promise.resolve()
       : window.api.sftp.connect(resolveConnectOptions(sessionId, host, credentials))
+    // 首次打开(本会话还没有浏览记录)且贴在终端旁边时,起始目录跟随终端命令行此刻
+    // 所在的目录,而不是从 '/' 开始。探测与 SFTP 连接并行,不额外拖慢面板打开;探不到
+    // (非 Linux、权限不足、超时)就返回 null,落回原来的默认目录。
+    const probeCwd =
+      recallDir(sessionId) || initialPath || !terminalSessionId
+        ? Promise.resolve(null)
+        : window.api.ssh.cwd(terminalSessionId).catch(() => null)
     ready
       .then(async () => {
         setStatus('ready')
         // 目录可能已被删除/权限变化,列不出来就退回根目录。
-        const start = recallDir(sessionId) ?? initialPath
+        const start = recallDir(sessionId) ?? initialPath ?? (await probeCwd)
         if (start && start !== '/' && (await load(start))) return
         await load('/')
       })
@@ -267,6 +275,12 @@ export function RemotePane({
     window.api.ssh.write(terminalSessionId, shellQuotePath(entry.path) + ' ')
   }
 
+  // 让旁边的终端 cd 到某个目录(选中的是文件就去它所在的目录),直接回车执行。
+  const openInTerminal = (dir: string): void => {
+    if (!terminalSessionId) return
+    window.api.ssh.write(terminalSessionId, `cd ${shellQuotePath(dir)}\n`)
+  }
+
   const menuActions = (entry: FileEntry): MenuAction[] => {
     const list: MenuAction[] = []
     if (entry.type !== 'directory') {
@@ -274,6 +288,11 @@ export function RemotePane({
     }
     list.push({ label: '下载到…', icon: Download, onSelect: downloadTo })
     if (terminalSessionId) {
+      list.push({
+        label: '在终端中打开',
+        icon: Terminal,
+        onSelect: (e) => openInTerminal(e.type === 'directory' ? e.path : remoteParent(e.path))
+      })
       list.push({ label: '输入路径到终端', icon: SquareTerminal, onSelect: insertIntoTerminal })
     }
     list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
@@ -343,6 +362,16 @@ export function RemotePane({
           >
             <RefreshCw size={14} />
           </button>
+          {/* 只有贴着终端时才有意义:让那个终端 cd 到当前浏览的目录。 */}
+          {terminalSessionId && (
+            <button
+              onClick={() => openInTerminal(path)}
+              className="rounded-lg px-2 py-1.5 text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+              title="在终端中打开当前目录"
+            >
+              <Terminal size={14} />
+            </button>
+          )}
           <div className="flex-1" />
           <button
             onClick={handleCreateFile}

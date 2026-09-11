@@ -880,8 +880,30 @@
     <section id="whats-new">
       <div class="wrap">
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
-        <p class="sec-sub" data-zh="近期更新——2026 年 7–8 月。">Recent updates — July–August 2026.</p>
+        <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🖥️</div>
+            <h3 data-zh="在终端中打开当前目录（2026‑09‑11）">
+              Open the current directory in the terminal (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="贴着终端的 SFTP 面板，工具栏（「刷新」右边）新增一个终端图标：点一下让旁边那个终端 <code>cd</code> 到你正在浏览的目录，并回车执行。文件/文件夹的右键菜单里也多了「在终端中打开」——选文件夹就进到该文件夹，选文件则进到它所在的目录。含空格或 shell 特殊字符的路径照样自动加引号。和已有的「输入路径到终端」相比，区别是这条直接执行，而不是把命令行留给你补全。同样只在贴着终端的面板里出现。"
+            >
+              The SFTP panel docked beside a terminal gains a terminal button in its toolbar (right of 刷新 / Refresh): one click makes that terminal <code>cd</code> into the directory you are browsing, Enter included. The right-click menu of any file or folder gains 在终端中打开 (Open in terminal) as well — a folder is entered directly, a file takes you to the directory holding it. Paths with spaces or shell metacharacters are quoted automatically. Next to the existing 输入路径到终端 (Type path into terminal), the difference is that this one runs, rather than leaving the line for you to complete. Like that item, it only shows up in a panel docked beside a terminal.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📂</div>
+            <h3 data-zh="终端的 SFTP 面板从命令行所在目录打开（2026‑09‑11）">
+              A terminal’s SFTP panel opens where the command line is (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="终端旁边的 SFTP 面板一律从 <code>/</code> 起步，你在命令行里 <code>cd</code> 到哪儿，都得在文件树里再点回去一遍。现在这条会话第一次打开该面板时，起始目录就是终端命令行此刻所在的目录。探测不往你的 shell 里写任何东西——没有回显，scrollback 里也不留痕迹：在同一条 SSH 连接上另开一个 exec 通道，从 <code>/proc</code> 反查。exec 进程与交互 shell 是同一个 sshd 会话进程的兄弟，于是那个占着 pty 的兄弟就是这个终端的 shell，它的 <code>/proc/&lt;pid&gt;/cwd</code> 即当前目录；随后还会沿同一 pty 往下走几层，所以在 <code>su</code> 或嵌套 shell 里 <code>cd</code> 过的目录同样能找到。探测与 SFTP 连接并行发起（不额外多等），判断不出来时一律退回原来的默认目录——没有 <code>/proc</code>（非 Linux）、权限不足、或 4 秒超时。之后再开该面板，仍然回到你上次浏览的目录。"
+            >
+              The SFTP panel beside a terminal always started at <code>/</code>, so wherever you had <code>cd</code>’d in the shell, you had to click your way back down the tree. The first time a session opens that panel, it now starts in the directory the terminal’s command line is in. Nothing is typed into your shell — no echo, no trace in the scrollback: a second exec channel on the same SSH connection looks the shell up through <code>/proc</code>. The exec process and the interactive shell are siblings under the same sshd session process, so the sibling holding a pty is that terminal’s shell, and its <code>/proc/&lt;pid&gt;/cwd</code> is the directory; the lookup then walks a few levels further down the same pty, so a directory you <code>cd</code>’d to inside <code>su</code> or a nested shell is found too. The probe runs in parallel with the SFTP connection (no extra wait) and falls back to the old default whenever it can’t tell — no <code>/proc</code> (non-Linux), no permission, or a 4s timeout. Reopening the panel later still returns to the last directory you browsed.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🖱️</div>
             <h3 data-zh="右键把文件路径输入到终端（2026‑08‑20）">
