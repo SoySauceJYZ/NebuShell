@@ -883,6 +883,83 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🐳</div>
+            <h3 data-zh="容器面板新增镜像 / 卷 / 网络 / 清理（2026‑09‑11）">
+              Images, volumes, networks and cleanup (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="面板顶部多了一排分区：容器 / 镜像 / 卷 / 网络 / 清理。镜像列出仓库、标签、大小与创建时间（悬空镜像单独标记）并可删除；卷显示驱动与宿主机挂载点，可一键在 SFTP 里打开那个目录，也可删除；网络显示驱动与作用域，docker 内置的 bridge/host/none 不允许删除。「清理」把 <code>docker system df</code> 摆在眼前——每类占了多少、其中多少可回收——旁边是一键 prune：已停止的容器、悬空镜像、所有未使用镜像、未使用的卷、未使用的网络、构建缓存，每一项都先弹确认并写清会删掉什么，完成后回显真正回收了多少空间。这几个分区不参与轮询：进入时拉一次，之后手动刷新或操作后再拉。"
+            >
+              The container panel grows a row of sections: 容器 / 镜像 / 卷 / 网络 / 清理. Images list repository, tag, size and age (dangling ones are marked) and can be deleted; volumes show their driver and host mount point, open that directory in the SFTP browser in one click, or get deleted; networks show driver and scope, with docker’s built-in bridge/host/none protected from deletion. Cleanup puts <code>docker system df</code> in front of you — what each category takes and how much of it is reclaimable — next to one-click prunes for stopped containers, dangling images, all unused images, unused volumes, unused networks and the build cache, each behind a confirmation that spells out what it removes, and each reporting the space it actually reclaimed. These sections do not poll: they load when opened and on refresh.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🧩</div>
+            <h3 data-zh="容器按 compose 项目分组（2026‑09‑11）">
+              Containers grouped by compose project (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="docker compose 起的容器现在按项目归组（读 com.docker.compose.* 标签），每组可折叠、直接显示「运行中/总数」，并支持「启动 / 重启 / 停止 全部」——一条命令带上组里所有容器 id 交给 docker。组内卡片显示服务名，而不是「项目-服务-1」那串。单个容器的动作也补齐了：除启动/停止/重启外，新增暂停、恢复、强制终止（kill）、删除（运行中则强制删除）、挂载点、在只读编辑器里 inspect、复制容器 ID，破坏性操作一律先确认。镜像声明了 HEALTHCHECK 的，健康状态单独成一个徽标。"
+            >
+              Containers started by docker compose are now grouped under their project (read from the com.docker.compose.* labels), each group collapsible, showing running/total at a glance and offering start / restart / stop all in one action — docker takes every container id in a single command. Cards inside a group show the service name instead of the mangled project-service-1. The per-container actions are complete now, too: alongside start/stop/restart there are pause, unpause, kill, delete (force-delete when it is still running), mount points, inspect in a read-only editor tab, and copying the container id — with confirmation on the destructive ones. Health from HEALTHCHECK shows as its own badge.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📂</div>
+            <h3 data-zh="停止的容器也能浏览文件（2026‑09‑11）">
+              Browse files in a stopped container (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="过去容器不在运行，文件按钮就是灰的，因为列目录走的是 <code>docker exec ... ls</code>。但 <code>docker cp</code> 对停止的容器照样有效，于是 exec 用不了时（容器已停止，或 distroless 镜像里根本没有 ls）自动改从 tar 流的头信息里还原目录。而「容器起不来，想看看里面的配置」恰恰就是最需要它的时刻。名称、大小、修改时间、权限全部来自 tar 头；文件照常打开与下载，新建/改名/删除则明确告诉你此时不可用。由于 docker cp 会把整棵子树都推过来，读取在 2 万条 / 64MB / 15 秒任一触顶时收手，面板会说明列表不完整，并建议直接输入更具体的路径。"
+            >
+              The file browser used to be greyed out unless the container was running, because listing went through <code>docker exec ... ls</code>. But <code>docker cp</code> works on stopped containers, so listing now falls back to reading the tar stream’s headers whenever exec is unavailable — a stopped container, or a distroless image with no ls at all. That is exactly the situation you are in when a container won’t start and you want to look at its config. Name, size, mtime and permissions all come from the tar headers; files can be opened and downloaded as usual, while creating/renaming/deleting is honestly reported as unavailable. Since docker cp streams the whole subtree, the read stops at 20k entries / 64MB / 15s and the panel says so, suggesting you type a more specific path.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📊</div>
+            <h3 data-zh="资源占用、可点端口、一键跳到卷目录（2026‑09‑11）">
+              CPU and memory per container, clickable ports, jump to a volume (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="运行中的容器显示来自 <code>docker stats</code> 的 CPU 与内存（按列表一半的频率采集，没有运行中的容器、或运行中超过 40 个时自动跳过，也可在面板标题栏一键关掉）。发布出来的端口变成了按钮：点「8080→80」就用系统浏览器打开主机对应地址。容器的挂载点（绑定挂载与卷）也只隔一个菜单，每条都带「在宿主机文件浏览器打开」——卷背后的数据从此离 SFTP 只有一次点击，不用再 inspect 完自己找路径。"
+            >
+              Running containers show CPU and memory from <code>docker stats</code> (collected at half the list’s cadence, skipped when nothing is running or when there are more than 40 running containers, and switchable from the panel header). Published ports became buttons: click 8080→80 and the host’s address opens in your browser. And the mount points a container has — bind mounts and volumes alike — are one menu away, each with “open on the host”, so the data behind a volume is one click from the SFTP browser rather than an inspect and a manual path hunt.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📜</div>
+            <h3 data-zh="容器日志：独立标签页跟随、行数可选（2026‑09‑11）">
+              Container logs: follow in their own tab, pick the lines (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="跟随日志过去是把 <code>docker logs -f</code> 写进你正在用的那个终端，还得自己 Ctrl-C 收场。现在它另开一个标签页，你的终端仍然是你的，关掉标签页即停止跟随。编辑器里的日志视图则多了一排控件：行数（200 / 1000 / 5000 / 全部）、时间戳开关（-t）、以及自动刷新——每 3 秒重新拉取并保持贴在末尾。"
+            >
+              The follow button used to type <code>docker logs -f</code> into the terminal you were working in and leave you to Ctrl-C it. It now opens its own tab, so your terminal stays yours, and closing the tab ends the follow. The editor view of the logs gains a toolbar: line count (200 / 1000 / 5000 / all), a timestamps toggle (-t), and auto-refresh, which re-pulls every 3s and keeps the view pinned to the end.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔑</div>
+            <h3 data-zh="以 root 或自定义身份进入容器（2026‑09‑11）">
+              Enter a container as root, or anywhere you like (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="容器终端过去写死成 <code>docker exec -it 容器 bash||sh</code>：镜像以非特权用户运行、或者你想直接落在 /app，都没辙。现在卡片菜单里有「以 root 进入」和「自定义进入…」，可指定用户、工作目录、shell（分别对应 -u / -w 与显式 shell）。终端本身的其它一切（resize、重连、撕出窗口）照旧。"
+            >
+              The container terminal was hard-wired to <code>docker exec -it &lt;id&gt; bash||sh</code>, which is no help when the image runs as an unprivileged user or when you want to land straight in /app. The card’s menu now offers “enter as root” and “custom”, where you can set user, working directory and shell — passed through as -u / -w and an explicit shell. Everything else about the terminal (resize, reconnect, tear-off) is unchanged.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">⚡</div>
+            <h3 data-zh="每台主机只轮询一次，报错也终于说人话（2026‑09‑11）">
+              One poll per host, and errors that say what went wrong (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="上面这些的两块地基。其一：<code>ssh:exec</code> 只回 stdout，所以面板过去每条命令都得拼 <code>2&gt;&amp;1</code>，还要从文本里猜成败（启停是靠「输出里有没有容器 id」判断的）。新增的 <code>ssh:execFull</code> 把 stderr 与退出码带了回来，失败能被正确识别，提示也就是真正的原因。其二：docker 的常见报错现在统一映射成可操作的中文（守护进程没起、无权限、端口被占、磁盘满、镜像被容器占用……），面板与容器文件后端共用同一份措辞。此外，4 秒一次的 <code>docker ps</code> 轮询从「每个面板一份」改成「每台主机一份」：同主机的多个面板共用，没有任何面板可见时整个暂停（以前切到别的 tab 它还在后台一直跑），重新可见立刻补一轮；列表内容没变时也不再重渲染卡片。"
+            >
+              Two foundations under all of the above. First, <code>ssh:exec</code> only ever returned stdout, so the panel had to append <code>2&gt;&amp;1</code> to every command and guess success from the text (a start/stop was judged by “did the output contain the container id”). A new <code>ssh:execFull</code> brings back stderr and the exit code, so failures are detected properly and the message is the real reason. Second, docker’s common failures now map to actionable Chinese messages (daemon not running, no permission, port already allocated, no space left, image still in use…), shared by the panel and the container file backend. And the 4s <code>docker ps</code> poll is now one per host rather than one per panel — panels for the same host share a single poll, it pauses entirely when no panel is visible (a background tab used to keep polling forever) and resumes with an immediate refresh, and an unchanged list no longer re-renders the cards.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🖥️</div>
             <h3 data-zh="在终端中打开当前目录（2026‑09‑11）">
               Open the current directory in the terminal (2026‑09‑11)

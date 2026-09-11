@@ -73,6 +73,8 @@ export function ContainerPane({
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
   const [navError, setNavError] = useState('')
+  /** 容器没在运行时的只读提示(走了 docker cp 兜底)。 */
+  const [fallbackNote, setFallbackNote] = useState('')
   const [showTree, setShowTree] = useState(!embedded)
   const [fsVersion, setFsVersion] = useState(0)
   const bumpFs = (): void => setFsVersion((v) => v + 1)
@@ -81,12 +83,23 @@ export function ContainerPane({
   const load = useCallback(
     async (targetPath: string): Promise<boolean> => {
       try {
-        const list = await window.api.containerFs.list(sessionId, targetPath)
+        const { entries: list, viaTar, truncated } = await window.api.containerFs.listInfo(
+          sessionId,
+          targetPath
+        )
         list.sort((a, b) => {
           if (a.type === b.type) return a.name.localeCompare(b.name)
           return a.type === 'directory' ? -1 : 1
         })
         setEntries(list)
+        // 容器没在跑(或镜像里没有 ls)时走的是 docker cp 兜底:能看能导出,但不能改。
+        setFallbackNote(
+          viaTar
+            ? truncated
+              ? '容器未运行:内容经 docker cp 读取,这个目录太大已提前收手,列表不完整 —— 直接在上方地址栏输入更具体的路径(如 /etc/nginx)会快也会全。可浏览、下载,但不能新建/改名/删除。'
+              : '容器未运行:内容经 docker cp 读取。可浏览、下载,但不能新建/改名/删除。'
+            : ''
+        )
         setPath(targetPath)
         registerPane(sessionId, {
           ownerId,
@@ -374,6 +387,12 @@ export function ContainerPane({
       {navError && (
         <div className="border-b border-[var(--panel-border)] bg-red-50 px-3 py-1.5 text-xs text-red-600">
           {navError}
+        </div>
+      )}
+
+      {fallbackNote && (
+        <div className="border-b border-[var(--panel-border)] bg-[var(--accent-soft)] px-3 py-1.5 text-xs leading-relaxed text-[var(--accent)]">
+          {fallbackNote}
         </div>
       )}
 

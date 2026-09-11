@@ -12,6 +12,7 @@ import type {
 import { SAFE_ALGORITHMS, SAFE_KEEPALIVE_INTERVAL } from '../ssh/algorithms'
 import { createNoDelaySocket } from '../ssh/createSocket'
 import { posixJoin } from '../sftp/SftpManager'
+import { mapDockerError } from '../../shared/dockerErrors'
 import { tarHeader, padTo512, TAR_TRAILER, TarExtractor, type TarEntryMeta } from './tar'
 
 interface CfsSession {
@@ -32,6 +33,23 @@ interface PlanEntry {
 
 const MAX_EDIT_BYTES = 2 * 1024 * 1024
 
+// docker cp 兜底列目录的上限(整棵子树都会进 tar,所以必须能提前收手)。
+const TAR_LIST_MAX_ENTRIES = 20_000
+const TAR_LIST_MAX_BYTES = 64 * 1024 * 1024
+const TAR_LIST_MAX_MS = 15_000
+
+/** docker exec 用不了(容器没运行 / 镜像里没有该二进制)—— 此时改走 docker cp 兜底。 */
+const EXEC_UNAVAILABLE_RE =
+  /is not running|is paused|executable file not found|OCI runtime exec failed|starting container process caused|no such file or directory/i
+
+/** 把 tar 头里的权限位还原成 ls 那样的 'drwxr-xr-x' 字符串。 */
+function formatMode(type: TarEntryMeta['type'], mode: number): string {
+  const head = type === 'directory' ? 'd' : type === 'symlink' ? 'l' : type === 'other' ? '?' : '-'
+  const rwx = (m: number): string =>
+    `${m & 4 ? 'r' : '-'}${m & 2 ? 'w' : '-'}${m & 1 ? 'x' : '-'}`
+  return head + rwx((mode >> 6) & 7) + rwx((mode >> 3) & 7) + rwx(mode & 7)
+}
+
 /** 为远程 shell 安全地单引号包裹参数。 */
 const shq = (p: string): string => `'${p.replace(/'/g, `'\\''`)}'`
 
@@ -46,14 +64,7 @@ function posixBasename(p: string): string {
   return parts[parts.length - 1] || '/'
 }
 
-/** 把 docker 的报错映射成对用户有意义的中文信息。 */
-function mapDockerError(stderr: string): string {
-  const s = stderr.trim()
-  if (/executable file not found|OCI runtime exec failed/i.test(s)) {
-    return '容器内没有可用的 shell/工具,无法执行该操作(可能是 distroless 镜像)'
-  }
-  return s || '操作失败'
-}
+// 报错映射搬到 shared/dockerErrors.ts,与渲染层的容器面板共用同一份措辞。
 
 export class ContainerFsManager {
   private sessions = new Map<string, CfsSession>()
@@ -126,35 +137,45 @@ export class ContainerFsManager {
     })
   }
 
-  /** 跑一条命令,stdout 逐块回调(tar 流下载),可选字节上限。 */
+  /**
+   * 跑一条命令,stdout 逐块回调(tar 流下载),可选字节上限。
+   * 回调返回 'stop' 表示「要的已经够了」:主动关掉通道并以 truncated 正常返回,
+   * 而不是当成错误(列目录的兜底路径靠这个提前掐断整棵子树的 tar 流)。
+   */
   private async execStreamOut(
     sessionId: string,
     command: string,
-    onStdout: (chunk: Buffer) => void,
+    onStdout: (chunk: Buffer) => void | 'stop',
     opts: { maxBytes?: number } = {}
-  ): Promise<{ code: number; stderr: string }> {
+  ): Promise<{ code: number; stderr: string; truncated: boolean }> {
     const channel = await this.openExec(sessionId, command)
     return new Promise((resolve, reject) => {
       let stderr = ''
       let code = 0
       let seen = 0
-      let overflow = false
+      let settled = false
+      const settle = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        fn()
+      }
       channel.on('data', (c: Buffer) => {
+        if (settled) return
         seen += c.length
-        if (opts.maxBytes && seen > opts.maxBytes && !overflow) {
-          overflow = true
+        if (opts.maxBytes && seen > opts.maxBytes) {
           channel.close()
-          reject(new Error('OVERFLOW'))
+          settle(() => reject(new Error('OVERFLOW')))
           return
         }
-        if (!overflow) onStdout(c)
+        if (onStdout(c) === 'stop') {
+          channel.close()
+          settle(() => resolve({ code: 0, stderr, truncated: true }))
+        }
       })
       channel.stderr.on('data', (c: Buffer) => (stderr += c.toString('utf8')))
       channel.on('exit', (c: number | null) => (code = c ?? 1))
-      channel.on('close', () => {
-        if (!overflow) resolve({ code, stderr })
-      })
-      channel.on('error', (err: Error) => reject(err))
+      channel.on('close', () => settle(() => resolve({ code, stderr, truncated: false })))
+      channel.on('error', (err: Error) => settle(() => reject(err)))
     })
   }
 
@@ -184,7 +205,16 @@ export class ContainerFsManager {
 
   // ---- 目录列表(docker exec + ls,exec 形式直接跑二进制,无嵌套引号) --------
 
-  async list(sessionId: string, path: string): Promise<SftpListEntry[]> {
+  /**
+   * 列目录,并说明是怎么列出来的:
+   * - viaTar:走了 docker cp 兜底(容器已停止 / 镜像里没有 ls),
+   * - truncated:兜底路径触顶提前中止,列表可能不完整。
+   * UI 据此给用户一条明确的提示,而不是让人对着半截列表猜。
+   */
+  async listInfo(
+    sessionId: string,
+    path: string
+  ): Promise<{ entries: SftpListEntry[]; viaTar: boolean; truncated: boolean }> {
     const { containerId, dockerCmd } = this.getSession(sessionId)
     // 先试 GNU coreutils(epoch 时间戳,精确),busybox 不认 --time-style 再回退。
     // -n:数字 uid/gid,列数稳定,避免用户名带空格干扰解析。
@@ -200,8 +230,89 @@ export class ContainerFsManager {
         `${dockerCmd} exec ${containerId} ls -lAn -- ${shq(path)}`
       )
     }
-    if (res.code !== 0) throw new Error(mapDockerError(res.stderr))
-    return parseLsOutput(res.stdout.toString('utf8'), path, gnuTime)
+    if (res.code === 0) {
+      return { entries: parseLsOutput(res.stdout.toString('utf8'), path, gnuTime), viaTar: false, truncated: false }
+    }
+    // exec 用不了 —— 容器已停止,或镜像里根本没有 ls(distroless)。docker cp 对这两种
+    // 情况都照样工作,于是改从 tar 流的头信息里还原出这一层的目录项。
+    if (!EXEC_UNAVAILABLE_RE.test(res.stderr)) throw new Error(mapDockerError(res.stderr))
+    return this.listViaTar(sessionId, path)
+  }
+
+  /** 列目录(只要条目)。目录树适配器等只关心内容的地方用这个。 */
+  async list(sessionId: string, path: string): Promise<SftpListEntry[]> {
+    return (await this.listInfo(sessionId, path)).entries
+  }
+
+  /**
+   * 用 `docker cp <容器>:<目录> -` 的 tar 流列目录 —— 容器**停止着也能用**,也不需要
+   * 容器内有 ls。代价是 docker 会把整棵子树都打进 tar:我们只读头、丢数据,并且在
+   * 条目数/字节数/耗时任一触顶时主动掐断通道,用已经拿到的那部分给出列表。
+   * 因此这是 exec 不可用时的兜底,而不是常规路径。
+   */
+  private async listViaTar(
+    sessionId: string,
+    path: string
+  ): Promise<{ entries: SftpListEntry[]; viaTar: boolean; truncated: boolean }> {
+    const { containerId, dockerCmd } = this.getSession(sessionId)
+    const entries: SftpListEntry[] = []
+    const seen = new Set<string>()
+    // tar 里的条目名以「被复制项的 basename」为根:/etc/nginx → 'nginx/...';根目录为空。
+    const rootName = posixBasename(path).replace(/^\/+$/, '')
+    let count = 0
+    const extractor = new TarExtractor({
+      onEntry: (meta: TarEntryMeta) => {
+        count++
+        // 去掉根前缀、'./' 与前导 '/',只留相对路径;再只收第一层(不含 '/' 的那些)。
+        // 注意根目录那一趟:`docker cp 容器:/ -` 给出的条目名是 '/'、'/bin/' 这样**带前导
+        // 斜杠**的,和复制子目录时('myapp/conf.txt')不一样,不剥掉就会一条都留不下。
+        let rel = meta.name
+          .replace(/^\.\//, '')
+          .replace(/^\/+/, '')
+          .replace(/\/+$/, '')
+        if (rootName) {
+          if (rel === rootName) return
+          if (rel.startsWith(`${rootName}/`)) rel = rel.slice(rootName.length + 1)
+          else return
+        }
+        if (!rel || rel.includes('/') || seen.has(rel)) return
+        seen.add(rel)
+        entries.push({
+          name: rel,
+          path: posixJoin(path, rel),
+          type: meta.type,
+          size: meta.size,
+          modifyTime: meta.mtime * 1000,
+          permissions: formatMode(meta.type, meta.mode)
+        })
+      },
+      onData: () => {},
+      onEntryEnd: () => {}
+    })
+    const startedAt = Date.now()
+    try {
+      const res = await this.execStreamOut(
+        sessionId,
+        `${dockerCmd} cp ${shq(`${containerId}:${path}`)} -`,
+        (c) => {
+          extractor.push(c)
+          // 条目数或耗时触顶就收手:整棵子树可能极大,我们只需要最上面那一层。
+          if (count >= TAR_LIST_MAX_ENTRIES || Date.now() - startedAt > TAR_LIST_MAX_MS) {
+            return 'stop'
+          }
+          return undefined
+        },
+        { maxBytes: TAR_LIST_MAX_BYTES }
+      )
+      if (res.code !== 0 && entries.length === 0) throw new Error(mapDockerError(res.stderr))
+      return { entries, viaTar: true, truncated: res.truncated }
+    } catch (err) {
+      // 字节超限:已经读到的那一部分照常返回,只是标记为不完整。
+      if (err instanceof Error && err.message === 'OVERFLOW') {
+        return { entries, viaTar: true, truncated: true }
+      }
+      throw err
+    }
   }
 
   // ---- 编辑器读写(docker cp tar 流,不依赖容器内工具) ----------------------

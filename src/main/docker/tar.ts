@@ -63,6 +63,10 @@ export interface TarEntryMeta {
   name: string
   size: number
   type: 'file' | 'directory' | 'symlink' | 'other'
+  /** 权限位(八进制低 12 位)。docker cp 的 tar 头自带,用于停止容器的目录列表。 */
+  mode: number
+  /** 修改时间(Unix 秒)。 */
+  mtime: number
 }
 
 function parseOctal(buf: Buffer, off: number, len: number): number {
@@ -147,7 +151,9 @@ export class TarExtractor {
           const meta: TarEntryMeta = {
             name: this.pendingLongname ?? headerName(header),
             size,
-            type: typeOf(flag)
+            type: typeOf(flag),
+            mode: parseOctal(header, 100, 8) & 0o7777,
+            mtime: parseOctal(header, 136, 12)
           }
           this.pendingLongname = null
           this.handlers.onEntry(meta)

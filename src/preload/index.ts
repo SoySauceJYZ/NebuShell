@@ -8,6 +8,7 @@ import type {
   VaultImportResult,
   SshConnectOptions,
   ContainerFsConnectOptions,
+  ContainerListResult,
   SftpListEntry,
   LocalListEntry,
   TransferProgress,
@@ -17,6 +18,7 @@ import type {
   ChatMessage,
   ChatTool,
   RunShellResult,
+  ExecResult,
   LlmSettings,
   LlmSettingsPublic,
   AgentConversationMeta,
@@ -120,6 +122,9 @@ const api = {
       ipcRenderer.invoke('ssh:resize', sessionId, cols, rows),
     exec: (sessionId: string, command: string): Promise<string> =>
       ipcRenderer.invoke('ssh:exec', sessionId, command),
+    /** 同 exec,但带回 stderr 与退出码,调用方无需再拼 2>&1 猜成败。 */
+    execFull: (sessionId: string, command: string): Promise<ExecResult> =>
+      ipcRenderer.invoke('ssh:execFull', sessionId, command),
     runInShell: (sessionId: string, command: string): Promise<RunShellResult> =>
       ipcRenderer.invoke('ssh:runInShell', sessionId, command),
     // 终端命令行此刻所在的目录;探测不到(非 Linux / 权限不足)时为 null。
@@ -202,6 +207,9 @@ const api = {
       ipcRenderer.invoke('containerFs:connect', opts),
     list: (sessionId: string, path: string): Promise<SftpListEntry[]> =>
       ipcRenderer.invoke('containerFs:list', sessionId, path),
+    /** 同 list,另外说明是否走了 docker cp 兜底(容器已停止)、列表是否被截断。 */
+    listInfo: (sessionId: string, path: string): Promise<ContainerListResult> =>
+      ipcRenderer.invoke('containerFs:listInfo', sessionId, path),
     readFile: (sessionId: string, path: string): Promise<string> =>
       ipcRenderer.invoke('containerFs:readFile', sessionId, path),
     writeFile: (sessionId: string, path: string, content: string): Promise<void> =>
@@ -261,7 +269,9 @@ const api = {
     pickDir: (): Promise<string | null> => ipcRenderer.invoke('local:pickDir'),
     pickFiles: (): Promise<string[]> => ipcRenderer.invoke('local:pickFiles'),
     // 智能体在本机执行命令(win32 → PowerShell,posix → /bin/sh)。
-    exec: (command: string): Promise<RunShellResult> => ipcRenderer.invoke('local:exec', command)
+    exec: (command: string): Promise<RunShellResult> => ipcRenderer.invoke('local:exec', command),
+    /** 用系统浏览器打开链接(仅 http/https)。容器端口一键访问用。 */
+    openUrl: (url: string): Promise<void> => ipcRenderer.invoke('local:openUrl', url)
   },
   transfers: {
     // Subscribe to progress for one transferId (covers sftp:*, local:* and containerFs:* streams).

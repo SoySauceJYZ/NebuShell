@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { Copy, Save, Check, History, RefreshCw } from 'lucide-react'
+import { Copy, Save, Check, History, RefreshCw, Clock, Play } from 'lucide-react'
 import { Select } from './ui/Select'
+import { buildLogsCommand, LOG_TAIL_CHOICES } from '../lib/dockerContainers'
 import type { HistoryVersion } from '@shared/types'
 
 const LANG_OPTIONS = [
@@ -84,11 +85,16 @@ export function EditorTab({
   remotePath,
   fileKey,
   fileName,
-  localPath
+  localPath,
+  logTarget,
+  logDockerCmd
 }: {
   content?: string
   execCommand?: string
   sourceSessionId?: string
+  /** 容器日志 tab:命令由行数/时间戳选项现算,工具栏也随之多出这几个控件。 */
+  logTarget?: string
+  logDockerCmd?: string
   /** 只读模式:内容不可编辑,工具栏只保留刷新/复制。 */
   readOnly?: boolean
   initialLang?: string
@@ -103,6 +109,8 @@ export function EditorTab({
   const isSftp = !!(sftpSessionId && remotePath && fileKey)
   const isCfs = !!(containerFsSessionId && remotePath && fileKey)
   const isLocal = !!localPath
+  // 容器日志 tab:命令不是固定的 execCommand,而是由下面的行数/时间戳选项现算。
+  const isLog = !!(logTarget && logDockerCmd && sourceSessionId)
   // sftp 与容器后端共用同一套「远程文件 + 版本历史」逻辑,只是读写走不同 API。
   const remoteRead = (): Promise<string> =>
     isCfs
@@ -119,9 +127,9 @@ export function EditorTab({
     initialLang || (isSftp || isCfs || isLocal ? guessLanguage(fileName) : 'plaintext')
   )
   const [value, setValue] = useState(
-    content ?? (execCommand || isSftp || isCfs || isLocal ? '正在加载...' : '')
+    content ?? (execCommand || isLog || isSftp || isCfs || isLocal ? '正在加载...' : '')
   )
-  const [loading, setLoading] = useState(!!execCommand || isSftp || isCfs || isLocal)
+  const [loading, setLoading] = useState(!!execCommand || isLog || isSftp || isCfs || isLocal)
   const [versions, setVersions] = useState<HistoryVersion[]>([])
   const [selectedVersion, setSelectedVersion] = useState(SERVER_VERSION)
   const [saved, setSaved] = useState(false)
@@ -129,14 +137,31 @@ export function EditorTab({
   const [statusMsg, setStatusMsg] = useState('')
   // 每次 +1 重跑 execCommand(刷新)
   const [execTick, setExecTick] = useState(0)
-  const isExec = !!(execCommand && sourceSessionId)
+  // 容器日志:行数 / 时间戳 / 自动刷新(跟随)。命令据此现算,改选项即重新拉取。
+  const [logTail, setLogTail] = useState<number | 'all'>(1000)
+  const [logTimestamps, setLogTimestamps] = useState(false)
+  const [logAuto, setLogAuto] = useState(false)
+  const effectiveCommand = isLog
+    ? buildLogsCommand(logDockerCmd as string, logTarget as string, {
+        tail: logTail,
+        timestamps: logTimestamps
+      })
+    : execCommand
+  const isExec = !!(effectiveCommand && sourceSessionId)
+
+  // 自动刷新:每 3s 重跑一次命令(刷新逻辑与手动刷新完全一致,末尾自动滚到底)。
+  useEffect(() => {
+    if (!isLog || !logAuto) return
+    const t = setInterval(() => setExecTick((n) => n + 1), 3000)
+    return () => clearInterval(t)
+  }, [isLog, logAuto])
 
   // exec-result mode
   useEffect(() => {
-    if (!execCommand || !sourceSessionId) return
+    if (!effectiveCommand || !sourceSessionId) return
     let cancelled = false
     window.api.ssh
-      .exec(sourceSessionId, execCommand)
+      .exec(sourceSessionId, effectiveCommand)
       .then((out) => {
         if (!cancelled) setValue(out)
       })
@@ -149,7 +174,7 @@ export function EditorTab({
     return () => {
       cancelled = true
     }
-  }, [execCommand, sourceSessionId, execTick])
+  }, [effectiveCommand, sourceSessionId, execTick])
 
   // 只读的命令输出(日志)加载后滚到末尾。value 落到 Monaco model 是异步的,故延后一拍。
   useEffect(() => {
@@ -314,6 +339,47 @@ export function EditorTab({
           </div>
         )}
         <div className="flex-1" />
+        {isLog && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-24">
+              <Select
+                value={String(logTail)}
+                onChange={(v) => {
+                  setLoading(true)
+                  setLogTail(v === 'all' ? 'all' : Number(v))
+                }}
+                options={LOG_TAIL_CHOICES.map((c) => ({
+                  value: String(c.value),
+                  label: c.label
+                }))}
+                className="h-8 !py-0 text-xs"
+              />
+            </div>
+            <button
+              onClick={() => {
+                setLoading(true)
+                setLogTimestamps((v) => !v)
+              }}
+              title="在每行前显示时间戳(docker logs -t)"
+              className={`btn-secondary h-8 !py-0 text-xs ${
+                logTimestamps ? '!text-[var(--accent)]' : ''
+              }`}
+            >
+              <Clock size={14} />
+              时间戳
+            </button>
+            <button
+              onClick={() => setLogAuto((v) => !v)}
+              title="每 3 秒重新拉取一次日志"
+              className={`btn-secondary h-8 !py-0 text-xs ${
+                logAuto ? '!text-[var(--accent)]' : ''
+              }`}
+            >
+              <Play size={14} />
+              {logAuto ? '跟随中' : '自动刷新'}
+            </button>
+          </div>
+        )}
         {statusMsg && <span className="text-xs text-[var(--accent)]">{statusMsg}</span>}
         {readOnly && <span className="text-xs text-[var(--text-muted)]">只读</span>}
         {isExec && (

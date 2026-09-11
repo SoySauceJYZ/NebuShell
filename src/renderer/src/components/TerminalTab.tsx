@@ -8,7 +8,7 @@ import { useTerminalStore } from '../store/useTerminalStore'
 import { useCommandHistoryStore } from '../store/useCommandHistoryStore'
 import { useSessionStore } from '../store/useSessionStore'
 import { resolveConnectOptions } from '../lib/resolveConnectOptions'
-import { buildExecShellCommand } from '../lib/dockerContainers'
+import { buildExecShellCommand, buildLogsCommand } from '../lib/dockerContainers'
 import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
@@ -47,6 +47,12 @@ export function TerminalTab({
   containerId,
   containerName,
   dockerCmd,
+  containerUser,
+  containerWorkdir,
+  containerShell,
+  containerLogsFollow,
+  containerLogsTail,
+  containerLogsTimestamps,
   initialCommands
 }: {
   sessionId: string
@@ -55,6 +61,14 @@ export function TerminalTab({
   containerId?: string
   containerName?: string
   dockerCmd?: string
+  /** 进入容器时的 exec 选项(留空即镜像默认用户 / 目录,shell 为 bash 优先回退 sh)。 */
+  containerUser?: string
+  containerWorkdir?: string
+  containerShell?: string
+  /** 该「容器终端」实为 docker logs -f 跟随窗口:不进容器,直接跟日志。 */
+  containerLogsFollow?: boolean
+  containerLogsTail?: number | 'all'
+  containerLogsTimestamps?: boolean
   /** 服务器绑定的快捷命令:首次连接成功后自动写入并执行一次。 */
   initialCommands?: string
 }): React.ReactElement {
@@ -100,7 +114,20 @@ export function TerminalTab({
     term.write('\r\n\x1b[36m[正在连接...]\x1b[0m\r\n')
     const opts = resolveConnectOptions(sessionId, host, credentials)
     // 容器终端:不开登录 shell,直接在 exec-PTY 通道上进入容器(exit 即通道关闭 → 重连横幅)。
-    if (containerId) opts.execCommand = buildExecShellCommand(dockerCmd ?? 'docker', containerId)
+    // 日志跟随窗口走同一条 exec-PTY 通道,只是命令换成 docker logs -f(Ctrl-C 即退出)。
+    if (containerId) {
+      opts.execCommand = containerLogsFollow
+        ? buildLogsCommand(dockerCmd ?? 'docker', containerName || containerId, {
+            tail: containerLogsTail ?? 200,
+            timestamps: containerLogsTimestamps,
+            follow: true
+          })
+        : buildExecShellCommand(dockerCmd ?? 'docker', containerId, {
+            user: containerUser,
+            workdir: containerWorkdir,
+            shell: containerShell
+          })
+    }
     return window.api.ssh
       .connect(opts)
       .then(() => {
@@ -124,7 +151,22 @@ export function TerminalTab({
         setErrorMsg(err instanceof Error ? err.message : String(err))
         throw err instanceof Error ? err : new Error(String(err))
       })
-  }, [sessionId, hostId, hosts, credentials, containerId, dockerCmd, initialCommands])
+  }, [
+    sessionId,
+    hostId,
+    hosts,
+    credentials,
+    containerId,
+    containerName,
+    dockerCmd,
+    containerUser,
+    containerWorkdir,
+    containerShell,
+    containerLogsFollow,
+    containerLogsTail,
+    containerLogsTimestamps,
+    initialCommands
+  ])
 
   useEffect(() => {
     doConnectRef.current = doConnect

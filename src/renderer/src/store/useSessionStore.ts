@@ -52,6 +52,17 @@ export interface Tab {
   containerName?: string
   /** 打开时探测到的 docker 调用前缀('docker' | 'sudo -n docker')。 */
   dockerCmd?: string
+  /** 容器终端的 exec 选项:以指定用户 / 工作目录 / shell 进入(留空即默认)。 */
+  containerUser?: string
+  containerWorkdir?: string
+  containerShell?: string
+  /** 该「容器终端」其实是 docker logs -f 的跟随窗口(Ctrl-C 退出,关掉即断)。 */
+  containerLogsFollow?: boolean
+  containerLogsTail?: number | 'all'
+  containerLogsTimestamps?: boolean
+  /** 容器日志编辑器 tab:有值时工具栏出现行数 / 时间戳 / 自动刷新控件。 */
+  editorLogTarget?: string
+  editorLogDockerCmd?: string
   /** 整页文件浏览器里,预置的远程面板打开时定位到的目录(由侧边栏「展开」带过来)。 */
   explorerInitialPath?: string
   // 容器文件浏览器:explorer tab 预置一个容器面板

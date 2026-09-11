@@ -34,6 +34,12 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
           containerId={tab.containerId}
           containerName={tab.containerName}
           dockerCmd={tab.dockerCmd}
+          containerUser={tab.containerUser}
+          containerWorkdir={tab.containerWorkdir}
+          containerShell={tab.containerShell}
+          containerLogsFollow={tab.containerLogsFollow}
+          containerLogsTail={tab.containerLogsTail}
+          containerLogsTimestamps={tab.containerLogsTimestamps}
           initialCommands={tab.initialCommands}
         />
       ) : null
@@ -73,6 +79,8 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
           fileKey={tab.editorFileKey}
           fileName={tab.editorFileName}
           localPath={tab.editorLocalPath}
+          logTarget={tab.editorLogTarget}
+          logDockerCmd={tab.editorLogDockerCmd}
         />
       )
     case 'image':

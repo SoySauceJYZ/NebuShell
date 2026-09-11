@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { promises as fsp, createReadStream, createWriteStream } from 'fs'
 import { spawn } from 'child_process'
@@ -250,6 +250,16 @@ export function registerLocalIpc(): void {
   ipcMain.handle('local:home', () => homedir())
 
   ipcMain.handle('local:exec', (_e, command: string) => runLocalShell(command))
+
+  // 用系统浏览器打开一个链接(容器端口映射一键访问)。只放行 http/https,
+  // 其它协议(file:、javascript: 等)一律拒绝,避免渲染层被诱导执行本地内容。
+  ipcMain.handle('local:openUrl', async (_e, url: string) => {
+    const u = new URL(url)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      throw new Error('只允许打开 http/https 链接')
+    }
+    await shell.openExternal(u.toString())
+  })
 
   // 盘符探测必须异步 + 并行 + 超时:existsSync 是同步调用会阻塞主进程,
   // 断连/慢的网络映射盘一次探测能挂几十秒,导致整个应用所有窗口无响应。

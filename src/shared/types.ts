@@ -208,6 +208,17 @@ export interface RunShellResult {
   note?: string
 }
 
+/**
+ * ssh:execFull 的结果。与只回 stdout 的 ssh:exec 不同,它把 stderr 与退出码一并带回,
+ * 调用方因此不必再拼 `2>&1`、也不必靠输出内容猜测成败(docker 面板即依赖这一点)。
+ */
+export interface ExecResult {
+  stdout: string
+  stderr: string
+  /** 通道异常关闭、没拿到 exit-status 时为 null。 */
+  code: number | null
+}
+
 export interface SshConnectOptions {
   sessionId: string
   host: string
@@ -225,6 +236,17 @@ export interface ContainerFsConnectOptions extends SshConnectOptions {
   containerId: string
   /** 'docker' 或 'sudo -n docker' —— 由渲染进程探测得出。 */
   dockerCmd: string
+}
+
+/**
+ * 容器内目录列表 + 它是怎么来的。
+ * viaTar:容器没运行(或镜像里没有 ls)时走 docker cp 的兜底路径;
+ * truncated:兜底路径触顶提前中止,列表可能不完整。
+ */
+export interface ContainerListResult {
+  entries: SftpListEntry[]
+  viaTar: boolean
+  truncated: boolean
 }
 
 export interface SftpListEntry {

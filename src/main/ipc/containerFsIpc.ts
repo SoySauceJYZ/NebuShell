@@ -20,6 +20,11 @@ export function registerContainerFsIpc(): void {
     containerFsManager.list(sessionId, path)
   )
 
+  // 同 list,外加「是否走了 docker cp 兜底 / 是否被截断」,供面板给出提示。
+  ipcMain.handle('containerFs:listInfo', (_e, sessionId: string, path: string) =>
+    containerFsManager.listInfo(sessionId, path)
+  )
+
   ipcMain.handle('containerFs:readFile', (_e, sessionId: string, path: string) =>
     containerFsManager.readFile(sessionId, path)
   )

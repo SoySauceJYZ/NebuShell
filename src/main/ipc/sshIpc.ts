@@ -23,6 +23,11 @@ export function registerSshIpc(): void {
     return sshManager.exec(sessionId, command)
   })
 
+  // 同 ssh:exec,但带回 stderr 与退出码(docker 面板等据此判定成败)。
+  ipcMain.handle('ssh:execFull', (_e, sessionId: string, command: string) => {
+    return sshManager.execFull(sessionId, command)
+  })
+
   // 终端当前所在目录(探测不到返回 null),SFTP 面板首次打开时据此定位。
   ipcMain.handle('ssh:cwd', (_e, sessionId: string) => sshManager.shellCwd(sessionId))
 

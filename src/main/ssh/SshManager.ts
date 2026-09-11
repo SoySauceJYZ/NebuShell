@@ -1,6 +1,6 @@
 import { Client, type ClientChannel } from 'ssh2'
 import { randomBytes } from 'crypto'
-import type { SshConnectOptions, RunShellResult } from '../../shared/types'
+import type { SshConnectOptions, RunShellResult, ExecResult } from '../../shared/types'
 import { SAFE_ALGORITHMS, SAFE_KEEPALIVE_INTERVAL } from './algorithms'
 import { createNoDelaySocket } from './createSocket'
 import { foldTerminalOutput } from '../../shared/terminalFold'
@@ -209,6 +209,40 @@ export class SshManager {
           // monitoring commands ignore stderr noise
         })
         stream.on('close', () => resolve(out))
+      })
+    })
+  }
+
+  /**
+   * 与 exec 同源,但保留 **stderr 与退出码**。上层(docker 面板等)据此判断成败,
+   * 不必再把命令拼成 `2>&1` 再从输出里猜——错误文本也不会混进正常输出。
+   */
+  execFull(sessionId: string, command: string): Promise<ExecResult> {
+    return new Promise((resolve, reject) => {
+      const session = this.sessions.get(sessionId)
+      if (!session) {
+        reject(new Error('SSH session not found'))
+        return
+      }
+      session.client.exec(command, (err, stream) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        let stdout = ''
+        let stderr = ''
+        let code: number | null = null
+        stream.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf8')
+        })
+        stream.stderr.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString('utf8')
+        })
+        stream.on('exit', (c: number | null) => {
+          code = c
+        })
+        stream.on('close', () => resolve({ stdout, stderr, code }))
+        stream.on('error', (e: Error) => reject(e))
       })
     })
   }
