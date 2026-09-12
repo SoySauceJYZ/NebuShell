@@ -26,6 +26,10 @@ interface DockerState {
   /** 是否同时采集 docker stats(多花一条命令,默认开)。 */
   statsEnabled: boolean
   setStatsEnabled: (v: boolean) => void
+
+  /** 每台主机上卷备份的落地目录(用户改过就记住,随进程存活)。 */
+  backupDirByHost: Record<string, string>
+  setBackupDir: (hostId: string, dir: string) => void
 }
 
 export const useDockerStore = create<DockerState>((set) => ({
@@ -54,7 +58,11 @@ export const useDockerStore = create<DockerState>((set) => ({
     }),
 
   statsEnabled: true,
-  setStatsEnabled: (v) => set({ statsEnabled: v })
+  setStatsEnabled: (v) => set({ statsEnabled: v }),
+
+  backupDirByHost: {},
+  setBackupDir: (hostId, dir) =>
+    set((s) => ({ backupDirByHost: { ...s.backupDirByHost, [hostId]: dir } }))
 }))
 
 export const emptyHostData = EMPTY

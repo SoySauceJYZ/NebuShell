@@ -883,6 +883,17 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">💾</div>
+            <h3 data-zh="卷可以备份与还原了（2026‑09‑11）">
+              Back up and restore a volume (2026‑09‑11)
+            </h3>
+            <p
+              data-zh="卷列表的菜单里新增「备份…」和「还原到此卷…」，分区顶部还有一个「从备份还原…」。备份落在主机上的目录（默认 <code>~/docker-volume-backups</code>），之后可以一键拉到本机，或在 SFTP 里打开。打包方式自动选：是 root 或有免密 sudo 就直接 tar 卷目录（最快、不依赖镜像），否则起一个一次性容器——优先用「正在用这个卷的那个容器」的镜像，它一定在本地，也几乎一定自带 tar。两条路都把归档经你自己的 shell 重定向成文件，所以产物归你所有，不会留下一堆 root 的删不掉的文件。tar 一律先尝试 <code>--numeric-owner</code>（busybox 的 tar 不认就逐级降级）：少了它，mysql 卷里 uid 999 的文件还原后全变 root，数据库直接起不来。开跑前对话框会显示卷有多大、目标盘还剩多少、哪些容器在用它，并可勾选「先停止这些容器，备份完自动启动」；即使备份失败也一定会把容器拉回来。还原默认建一个新卷（原名-restore-时间），原卷分毫不动；覆盖现有卷是需要显式选择的第二选项，带「先清空」开关。每个归档旁边写一个 .json 边车（卷名、主机、时间、大小、tar 参数、相关容器），解包前还会先 <code>gzip -t</code> 验一遍完整性。"
+            >
+              The volume list’s menu gains “back up” and “restore here”, plus a “restore from a backup” entry for the section itself. Backups land in a directory on the host (<code>~/docker-volume-backups</code> by default) and can then be pulled to your machine, or opened in the SFTP browser. Two packing routes are chosen automatically: tar the volume directory directly when you are root or have passwordless sudo (fastest, needs no image), otherwise a throwaway container — preferring the image of the container that uses the volume, since that one is certainly present locally and almost certainly has tar. Either way the archive is streamed through your own shell, so the file belongs to you rather than to root. <code>--numeric-owner</code> is always attempted (falling back a rung at a time when busybox’s tar rejects a flag): without it a mysql volume’s uid 999 comes back as root and the database won’t start. Before running, the dialog shows the volume’s size, the free space at the target, which containers use it, and offers to stop them for the backup and start them again afterwards — and the restart happens even if the backup fails. Restoring defaults to a new volume, leaving the original untouched; overwriting an existing one is the deliberate second option, with “clear first”. Each archive gets a sidecar .json (volume, host, time, size, tar flags, containers), and the archive is <code>gzip -t</code>’d before anything is unpacked.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🐳</div>
             <h3 data-zh="容器面板新增镜像 / 卷 / 网络 / 清理（2026‑09‑11）">
               Images, volumes, networks and cleanup (2026‑09‑11)

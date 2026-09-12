@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Trash2, FolderOpen, Layers, HardDrive, Network, Brush } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import {
+  RefreshCw,
+  Trash2,
+  FolderOpen,
+  Layers,
+  HardDrive,
+  Network,
+  Brush,
+  Archive,
+  RotateCcw,
+  MoreHorizontal
+} from 'lucide-react'
 import { mapDockerError } from '@shared/dockerErrors'
+import { useDockerStore } from '../../store/useDockerStore'
+import { DEFAULT_BACKUP_DIR } from '../../lib/dockerVolumes'
+import { VolumeBackupModal, VolumeRestoreModal } from './VolumeBackupModals'
 import {
   buildImagesCommand,
   buildVolumesCommand,
@@ -239,11 +254,18 @@ export function VolumesSection({
   )
   const q = filter.trim().toLowerCase()
   const shown = (items ?? []).filter((v) => !q || v.name.toLowerCase().includes(q))
+  const backupDir = useDockerStore((s) => s.backupDirByHost[ctx.hostId]) ?? DEFAULT_BACKUP_DIR
+  const setBackupDir = useDockerStore((s) => s.setBackupDir)
+  const [backupFor, setBackupFor] = useState<VolumeInfo | null>(null)
+  const [restoreFor, setRestoreFor] = useState<VolumeInfo | null>(null)
+  /** 不带目标卷的还原(从备份新建一个卷)。 */
+  const [restoreAny, setRestoreAny] = useState(false)
 
   const remove = async (v: VolumeInfo): Promise<void> => {
     const ok = await window.api.dialog.confirm({
       message: `删除卷 “${v.name}”?`,
-      detail: '卷里的数据会一并删除,且无法恢复。被容器使用中的卷会删除失败。',
+      detail:
+        '卷里的数据会一并删除,且无法恢复。被容器使用中的卷会删除失败。若还没备份过,建议先「备份…」。',
       confirmLabel: '删除',
       cancelLabel: '取消'
     })
@@ -259,24 +281,97 @@ export function VolumesSection({
       error={error}
       onReload={reload}
     >
+      <button
+        onClick={() => setRestoreAny(true)}
+        className="flex items-center gap-1.5 self-start rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)]"
+      >
+        <RotateCcw size={12} className="text-[var(--text-muted)]" />
+        从备份还原…
+      </button>
       {items && shown.length === 0 && (
         <div className="text-xs text-[var(--text-muted)]">{q ? '没有匹配的卷' : '没有卷'}</div>
       )}
       {shown.map((v) => (
         <Row key={v.name} icon={HardDrive} title={v.name} badge={v.driver} detail={v.mountpoint}>
-          {v.mountpoint && (
-            <button
-              onClick={() => onOpenPath(v.mountpoint)}
-              title="在宿主机文件浏览器打开"
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger
               className="shrink-0 rounded p-1 text-[var(--text-muted)] hover:bg-[var(--nav-bg-hover)]"
+              title="更多操作"
             >
-              <FolderOpen size={13} strokeWidth={1.75} />
-            </button>
-          )}
-          <DeleteBtn onClick={() => void remove(v)} title="删除卷" />
+              <MoreHorizontal size={13} strokeWidth={1.75} />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={4}
+                className="z-[70] min-w-[170px] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-lg"
+              >
+                {v.mountpoint && (
+                  <MenuItem
+                    icon={FolderOpen}
+                    label="在文件浏览器打开"
+                    onSelect={() => onOpenPath(v.mountpoint)}
+                  />
+                )}
+                <MenuItem icon={Archive} label="备份…" onSelect={() => setBackupFor(v)} />
+                <MenuItem icon={RotateCcw} label="还原到此卷…" onSelect={() => setRestoreFor(v)} />
+                <DropdownMenu.Separator className="my-1 h-px bg-[var(--panel-border)]" />
+                <MenuItem icon={Trash2} label="删除卷" danger onSelect={() => void remove(v)} />
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </Row>
       ))}
+
+      {backupFor && (
+        <VolumeBackupModal
+          ctx={ctx}
+          volume={backupFor.name}
+          mountpoint={backupFor.mountpoint}
+          backupDir={backupDir}
+          onBackupDirChange={(d) => setBackupDir(ctx.hostId, d)}
+          onOpenPath={onOpenPath}
+          onClose={() => setBackupFor(null)}
+        />
+      )}
+      {(restoreFor || restoreAny) && (
+        <VolumeRestoreModal
+          ctx={ctx}
+          backupDir={backupDir}
+          targetVolume={restoreFor?.name}
+          onOpenPath={onOpenPath}
+          onDone={reload}
+          onClose={() => {
+            setRestoreFor(null)
+            setRestoreAny(false)
+          }}
+        />
+      )}
     </SectionShell>
+  )
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onSelect,
+  danger
+}: {
+  icon: typeof HardDrive
+  label: string
+  onSelect: () => void
+  danger?: boolean
+}): React.ReactElement {
+  return (
+    <DropdownMenu.Item
+      onSelect={onSelect}
+      className={`flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--nav-bg-hover)] ${
+        danger ? 'text-[var(--danger)]' : 'text-[var(--text-dark)]'
+      }`}
+    >
+      <Icon size={15} className={danger ? '' : 'text-[var(--text-muted)]'} />
+      {label}
+    </DropdownMenu.Item>
   )
 }
 
