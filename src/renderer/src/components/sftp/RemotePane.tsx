@@ -12,7 +12,8 @@ import {
   Trash2,
   PanelLeft,
   SquareTerminal,
-  Terminal
+  Terminal,
+  FolderInput
 } from 'lucide-react'
 import { useVaultStore } from '../../store/useVaultStore'
 import { useSessionStore } from '../../store/useSessionStore'
@@ -73,6 +74,8 @@ export function RemotePane({
   const [errorMsg, setErrorMsg] = useState('')
   const [navError, setNavError] = useState('')
   const [showTree, setShowTree] = useState(!embedded)
+  /** 正在探测终端当前目录(按钮禁用 + 图标呼吸)。 */
+  const [following, setFollowing] = useState(false)
   // Bumped after any fs mutation so the tree can invalidate its cached children.
   const [fsVersion, setFsVersion] = useState(0)
   const bumpFs = (): void => setFsVersion((v) => v + 1)
@@ -290,6 +293,32 @@ export function RemotePane({
     window.api.ssh.write(terminalSessionId, `cd ${shellQuotePath(dir)}\n`)
   }
 
+  /**
+   * 反方向:把面板跳到终端此刻所在的目录。复用打开面板时那套 /proc 反查 ——
+   * 不往 shell 里写任何东西,终端里看不到痕迹;探不到(非 Linux、权限不足、超时)
+   * 就如实说一声,而不是默默什么都不做。
+   */
+  const followTerminal = async (): Promise<void> => {
+    if (!terminalSessionId || following) return
+    setFollowing(true)
+    try {
+      const dir = await window.api.ssh.cwd(terminalSessionId)
+      if (!dir) {
+        setNavError(
+          '读不到终端当前目录(需要 Linux 的 /proc;若终端正卡在某个前台程序里,先回到提示符再试)'
+        )
+        return
+      }
+      if (dir === path) {
+        setNavError('')
+        return
+      }
+      await load(dir)
+    } finally {
+      setFollowing(false)
+    }
+  }
+
   const menuActions = (targets: FileEntry[]): MenuAction[] => {
     const one = targets[0]
     const list: MenuAction[] = []
@@ -406,6 +435,17 @@ export function RemotePane({
               title="在终端中打开当前目录"
             >
               <Terminal size={14} />
+            </button>
+          )}
+          {/* 反方向:把面板跳到终端此刻所在的目录。 */}
+          {terminalSessionId && (
+            <button
+              onClick={() => void followTerminal()}
+              disabled={following}
+              className="rounded-lg px-2 py-1.5 text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)] disabled:opacity-50"
+              title="在 SFTP 中打开终端当前所在的目录"
+            >
+              <FolderInput size={14} className={following ? 'animate-pulse' : ''} />
             </button>
           )}
           <div className="flex-1" />

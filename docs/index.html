@@ -894,6 +894,24 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🧭</div>
+            <h3 data-zh="一键把文件面板跳到终端所在目录（2026‑09‑15）">
+              Jump the file panel to the terminal’s directory (2026‑09‑15)
+            </h3>
+            <p
+              data-zh="贴着终端的 SFTP 面板原本已有「在终端中打开当前目录」（面板 → 终端）；现在它旁边多了反方向的那颗按钮：点一下，面板直接跳到那个终端命令行此刻所在的目录。走的是面板首次打开时同一套 <code>/proc</code> 反查——不往你的 shell 里写任何东西，scrollback 一字不留（已用探测前后逐字比对验证）。嵌套 shell 里 <code>cd</code> 过的目录同样跟得上；真判断不出来时（没有 <code>/proc</code>、或终端正卡在某个前台程序里）会明确提示，而不是默默无反应。"
+            >
+              The SFTP panel docked beside a terminal already had a button that sends its directory
+              to the terminal; the opposite direction now sits right next to it. One click and the
+              panel navigates to wherever that terminal’s command line currently is, using the same
+              <code>/proc</code> lookup the panel does when it first opens — so nothing is typed into
+              your shell and the scrollback is left untouched (verified by diffing it around a
+              probe). It follows a <code>cd</code> inside a nested shell too, and when it genuinely
+              can’t tell (no <code>/proc</code>, or the terminal is sitting inside a foreground
+              program) it says so rather than doing nothing.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🗂️</div>
             <h3 data-zh="文件面板支持多选，删除终于真的能删掉（2026‑09‑15）">
               Select several files at once, and a delete that actually deletes (2026‑09‑15)
