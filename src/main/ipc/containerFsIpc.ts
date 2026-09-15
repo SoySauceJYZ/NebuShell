@@ -51,6 +51,10 @@ export function registerContainerFsIpc(): void {
       containerFsManager.remove(sessionId, path, isDirectory)
   )
 
+  ipcMain.handle('containerFs:removePaths', (_e, sessionId: string, paths: string[]) =>
+    containerFsManager.removePaths(sessionId, paths)
+  )
+
   ipcMain.handle(
     'containerFs:uploadPaths',
     async (

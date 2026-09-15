@@ -336,6 +336,13 @@ export function registerLocalIpc(): void {
     isDirectory ? fsp.rm(p, { recursive: true, force: true }) : fsp.unlink(p)
   )
 
+  // 多选删除:逐条递归删除(与单条同语义,目录非空也删)。
+  ipcMain.handle('local:removePaths', async (_e, paths: string[]) => {
+    for (const p of paths) {
+      await fsp.rm(p, { recursive: true, force: true })
+    }
+  })
+
   ipcMain.handle('local:readFile', async (_e, p: string) => {
     const st = await fsp.stat(p)
     if (st.size > MAX_TEXT_BYTES) throw new Error('文件过大,无法在编辑器中打开(上限 2MB)')

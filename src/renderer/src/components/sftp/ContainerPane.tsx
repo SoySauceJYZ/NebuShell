@@ -20,6 +20,7 @@ import { resolveConnectOptions } from '../../lib/resolveConnectOptions'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { registerPane, unregisterPane } from '../../lib/dirMemory'
 import { remoteParent, remoteJoin, shellQuotePath } from '../../lib/pathUtils'
+import { confirmDelete } from '../../lib/confirmDelete'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
@@ -83,10 +84,11 @@ export function ContainerPane({
   const load = useCallback(
     async (targetPath: string): Promise<boolean> => {
       try {
-        const { entries: list, viaTar, truncated } = await window.api.containerFs.listInfo(
-          sessionId,
-          targetPath
-        )
+        const {
+          entries: list,
+          viaTar,
+          truncated
+        } = await window.api.containerFs.listInfo(sessionId, targetPath)
         list.sort((a, b) => {
           if (a.type === b.type) return a.name.localeCompare(b.name)
           return a.type === 'directory' ? -1 : 1
@@ -236,15 +238,18 @@ export function ContainerPane({
     { label: '新建文件夹', icon: FolderPlus, onSelect: handleMkdir }
   ]
 
-  const downloadTo = async (entry: FileEntry): Promise<void> => {
+  const downloadTo = async (targets: FileEntry[]): Promise<void> => {
     const dir = await window.api.local.pickDir()
     if (!dir) return
-    const transferId = genId()
-    track(transferId, `下载 ${entry.name}`, ownerId)
-    try {
-      await window.api.containerFs.downloadTo(sessionId, entry.path, dir, transferId)
-    } catch {
-      // surfaced via transfers overlay
+    // 多选时逐条下载,每条在传输面板里各占一行。
+    for (const entry of targets) {
+      const transferId = genId()
+      track(transferId, `下载 ${entry.name}`, ownerId)
+      try {
+        await window.api.containerFs.downloadTo(sessionId, entry.path, dir, transferId)
+      } catch {
+        // surfaced via transfers overlay
+      }
     }
   }
 
@@ -256,37 +261,68 @@ export function ContainerPane({
     bumpFs()
   }
 
-  const remove = async (entry: FileEntry): Promise<void> => {
-    const ok = await window.api.dialog.confirm({
-      message: `确定删除 “${entry.name}”?`,
-      detail: entry.type === 'directory' ? '目录及其全部内容将被删除。' : undefined,
-      confirmLabel: '删除',
-      cancelLabel: '取消'
-    })
-    if (!ok) return
-    await window.api.containerFs.remove(sessionId, entry.path, entry.type === 'directory')
+  /** 删除选中的一批(目录连内容一起删)。 */
+  const remove = async (targets: FileEntry[]): Promise<void> => {
+    if (!(await confirmDelete(targets))) return
+    try {
+      await window.api.containerFs.removePaths(
+        sessionId,
+        targets.map((t) => t.path)
+      )
+      setNavError('')
+    } catch (err) {
+      setNavError(err instanceof Error ? err.message : String(err))
+    }
     await load(path)
     bumpFs()
   }
 
   // 容器终端跑在容器里,所以这里填的容器内路径正好对得上。不回车,留给用户补命令。
-  const insertIntoTerminal = (entry: FileEntry): void => {
+  const insertIntoTerminal = (targets: FileEntry[]): void => {
     if (!terminalSessionId) return
     // 末尾留个空格,和终端里拖放文件的习惯一致,方便接着拼下一个参数。
-    window.api.ssh.write(terminalSessionId, shellQuotePath(entry.path) + ' ')
+    window.api.ssh.write(
+      terminalSessionId,
+      targets.map((t) => shellQuotePath(t.path)).join(' ') + ' '
+    )
   }
 
-  const menuActions = (entry: FileEntry): MenuAction[] => {
+  const menuActions = (targets: FileEntry[]): MenuAction[] => {
+    const one = targets[0]
     const list: MenuAction[] = []
-    if (entry.type !== 'directory') {
-      list.push({ label: '用编辑器打开', icon: FilePenLine, onSelect: onOpen })
+    if (one && one.type !== 'directory') {
+      list.push({
+        label: '用编辑器打开',
+        icon: FilePenLine,
+        singleOnly: true,
+        onSelect: (t) => onOpen(t[0])
+      })
     }
-    list.push({ label: '下载到…', icon: Download, onSelect: downloadTo })
+    list.push({
+      label: (n) => (n > 1 ? `下载 ${n} 项到…` : '下载到…'),
+      icon: Download,
+      onSelect: (t) => void downloadTo(t)
+    })
     if (terminalSessionId) {
-      list.push({ label: '输入路径到终端', icon: SquareTerminal, onSelect: insertIntoTerminal })
+      list.push({
+        label: (n) => (n > 1 ? `输入 ${n} 条路径到终端` : '输入路径到终端'),
+        icon: SquareTerminal,
+        onSelect: insertIntoTerminal
+      })
     }
-    list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
-    list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
+    list.push({
+      label: '重命名',
+      icon: Pencil,
+      singleOnly: true,
+      onSelect: (t) => void rename(t[0]),
+      separatorBefore: true
+    })
+    list.push({
+      label: (n) => (n > 1 ? `删除 ${n} 项` : '删除'),
+      icon: Trash2,
+      onSelect: (t) => void remove(t),
+      danger: true
+    })
     return list
   }
 

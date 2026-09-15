@@ -43,6 +43,18 @@ export function posixJoin(dir: string, name: string): string {
   return d === '' ? `/${name}` : `${d}/${name}`
 }
 
+/** 探测 shell 可用性的回显标记与上限。 */
+const SHELL_PROBE_MARKER = 'NEBU_SHELL_OK'
+const SHELL_PROBE_TIMEOUT_MS = 3000
+
+/** 一条 `rm -rf` 里最多带多少个路径(命令行长度上限的保守取值)。 */
+const REMOVE_BATCH = 60
+
+/** 为远端 shell 安全地单引号包裹一个路径。 */
+function shellQuote(p: string): string {
+  return `'${p.replace(/'/g, `'\\''`)}'`
+}
+
 /** basename that tolerates both '/' and '\\' separators (remote or local input). */
 export function anyBasename(p: string): string {
   const parts = p.replace(/\\/g, '/').replace(/\/+$/, '').split('/')
@@ -51,6 +63,8 @@ export function anyBasename(p: string): string {
 
 export class SftpManager {
   private sessions = new Map<string, SftpSession>()
+  /** 每条会话能否用 exec 跑 shell 命令(删除走 rm -rf 还是协议递归)。 */
+  private shellOk = new Map<string, boolean>()
 
   async connect(opts: SshConnectOptions): Promise<void> {
     const sock = await createNoDelaySocket(opts.host, opts.port)
@@ -127,15 +141,139 @@ export class SftpManager {
     })
   }
 
-  remove(sessionId: string, remotePath: string, isDirectory: boolean): Promise<void> {
-    const { sftp } = this.getSession(sessionId)
-    return new Promise((resolve, reject) => {
-      if (isDirectory) {
-        sftp.rmdir(remotePath, (err) => (err ? reject(err) : resolve()))
-      } else {
-        sftp.unlink(remotePath, (err) => (err ? reject(err) : resolve()))
+  /** 单条删除:等价于删一批里只有一条(目录同样是递归删除)。 */
+  remove(sessionId: string, remotePath: string): Promise<void> {
+    return this.removePaths(sessionId, [remotePath])
+  }
+
+  /**
+   * 删除一批远端路径,**目录非空也删**。
+   *
+   * 首选在同一条 SSH 连接上执行 `rm -rf`:非空目录一条命令就能删掉,多个路径也只要一次
+   * 往返(SFTP 协议得一层层 readdir/unlink/rmdir,深目录要成百上千次往返)。
+   * 账户被限制成纯 SFTP(ForceCommand internal-sftp)时没有 shell,exec 会失败,
+   * 这时退回按协议递归删除 —— 慢,但仍然能把非空目录删干净。
+   */
+  async removePaths(sessionId: string, remotePaths: string[]): Promise<void> {
+    const paths = remotePaths.filter((p) => p && p !== '/')
+    if (paths.length === 0) return
+    try {
+      if (!(await this.canRunShell(sessionId))) throw new Error('NO_SHELL')
+      // 命令行长度有限,分批下发(每批 60 条,远低于常见的 ARG_MAX)。
+      for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
+        await this.execRemove(sessionId, paths.slice(i, i + REMOVE_BATCH))
       }
+      return
+    } catch (err) {
+      // 没有 shell / 没有 rm:退回协议递归删除。权限不足之类的错误在这条路上
+      // 会以更具体的「哪个文件删不掉」形式再报一次。
+      const { sftp } = this.getSession(sessionId)
+      let lastErr: unknown = err
+      let ok = false
+      for (const p of paths) {
+        try {
+          await this.removeRecursive(sftp, p)
+          ok = true
+        } catch (e) {
+          lastErr = e
+        }
+      }
+      if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
+    }
+  }
+
+  /**
+   * 这条连接能不能用 exec 跑 shell 命令?每个会话只探一次(结果缓存)。
+   *
+   * 必须先探:被 `ForceCommand internal-sftp` 限制的账户,exec 请求本身是**成功**的,
+   * 只是跑起来的是 sftp 子系统而不是你的命令 —— 通道会一直等 SFTP 报文,既不出错也不退出。
+   * 直接下发 rm 就会永久挂住。探测用一条 echo + 3 秒上限,拿不到回显即判定没有 shell。
+   */
+  private async canRunShell(sessionId: string): Promise<boolean> {
+    const cached = this.shellOk.get(sessionId)
+    if (cached !== undefined) return cached
+    const ok = await this.probeShell(sessionId)
+    this.shellOk.set(sessionId, ok)
+    return ok
+  }
+
+  private probeShell(sessionId: string): Promise<boolean> {
+    const { client } = this.getSession(sessionId)
+    return new Promise((resolve) => {
+      let settled = false
+      const done = (v: boolean, channel?: { close: () => void }): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        try {
+          channel?.close()
+        } catch {
+          // 通道可能已经关了
+        }
+        resolve(v)
+      }
+      const timer = setTimeout(() => done(false), SHELL_PROBE_TIMEOUT_MS)
+      client.exec(`echo ${SHELL_PROBE_MARKER}`, (err, stream) => {
+        if (err || !stream) {
+          done(false)
+          return
+        }
+        let out = ''
+        stream.on('data', (c: Buffer) => {
+          out += c.toString('utf8')
+          if (out.includes(SHELL_PROBE_MARKER)) done(true, stream)
+        })
+        stream.on('close', () => done(out.includes(SHELL_PROBE_MARKER)))
+        stream.on('error', () => done(false))
+      })
     })
+  }
+
+  /** 在 SFTP 会话自己的 SSH 连接上跑 `rm -rf`。 */
+  private execRemove(sessionId: string, paths: string[]): Promise<void> {
+    const { client } = this.getSession(sessionId)
+    const command = `rm -rf -- ${paths.map(shellQuote).join(' ')}`
+    return new Promise((resolve, reject) => {
+      client.exec(command, (err, stream) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        let stderr = ''
+        let code: number | null = null
+        stream.on('data', () => {})
+        stream.stderr.on('data', (c: Buffer) => (stderr += c.toString('utf8')))
+        stream.on('exit', (c: number | null) => (code = c))
+        stream.on('close', () => {
+          if (code === 0) resolve()
+          else reject(new Error(stderr.trim() || `rm 退出码 ${code ?? '未知'}`))
+        })
+        stream.on('error', (e: Error) => reject(e))
+      })
+    })
+  }
+
+  /** 纯 SFTP 协议的递归删除(没有 shell 时的兜底)。用 lstat,符号链接只删链接本身。 */
+  private async removeRecursive(sftp: SFTPWrapper, remotePath: string): Promise<void> {
+    const st = await new Promise<Stats>((resolve, reject) =>
+      sftp.lstat(remotePath, (err, s) => (err ? reject(err) : resolve(s)))
+    )
+    if (st.isDirectory()) {
+      const entries = await new Promise<Array<{ filename: string }>>((resolve, reject) =>
+        sftp.readdir(remotePath, (err, list) => (err ? reject(err) : resolve(list)))
+      )
+      for (const e of entries) {
+        if (e.filename === '.' || e.filename === '..') continue
+        await this.removeRecursive(sftp, posixJoin(remotePath, e.filename))
+      }
+      await new Promise<void>((resolve, reject) =>
+        sftp.rmdir(remotePath, (err) => (err ? reject(err) : resolve()))
+      )
+      return
+    }
+    await new Promise<void>((resolve, reject) =>
+      sftp.unlink(remotePath, (err) => (err ? reject(err) : resolve()))
+    )
   }
 
   download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
@@ -476,6 +614,7 @@ export class SftpManager {
       session.client.end()
       this.sessions.delete(sessionId)
     }
+    this.shellOk.delete(sessionId)
   }
 }
 

@@ -394,6 +394,13 @@ export class ContainerFsManager {
     )
   }
 
+  /** 多选删除:一条 rm -rf 带上全部选中项(目录非空也删)。 */
+  removePaths(sessionId: string, paths: string[]): Promise<void> {
+    const list = paths.filter((p) => p && p !== '/')
+    if (list.length === 0) return Promise.resolve()
+    return this.execSimple(sessionId, `rm -rf -- ${list.map(shq).join(' ')}`)
+  }
+
   // ---- 上传(本地 → 容器,tar 流灌 docker cp -) -----------------------------
 
   async uploadPaths(

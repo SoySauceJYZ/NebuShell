@@ -22,6 +22,7 @@ import { useFileDnd } from '../../lib/useFileDnd'
 import { consumeDetaching } from '../../lib/detachRegistry'
 import { recallDir, registerPane, rememberDir, unregisterPane } from '../../lib/dirMemory'
 import { remoteParent, remoteJoin, shellQuotePath } from '../../lib/pathUtils'
+import { confirmDelete } from '../../lib/confirmDelete'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
@@ -234,15 +235,18 @@ export function RemotePane({
     { label: '新建文件夹', icon: FolderPlus, onSelect: handleMkdir }
   ]
 
-  const downloadTo = async (entry: FileEntry): Promise<void> => {
+  const downloadTo = async (targets: FileEntry[]): Promise<void> => {
     const dir = await window.api.local.pickDir()
     if (!dir) return
-    const transferId = genId()
-    track(transferId, `下载 ${entry.name}`, ownerId)
-    try {
-      await window.api.sftp.downloadTo(sessionId, entry.path, dir, transferId)
-    } catch {
-      // surfaced via transfers overlay
+    // 多选时按顺序逐条下载,每条在传输面板里各占一行(与拖放下载一致)。
+    for (const entry of targets) {
+      const transferId = genId()
+      track(transferId, `下载 ${entry.name}`, ownerId)
+      try {
+        await window.api.sftp.downloadTo(sessionId, entry.path, dir, transferId)
+      } catch {
+        // surfaced via transfers overlay
+      }
     }
   }
 
@@ -254,25 +258,30 @@ export function RemotePane({
     bumpFs()
   }
 
-  const remove = async (entry: FileEntry): Promise<void> => {
-    const ok = await window.api.dialog.confirm({
-      message: `确定删除 “${entry.name}”?`,
-      detail: entry.type === 'directory' ? '目录必须为空才能删除。' : undefined,
-      confirmLabel: '删除',
-      cancelLabel: '取消'
-    })
-    if (!ok) return
-    await window.api.sftp.remove(sessionId, entry.path, entry.type === 'directory')
+  /** 删除选中的一批(目录递归删除)。 */
+  const remove = async (targets: FileEntry[]): Promise<void> => {
+    if (!(await confirmDelete(targets))) return
+    try {
+      await window.api.sftp.removePaths(
+        sessionId,
+        targets.map((t) => t.path)
+      )
+      setNavError('')
+    } catch (err) {
+      setNavError(err instanceof Error ? err.message : String(err))
+    }
     await load(path)
     bumpFs()
   }
 
   // 把整条路径填进终端的当前输入行(不回车),用户可以在前面补命令再执行。
   // 走和「历史命令」面板一样的写入方式,含空格等特殊字符的路径会自动加引号。
-  const insertIntoTerminal = (entry: FileEntry): void => {
+  // 多选时一次填入多条(空格分隔),正好可以接在 tar / cp 之类命令后面。
+  const insertIntoTerminal = (targets: FileEntry[]): void => {
     if (!terminalSessionId) return
     // 末尾留个空格,和终端里拖放文件的习惯一致,方便接着拼下一个参数。
-    window.api.ssh.write(terminalSessionId, shellQuotePath(entry.path) + ' ')
+    const text = targets.map((t) => shellQuotePath(t.path)).join(' ') + ' '
+    window.api.ssh.write(terminalSessionId, text)
   }
 
   // 让旁边的终端 cd 到某个目录(选中的是文件就去它所在的目录),直接回车执行。
@@ -281,22 +290,49 @@ export function RemotePane({
     window.api.ssh.write(terminalSessionId, `cd ${shellQuotePath(dir)}\n`)
   }
 
-  const menuActions = (entry: FileEntry): MenuAction[] => {
+  const menuActions = (targets: FileEntry[]): MenuAction[] => {
+    const one = targets[0]
     const list: MenuAction[] = []
-    if (entry.type !== 'directory') {
-      list.push({ label: '用编辑器打开', icon: FilePenLine, onSelect: onOpen })
+    if (one && one.type !== 'directory') {
+      list.push({
+        label: '用编辑器打开',
+        icon: FilePenLine,
+        singleOnly: true,
+        onSelect: (t) => onOpen(t[0])
+      })
     }
-    list.push({ label: '下载到…', icon: Download, onSelect: downloadTo })
+    list.push({
+      label: (n) => (n > 1 ? `下载 ${n} 项到…` : '下载到…'),
+      icon: Download,
+      onSelect: (t) => void downloadTo(t)
+    })
     if (terminalSessionId) {
       list.push({
         label: '在终端中打开',
         icon: Terminal,
-        onSelect: (e) => openInTerminal(e.type === 'directory' ? e.path : remoteParent(e.path))
+        singleOnly: true,
+        onSelect: (t) =>
+          openInTerminal(t[0].type === 'directory' ? t[0].path : remoteParent(t[0].path))
       })
-      list.push({ label: '输入路径到终端', icon: SquareTerminal, onSelect: insertIntoTerminal })
+      list.push({
+        label: (n) => (n > 1 ? `输入 ${n} 条路径到终端` : '输入路径到终端'),
+        icon: SquareTerminal,
+        onSelect: insertIntoTerminal
+      })
     }
-    list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
-    list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
+    list.push({
+      label: '重命名',
+      icon: Pencil,
+      singleOnly: true,
+      onSelect: (t) => void rename(t[0]),
+      separatorBefore: true
+    })
+    list.push({
+      label: (n) => (n > 1 ? `删除 ${n} 项` : '删除'),
+      icon: Trash2,
+      onSelect: (t) => void remove(t),
+      danger: true
+    })
     return list
   }
 
@@ -314,7 +350,7 @@ export function RemotePane({
       join: remoteJoin,
       mkdir: (p) => window.api.sftp.mkdir(sessionId, p),
       rename: (oldPath, newPath) => window.api.sftp.rename(sessionId, oldPath, newPath),
-      removeDir: (p) => window.api.sftp.remove(sessionId, p, true)
+      removeDir: (p) => window.api.sftp.remove(sessionId, p)
     }),
     [sessionId]
   )

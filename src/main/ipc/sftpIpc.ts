@@ -54,12 +54,15 @@ export function registerSftpIpc(): void {
     }
   )
 
-  ipcMain.handle(
-    'sftp:remove',
-    async (_e, sessionId: string, remotePath: string, isDirectory: boolean) => {
-      return sftpManager.remove(sessionId, remotePath, isDirectory)
-    }
-  )
+  // 目录一律递归删除(rm -rf 语义),非空也能删。
+  ipcMain.handle('sftp:remove', async (_e, sessionId: string, remotePath: string) => {
+    return sftpManager.remove(sessionId, remotePath)
+  })
+
+  // 多选删除:一次把选中的若干条交给 rm -rf。
+  ipcMain.handle('sftp:removePaths', async (_e, sessionId: string, remotePaths: string[]) => {
+    return sftpManager.removePaths(sessionId, remotePaths)
+  })
 
   ipcMain.handle(
     'sftp:download',

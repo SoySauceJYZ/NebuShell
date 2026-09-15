@@ -798,23 +798,34 @@
             <div class="ico">📁</div>
             <h3 data-zh="SFTP 文件浏览器">SFTP file browser</h3>
             <p
-              data-zh="远程/本地双栏管理，支持拖拽传输和实时传输队列。可从工具栏或右键空白处新建文件 / 文件夹；右键任意条目还能把它的完整路径输入到旁边的终端。"
+              data-zh="远程/本地双栏管理，支持拖拽传输、实时传输队列与懒加载目录树。支持多选（Ctrl / Shift / Ctrl+A）并对整个选区一次性操作——批量下载、批量删除（<code>rm -rf</code>，非空目录照样删）、把所有路径一次输入到终端。可从工具栏或右键空白处新建文件 / 文件夹，双击用 Monaco 编辑器打开并直接存回服务器；面板贴着终端时，还能让那个终端 cd 到你正在浏览的目录——首次打开时它也正是从终端当前目录起步的。"
             >
-              Dual-pane remote/local management with drag-and-drop transfers and a live transfer
-              queue. Create files and folders from the toolbar or by right-clicking blank space,
-              and right-click any entry to type its full path into the terminal next to it.
+              Dual-pane remote/local management with drag-and-drop transfers, a live transfer queue
+              and a lazy-loaded directory tree. Multi-select with Ctrl/Shift/Ctrl+A and act on the
+              whole selection at once — download, delete (<code>rm -rf</code>, so a non-empty
+              directory is no problem), or type every path into the terminal. Create files and
+              folders from the toolbar or by right-clicking blank space, open a file in the Monaco
+              editor and save it straight back, and when the panel is docked beside a terminal, jump
+              that terminal into the directory you are browsing — which is also where the panel
+              starts from when you first open it.
             </p>
           </div>
           <div class="card">
             <div class="ico">🐳</div>
             <h3 data-zh="Docker 容器管理">Docker container management</h3>
             <p
-              data-zh="每台主机的容器面板：实时 docker ps、启停重启、日志、sudo 自动探测；一键打开 docker exec 容器终端；基于 docker cp tar 流的容器文件浏览器——浏览、编辑保存、在本机与任意运行中容器之间拖拽传文件。"
+              data-zh="每台主机一个面板，分为容器 / 镜像 / 卷 / 网络 / 清理五个分区。容器按 compose 项目分组（可整组启停重启），显示健康状态、CPU 与内存、以及可点击的端口映射；每个容器都能启动/停止/重启/暂停/强制终止/删除，查看日志（独立标签页实时跟随，或在编辑器里看快照，可选行数、时间戳、自动刷新），打开容器终端（可指定用户 / 工作目录 / shell），查看挂载点（一键在宿主机 SFTP 里打开那份数据），以及基于 <code>docker cp</code> tar 流的容器文件浏览器——容器已停止也能浏览。卷可以备份与还原，镜像/卷/网络可删除，<code>docker system df</code> 加一键 prune 回收磁盘。Docker 权限（直连或免密 sudo）自动探测，出错一律给中文可操作提示。"
             >
-              A per-host container panel (live docker ps, start/stop/restart, logs, sudo
-              auto-detect), one-click container terminals via docker exec PTY, and a container file
-              browser built on docker cp tar streaming — browse, edit-and-save, and drag files
-              between your PC and any running container.
+              A per-host panel with sections for containers, images, volumes, networks and cleanup.
+              Containers are grouped by compose project (start/restart/stop a whole project), show
+              health, CPU &amp; memory, and clickable published ports; each one offers
+              start/stop/restart/pause/kill/delete, logs (following in their own tab, or a snapshot
+              in the editor with line count, timestamps and auto-refresh), a container terminal you
+              can enter as any user, workdir or shell, its mount points (one click opens the data on
+              the host in SFTP), and a file browser built on <code>docker cp</code> tar streaming
+              that works even when the container is stopped. Volumes can be backed up and restored,
+              images/volumes/networks deleted, and <code>docker system df</code> plus one-click
+              prunes reclaim disk.
             </p>
           </div>
           <div class="card">
@@ -882,6 +893,17 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🗂️</div>
+            <h3 data-zh="文件面板支持多选，删除终于真的能删掉（2026‑09‑15）">
+              Select several files at once, and a delete that actually deletes (2026‑09‑15)
+            </h3>
+            <p
+              data-zh="文件面板现在可以多选：单击选中、Ctrl/Cmd 点击加选、Shift 点击连选、Ctrl/Cmd+A 全选、Esc 清空、Delete 删除，底部显示「已选 N 项」。右键落在选区里时，菜单作用于整个选区——下载 N 项、把 N 条路径输入到终端、删除 N 项；而「重命名」「用编辑器打开」这类只对单个有意义的项，多选时会自动隐藏。另外，SFTP 删目录不再因为非空而失败：以前调的是 <code>rmdir</code>，非空目录直接拒绝（确认框上甚至还写着「目录必须为空才能删除」），只能回终端自己动手。现在删除是在 SFTP 会话自己的那条 SSH 连接上跑 <code>rm -rf</code>——整棵树一条命令，多选也只要一次往返（实测 420 个节点 11ms）。被限制成纯 SFTP 的账户（<code>ForceCommand internal-sftp</code>）没有 shell，而麻烦之处在于这种账户的 exec 请求会「成功」然后永远不返回，所以下发任何命令前先用一条带 3 秒上限的 <code>echo</code> 探一次；探不到 shell 就退回按 SFTP 协议递归删除（结果一样，只是慢：同一棵树 774ms）。含空格与引号的路径会转义，<code>/</code> 直接拒绝，权限不足会如实报错。SFTP、容器文件、本机文件三个面板行为一致。"
+            >
+              The file panels gain multi-select: click to select, Ctrl/Cmd-click to add one, Shift-click for a range, Ctrl/Cmd+A for everything, Esc to clear and Delete to delete, with an “N selected” bar at the bottom. Right-clicking inside the selection acts on all of it — download N items, type N paths into the terminal, delete N items — while entries that only make sense for one thing (rename, open in the editor) hide themselves when more than one is selected. And deleting a directory over SFTP no longer fails when it isn’t empty: it used to call <code>rmdir</code>, which refuses a non-empty directory (the confirmation even said “the directory must be empty”), so the only way out was the terminal. Deletion now runs <code>rm -rf</code> on the SFTP session’s own SSH connection — one command for the whole tree, and one round trip for a whole multi-selection (measured: a 420-node tree in 11ms). Accounts restricted to SFTP only (<code>ForceCommand internal-sftp</code>) have no shell, and the subtle part is that their exec request succeeds and then never returns — so the connection is probed once with a 3s-capped <code>echo</code> before anything is run, and when there is no shell the delete falls back to recursing over the SFTP protocol (same result, just slower: the same tree took 774ms). Paths with spaces or quotes are escaped, <code>/</code> is refused outright, and a permission failure is reported rather than silently swallowed. SFTP, container files and local files all behave the same way.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">💾</div>
             <h3 data-zh="卷可以备份与还原了（2026‑09‑11）">

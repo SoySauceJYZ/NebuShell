@@ -12,6 +12,7 @@ import {
 import { useSessionStore } from '../../store/useSessionStore'
 import { useFileDnd } from '../../lib/useFileDnd'
 import { localParent, localJoin, localRoot } from '../../lib/pathUtils'
+import { confirmDelete } from '../../lib/confirmDelete'
 import { FileTable, type FileEntry, type MenuAction, type EmptyMenuAction } from './FileTable'
 import { DirectoryTree, type TreeAdapter } from './DirectoryTree'
 import { usePromptModal } from './PromptModal'
@@ -157,26 +158,43 @@ export function LocalPane({
     bumpFs()
   }
 
-  const remove = async (entry: FileEntry): Promise<void> => {
-    const ok = await window.api.dialog.confirm({
-      message: `确定删除 “${entry.name}”?`,
-      detail: entry.type === 'directory' ? '将递归删除整个目录。' : undefined,
-      confirmLabel: '删除',
-      cancelLabel: '取消'
-    })
-    if (!ok) return
-    await window.api.local.remove(entry.path, entry.type === 'directory')
+  /** 删除选中的一批(目录连内容一起删)。 */
+  const remove = async (targets: FileEntry[]): Promise<void> => {
+    if (!(await confirmDelete(targets))) return
+    try {
+      await window.api.local.removePaths(targets.map((t) => t.path))
+      setErrorMsg('')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    }
     await load(cwd)
     bumpFs()
   }
 
-  const menuActions = (entry: FileEntry): MenuAction[] => {
+  const menuActions = (targets: FileEntry[]): MenuAction[] => {
+    const one = targets[0]
     const list: MenuAction[] = []
-    if (entry.type === 'file' && (IMAGE_RE.test(entry.name) || TEXT_RE.test(entry.name))) {
-      list.push({ label: '打开预览', icon: Pencil, onSelect: onOpen })
+    if (one && one.type === 'file' && (IMAGE_RE.test(one.name) || TEXT_RE.test(one.name))) {
+      list.push({
+        label: '打开预览',
+        icon: Pencil,
+        singleOnly: true,
+        onSelect: (t) => onOpen(t[0])
+      })
     }
-    list.push({ label: '重命名', icon: Pencil, onSelect: rename, separatorBefore: true })
-    list.push({ label: '删除', icon: Trash2, onSelect: remove, danger: true })
+    list.push({
+      label: '重命名',
+      icon: Pencil,
+      singleOnly: true,
+      onSelect: (t) => void rename(t[0]),
+      separatorBefore: true
+    })
+    list.push({
+      label: (n) => (n > 1 ? `删除 ${n} 项` : '删除'),
+      icon: Trash2,
+      onSelect: (t) => void remove(t),
+      danger: true
+    })
     return list
   }
 
@@ -245,7 +263,11 @@ export function LocalPane({
             </div>
           )}
           <div className="flex-1" />
-          <button onClick={handleCreateFile} className="btn-secondary px-2.5 py-1.5" title="新建文件">
+          <button
+            onClick={handleCreateFile}
+            className="btn-secondary px-2.5 py-1.5"
+            title="新建文件"
+          >
             <FilePlus size={14} />
           </button>
           <button onClick={handleMkdir} className="btn-secondary px-2.5 py-1.5" title="新建文件夹">

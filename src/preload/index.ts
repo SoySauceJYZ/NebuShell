@@ -165,8 +165,12 @@ const api = {
       ipcRenderer.invoke('sftp:writeFile', sessionId, remotePath, content),
     rename: (sessionId: string, oldPath: string, newPath: string): Promise<void> =>
       ipcRenderer.invoke('sftp:rename', sessionId, oldPath, newPath),
-    remove: (sessionId: string, path: string, isDirectory: boolean): Promise<void> =>
-      ipcRenderer.invoke('sftp:remove', sessionId, path, isDirectory),
+    /** 删除一项。目录递归删除(rm -rf 语义),非空也能删。 */
+    remove: (sessionId: string, path: string): Promise<void> =>
+      ipcRenderer.invoke('sftp:remove', sessionId, path),
+    /** 多选删除:一次交给 rm -rf。 */
+    removePaths: (sessionId: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('sftp:removePaths', sessionId, paths),
     download: (sessionId: string, remotePath: string): Promise<string | null> =>
       ipcRenderer.invoke('sftp:download', sessionId, remotePath),
     upload: (sessionId: string, remoteDir: string): Promise<string | null> =>
@@ -220,6 +224,9 @@ const api = {
       ipcRenderer.invoke('containerFs:rename', sessionId, oldPath, newPath),
     remove: (sessionId: string, path: string, isDirectory: boolean): Promise<void> =>
       ipcRenderer.invoke('containerFs:remove', sessionId, path, isDirectory),
+    /** 多选删除:一条 rm -rf 带上全部选中项。 */
+    removePaths: (sessionId: string, paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('containerFs:removePaths', sessionId, paths),
     uploadPaths: (
       sessionId: string,
       containerDir: string,
@@ -256,6 +263,9 @@ const api = {
       ipcRenderer.invoke('local:rename', oldPath, newPath),
     remove: (p: string, isDirectory: boolean): Promise<void> =>
       ipcRenderer.invoke('local:remove', p, isDirectory),
+    /** 多选删除:逐条递归删除。 */
+    removePaths: (paths: string[]): Promise<void> =>
+      ipcRenderer.invoke('local:removePaths', paths),
     readFile: (p: string): Promise<string> => ipcRenderer.invoke('local:readFile', p),
     writeFile: (p: string, content: string): Promise<void> =>
       ipcRenderer.invoke('local:writeFile', p, content),
