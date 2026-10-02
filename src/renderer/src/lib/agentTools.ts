@@ -357,7 +357,10 @@ export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask
       '容器与 SSH 主机之间、两个容器之间不能直传,需分两步经由本机中转。' +
       '本机内部的复制用 run_command(cp / Copy-Item),不要用 transfer_file。' +
       '传输可能被用户拒绝或在计划模式下被拦截,按结果调整,不要反复重试。',
-    '12. 回答使用 Markdown。',
-    ...(hasLocal ? [`13. ${localTargetRule()}`] : [])
+    '12. 用户消息里形如 @名字 的写法是在点名目标,名字与上面列出的目标名逐字一致。' +
+      '遇到时就把它当作本次 run_command / transfer_file 的 target,不要自行换一台;' +
+      '一条消息里点了多个目标,就按点到的目标分别下发。',
+    '13. 回答使用 Markdown。',
+    ...(hasLocal ? [`14. ${localTargetRule()}`] : [])
   ].join('\n')
 }

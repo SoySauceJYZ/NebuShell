@@ -46,6 +46,7 @@ import {
   localTargetName,
   type AgentTarget
 } from '../lib/agentTools'
+import { detectMention, matchTargets, type MentionState } from '../lib/targetMention'
 import {
   estimateMessagesTokens,
   estimateTokens,
@@ -68,6 +69,7 @@ import {
 } from '../lib/attachments'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ModeSelector, ModelSelector } from './agent/AgentSelectors'
+import { MentionPopup } from './agent/TargetMention'
 import type {
   Attachment,
   ChatMessage,
@@ -586,6 +588,9 @@ export function AgentPanel({
   )
 }
 
+/** 订阅 store 时的空目标常量:每次返回同一个引用,免得白白触发重渲染。 */
+const NO_TARGETS: AgentTarget[] = []
+
 interface ContextUsage {
   used: number
   window: number
@@ -646,6 +651,45 @@ function Composer({
   const [attachError, setAttachError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const textRef = useRef<HTMLTextAreaElement>(null)
+
+  // ---- @ 引用目标 ----
+  // 目标清单直接从 store 订阅,不走 props:面板那边已经把「终端标题 + 去重 + 本机」
+  // 算成了最终的 target 名字,而那串名字正是模型 run_command 的 target 枚举值。
+  const targets = useAgentStore((s) => s.targetsBySession[sessionId] ?? NO_TARGETS)
+  const [mention, setMention] = useState<MentionState | null>(null)
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const matches = useMemo(
+    () => (mention ? matchTargets(targets, mention.query) : []),
+    [mention, targets]
+  )
+  // 一个命中都没有时收起菜单 —— 正文里出现的 "@" 不该一直挂着一个空框。
+  const mentionOpen = matches.length > 0
+  const activeIdx = Math.min(mentionIdx, matches.length - 1)
+
+  /** 敲键盘之后重新判断光标是不是落在一次 @ 引用里。 */
+  const refreshMention = (value: string, caret: number | null): void => {
+    setMention(detectMention(value, caret ?? value.length))
+    setMentionIdx(0)
+  }
+
+  /** 把 `@过滤词` 整段换成 `@目标名 `,光标落到空格之后。 */
+  const applyMention = (t: AgentTarget): void => {
+    if (!mention) return
+    const el = textRef.current
+    const value = el?.value ?? input
+    const caret = el?.selectionStart ?? mention.start + 1 + mention.query.length
+    const head = value.slice(0, mention.start)
+    const inserted = `@${t.name} `
+    setInput(head + inserted + value.slice(caret))
+    setMention(null)
+    const pos = head.length + inserted.length
+    // 等 React 把新值写进 DOM 再摆光标,否则 setSelectionRange 作用在旧文本上。
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(pos, pos)
+    })
+  }
 
   const addImages = async (files: File[]): Promise<void> => {
     if (files.length === 0) return
@@ -705,6 +749,7 @@ function Composer({
     setImages([])
     setDocs([])
     setAttachError('')
+    setMention(null)
     onSubmit()
     send(sessionId, text, images, docs)
   }
@@ -727,7 +772,7 @@ function Composer({
           setDragOver(false)
           addFiles(files)
         }}
-        className={`rounded-xl border bg-[var(--panel-bg)] focus-within:border-[var(--accent)] ${
+        className={`relative rounded-xl border bg-[var(--panel-bg)] focus-within:border-[var(--accent)] ${
           dragOver
             ? 'border-[var(--accent)] bg-[var(--accent-soft)]/30'
             : 'border-[var(--panel-border)]'
@@ -773,9 +818,24 @@ function Composer({
           </div>
         )}
         {attachError && <div className="px-3 pt-2 text-xs text-[var(--danger)]">{attachError}</div>}
+        {mentionOpen && (
+          <MentionPopup
+            targets={matches}
+            activeIndex={activeIdx}
+            onPick={applyMention}
+            onHover={setMentionIdx}
+          />
+        )}
         <textarea
+          ref={textRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value)
+            refreshMention(e.target.value, e.target.selectionStart)
+          }}
+          // 光标被鼠标/左右方向键挪走之后,原来那次引用就不再贴着光标了,直接收起。
+          onClick={() => setMention(null)}
+          onBlur={() => setMention(null)}
           onPaste={(e) => {
             const files = [
               ...imageFilesFromClipboard(e.clipboardData),
@@ -787,13 +847,41 @@ function Composer({
             addFiles(files)
           }}
           onKeyDown={(e) => {
+            // 输入法组词期间的回车/方向键是给候选框的,别抢。
+            if (mentionOpen && !e.nativeEvent.isComposing) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setMentionIdx((i) => (Math.min(i, matches.length - 1) + 1) % matches.length)
+                return
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setMentionIdx(
+                  (i) => (Math.min(i, matches.length - 1) + matches.length - 1) % matches.length
+                )
+                return
+              }
+              if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault()
+                applyMention(matches[activeIdx])
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setMention(null)
+                return
+              }
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') setMention(null)
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               handleSend()
             }
           }}
           rows={2}
-          placeholder={status === 'idle' ? '输入消息…(可粘贴 / 拖入图片、文档)' : '处理中…'}
+          placeholder={
+            status === 'idle' ? '输入消息…(@ 引用目标,可粘贴 / 拖入图片、文档)' : '处理中…'
+          }
           disabled={status !== 'idle'}
           className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none"
         />

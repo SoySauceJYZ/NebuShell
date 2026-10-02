@@ -894,6 +894,32 @@
         <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
         <div class="grid">
           <div class="card">
+            <div class="ico">🎯</div>
+            <h3 data-zh="智能体输入框可以 @ 引用目标了（2026‑09‑22）">
+              @ a target straight from the agent’s input box (2026‑09‑22)
+            </h3>
+            <p
+              data-zh="挂着好几个终端时，「到底动哪一台」以前只能写在正文里，靠模型自己领会。现在在智能体输入框里敲 <code>@</code>，当前会话可用的目标就列出来——SSH 终端、容器终端，以及本机——边打边按名字或主机过滤，<code>↑↓</code> 选择、<code>Enter / Tab</code> 插入、<code>Esc</code> 收起，鼠标点选同样可以。插进去的是目标名字的原文，而那串名字正是模型调用 <code>run_command</code> / <code>transfer_file</code> 时 <code>target</code> 参数的取值；系统提示词里也补了一条对应规则，所以 @ 是一条明确指令而不是暗示，一条消息里点两台就会分别下发。只有行首或空格之后的 @ 才算引用，<code>root@server</code>、正文里的邮箱地址都不会被误判；过滤词一旦写成了正文，匹配不到任何目标，菜单自己收起来。带空格的终端标题照样能选中（过滤不会遇到空格就放弃），重名的去重规则与「目标」菜单完全一致（<code>标题 #2</code>），并且菜单开着时回车用于选中，不会把消息发出去。"
+            >
+              With several terminals attached, saying which machine you mean was prose the model had
+              to infer. Type <code>@</code> in the agent’s input box and the session’s current
+              targets drop in — SSH terminals, container terminals and 本机 (this computer) —
+              filtered as you type by name or host, with <code>↑↓</code> to move,
+              <code>Enter / Tab</code> to insert, <code>Esc</code> to dismiss, and clicking works
+              too. What gets inserted is the target’s name verbatim, which is exactly the value the
+              model passes as <code>target</code> to <code>run_command</code> /
+              <code>transfer_file</code>, and a new system-prompt rule tells it to honour it — so
+              <code>@</code> is an instruction rather than a hint, and naming two targets in one
+              message gets the work split between them. Only an <code>@</code> at the start of a
+              line or after a space counts as a reference, so <code>root@server</code> and an email
+              address in your text are left alone; once the words after it have drifted into
+              ordinary prose nothing matches any more and the menu closes itself. Terminal titles
+              containing spaces still match (the filter doesn’t give up at the first space), names
+              are deduplicated exactly as the 目标 (Targets) menu does it (<code>title #2</code>),
+              and while the menu is open Enter picks rather than sends.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">🧭</div>
             <h3 data-zh="一键把文件面板跳到终端所在目录（2026‑09‑15）">
               Jump the file panel to the terminal’s directory (2026‑09‑15)
