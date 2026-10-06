@@ -18,6 +18,7 @@ import {
 import { useVaultStore } from '../store/useVaultStore'
 import { useUpdateStore } from '../store/useUpdateStore'
 import { formatBytes } from '../lib/agentTransfer'
+import { McpSettingsCard } from './McpSettingsCard'
 
 function clamp(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_TRANSFER_CONCURRENCY
@@ -286,6 +287,8 @@ export function SettingsView(): React.ReactElement {
           </div>
         </div>
       </div>
+
+      <McpSettingsCard />
     </div>
   )
 }

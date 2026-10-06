@@ -16,6 +16,8 @@ import { registerQuickCommandsIpc } from './ipc/quickCommandsIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 import { registerRemoteDesktopIpc } from './ipc/remoteDesktopIpc'
 import { registerUpdateIpc } from './ipc/updateIpc'
+import { registerMcpIpc } from './ipc/mcpIpc'
+import { mcpManager } from './mcp/McpManager'
 
 // Window creation lives in ./windows so both the initial window and torn-off tab
 // windows go through the same path (and get registered for broadcast/hit-testing).
@@ -49,6 +51,7 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerRemoteDesktopIpc()
   registerUpdateIpc()
+  registerMcpIpc()
 
   createAppWindow()
 
@@ -66,6 +69,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  void mcpManager.stop()
 })
 
 // In this file you can include the rest of your app's specific main process

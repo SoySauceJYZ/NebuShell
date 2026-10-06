@@ -293,7 +293,24 @@ export interface AppSettings {
   transferConcurrency: number
   /** Ask GitHub for a newer release shortly after startup. */
   autoCheckUpdate: boolean
+  /** 是否开启内置 MCP 服务(让其他智能体使用已保存的服务器)。 */
+  mcpEnabled: boolean
+  /** MCP 服务监听端口(被占用时自动回退到随机端口)。 */
+  mcpPort: number
+  /** MCP 访问令牌(Bearer)。首次开启时自动生成,可在设置中重新生成。 */
+  mcpToken: string
 }
+
+/** MCP 服务运行状态(设置页展示用)。 */
+export interface McpStatus {
+  running: boolean
+  port: number | null
+  /** 本机可用于连接的地址(含回环与局域网 IP),形如 http://192.168.1.5:46300/mcp。 */
+  urls: string[]
+  error?: string
+}
+
+export const DEFAULT_MCP_PORT = 46300
 
 export const DEFAULT_TRANSFER_CONCURRENCY = 64
 export const MIN_TRANSFER_CONCURRENCY = 1
@@ -301,7 +318,10 @@ export const MAX_TRANSFER_CONCURRENCY = 256
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   transferConcurrency: DEFAULT_TRANSFER_CONCURRENCY,
-  autoCheckUpdate: true
+  autoCheckUpdate: true,
+  mcpEnabled: false,
+  mcpPort: DEFAULT_MCP_PORT,
+  mcpToken: ''
 }
 
 // ---- 更新检查 (Update check) -------------------------------------------------

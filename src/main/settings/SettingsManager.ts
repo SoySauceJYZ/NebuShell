@@ -42,7 +42,14 @@ export class SettingsManager {
       autoCheckUpdate:
         typeof raw.autoCheckUpdate === 'boolean'
           ? raw.autoCheckUpdate
-          : DEFAULT_APP_SETTINGS.autoCheckUpdate
+          : DEFAULT_APP_SETTINGS.autoCheckUpdate,
+      mcpEnabled:
+        typeof raw.mcpEnabled === 'boolean' ? raw.mcpEnabled : DEFAULT_APP_SETTINGS.mcpEnabled,
+      mcpPort:
+        Number.isInteger(raw.mcpPort) && raw.mcpPort! >= 1024 && raw.mcpPort! <= 65535
+          ? raw.mcpPort!
+          : DEFAULT_APP_SETTINGS.mcpPort,
+      mcpToken: typeof raw.mcpToken === 'string' ? raw.mcpToken : DEFAULT_APP_SETTINGS.mcpToken
     }
   }
 

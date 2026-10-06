@@ -25,6 +25,7 @@ import type {
   CommandHistoryEntry,
   QuickCommand,
   AppSettings,
+  McpStatus,
   UpdateInfo,
   AdoptPayload,
   RdStartResult,
@@ -304,6 +305,11 @@ const api = {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
     set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:set', patch)
+  },
+  mcp: {
+    status: (): Promise<McpStatus> => ipcRenderer.invoke('mcp:status'),
+    regenToken: (): Promise<string> => ipcRenderer.invoke('mcp:regenToken'),
+    showAuditLog: (): Promise<void> => ipcRenderer.invoke('mcp:showAuditLog')
   },
   update: {
     /** 主动向 GitHub 查询最新发布版本(失败时 reject)。 */
