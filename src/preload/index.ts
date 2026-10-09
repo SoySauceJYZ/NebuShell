@@ -24,6 +24,8 @@ import type {
   AgentConversationMeta,
   CommandHistoryEntry,
   QuickCommand,
+  ProxyEntry,
+  ProxyCheckResult,
   AppSettings,
   McpStatus,
   UpdateInfo,
@@ -365,6 +367,16 @@ const api = {
   quickCommands: {
     list: (): Promise<QuickCommand[]> => ipcRenderer.invoke('quickCommands:list'),
     save: (items: QuickCommand[]): Promise<void> => ipcRenderer.invoke('quickCommands:save', items)
+  },
+  proxy: {
+    add: (items: Omit<ProxyEntry, 'id' | 'createdAt'>[]): Promise<ProxyEntry[]> =>
+      ipcRenderer.invoke('proxy:add', items),
+    update: (id: string, patch: Partial<ProxyEntry>): Promise<ProxyEntry> =>
+      ipcRenderer.invoke('proxy:update', id, patch),
+    delete: (ids: string[]): Promise<void> => ipcRenderer.invoke('proxy:delete', ids),
+    /** targetKey: 'local' = 本机检测,否则为主机 id(在该主机上经 curl 检测)。 */
+    check: (id: string, targetKey: string, probeUrl?: string): Promise<ProxyCheckResult> =>
+      ipcRenderer.invoke('proxy:check', id, targetKey, probeUrl)
   },
   llm: {
     getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),

@@ -9,7 +9,9 @@ import type {
   Credential,
   LlmSettings,
   LlmConfigLegacy,
-  VaultImportResult
+  VaultImportResult,
+  ProxyEntry,
+  ProxyCheckResult
 } from '../../shared/types'
 
 interface VaultFile {
@@ -280,6 +282,10 @@ export class VaultManager {
   deleteHost(id: string): void {
     const data = this.getData()
     data.hosts = data.hosts.filter((h) => h.id !== id)
+    // 该主机上的代理检测结果一并清掉。
+    data.proxies?.forEach((p) => {
+      if (p.checks?.[id]) delete p.checks[id]
+    })
     this.persist()
   }
 
@@ -354,6 +360,62 @@ export class VaultManager {
       if (h.credentialId === id) h.credentialId = null
     })
     this.persist()
+  }
+
+  // Proxies
+
+  private proxyList(): ProxyEntry[] {
+    const data = this.getData()
+    if (!data.proxies) data.proxies = []
+    return data.proxies
+  }
+
+  getProxy(id: string): ProxyEntry {
+    const p = this.proxyList().find((x) => x.id === id)
+    if (!p) throw new Error('代理不存在(可能已被删除)')
+    return p
+  }
+
+  /** 批量添加(单条添加也走这里),返回新建的记录。 */
+  addProxies(items: Omit<ProxyEntry, 'id' | 'createdAt'>[]): ProxyEntry[] {
+    const list = this.proxyList()
+    const now = Date.now()
+    const added = items.map((p) => ({ ...p, id: randomUUID(), createdAt: now }))
+    list.push(...added)
+    this.persist()
+    return added
+  }
+
+  updateProxy(id: string, patch: Partial<ProxyEntry>): ProxyEntry {
+    const list = this.proxyList()
+    const idx = list.findIndex((p) => p.id === id)
+    if (idx === -1) throw new Error('Proxy not found')
+    const prev = list[idx]
+    const next = { ...prev, ...patch, id, createdAt: prev.createdAt }
+    // 地址/类型/凭据变了,旧的检测结果就不再代表这个代理。
+    const changed = (['type', 'host', 'port', 'username', 'password'] as const).some(
+      (k) => k in patch && patch[k] !== prev[k]
+    )
+    if (changed) next.checks = {}
+    list[idx] = next
+    this.persist()
+    return next
+  }
+
+  deleteProxies(ids: string[]): void {
+    const data = this.getData()
+    const drop = new Set(ids)
+    data.proxies = this.proxyList().filter((p) => !drop.has(p.id))
+    this.persist()
+  }
+
+  /** 检测结果由主进程原子写入,避免渲染端并发检测时互相覆盖。代理已删则忽略。 */
+  setProxyCheck(id: string, key: string, result: ProxyCheckResult): ProxyEntry | null {
+    const p = this.proxyList().find((x) => x.id === id)
+    if (!p) return null
+    p.checks = { ...p.checks, [key]: result }
+    this.persist()
+    return p
   }
 
   // Import / Export

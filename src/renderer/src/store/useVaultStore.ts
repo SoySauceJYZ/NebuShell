@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { Host, Group, Credential, VaultImportResult } from '@shared/types'
+import type {
+  Host,
+  Group,
+  Credential,
+  VaultImportResult,
+  ProxyEntry,
+  ProxyCheckResult
+} from '@shared/types'
 
 interface VaultState {
   unlocked: boolean
@@ -8,6 +15,7 @@ interface VaultState {
   hosts: Host[]
   groups: Group[]
   credentials: Credential[]
+  proxies: ProxyEntry[]
   checkStatus: () => Promise<void>
   createVault: (password: string) => Promise<void>
   unlock: (password: string) => Promise<void>
@@ -31,6 +39,12 @@ interface VaultState {
   updateCredential: (id: string, patch: Partial<Credential>) => Promise<void>
   deleteCredential: (id: string) => Promise<void>
 
+  addProxies: (items: Omit<ProxyEntry, 'id' | 'createdAt'>[]) => Promise<ProxyEntry[]>
+  updateProxy: (id: string, patch: Partial<ProxyEntry>) => Promise<void>
+  deleteProxies: (ids: string[]) => Promise<void>
+  /** 把一次检测结果合并进本地列表(主进程已落库,这里只同步视图)。 */
+  applyProxyCheck: (id: string, key: string, result: ProxyCheckResult) => void
+
   exportVault: (password: string) => Promise<string | null>
   importPickFile: () => Promise<string | null>
   importVault: (password: string, content: string) => Promise<VaultImportResult>
@@ -43,6 +57,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   hosts: [],
   groups: [],
   credentials: [],
+  proxies: [],
 
   checkStatus: async () => {
     const initialized = await window.api.vault.isInitialized()
@@ -54,12 +69,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   createVault: async (password) => {
     const data = await window.api.vault.create(password)
-    set({ initialized: true, unlocked: true, ...data })
+    set({ initialized: true, unlocked: true, ...data, proxies: data.proxies ?? [] })
   },
 
   unlock: async (password) => {
     const data = await window.api.vault.unlock(password)
-    set({ unlocked: true, ...data })
+    set({ unlocked: true, ...data, proxies: data.proxies ?? [] })
   },
 
   unlockTrusted: async () => {
@@ -68,7 +83,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       set({ trusted: false })
       return false
     }
-    set({ unlocked: true, trusted: true, ...data })
+    set({ unlocked: true, trusted: true, ...data, proxies: data.proxies ?? [] })
     return true
   },
 
@@ -79,12 +94,17 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   lock: async () => {
     await window.api.vault.lock()
-    set({ unlocked: false, hosts: [], groups: [], credentials: [] })
+    set({ unlocked: false, hosts: [], groups: [], credentials: [], proxies: [] })
   },
 
   refresh: async () => {
     const data = await window.api.vault.getData()
-    set({ hosts: data.hosts, groups: data.groups, credentials: data.credentials })
+    set({
+      hosts: data.hosts,
+      groups: data.groups,
+      credentials: data.credentials,
+      proxies: data.proxies ?? []
+    })
   },
 
   addHost: async (host) => {
@@ -139,6 +159,26 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     await window.api.vault.deleteCredential(id)
     await get().refresh()
   },
+
+  addProxies: async (items) => {
+    const added = await window.api.proxy.add(items)
+    await get().refresh()
+    return added
+  },
+  updateProxy: async (id, patch) => {
+    await window.api.proxy.update(id, patch)
+    await get().refresh()
+  },
+  deleteProxies: async (ids) => {
+    await window.api.proxy.delete(ids)
+    await get().refresh()
+  },
+  applyProxyCheck: (id, key, result) =>
+    set((state) => ({
+      proxies: state.proxies.map((p) =>
+        p.id === id ? { ...p, checks: { ...p.checks, [key]: result } } : p
+      )
+    })),
 
   exportVault: (password) => window.api.vault.exportData(password),
   importPickFile: () => window.api.vault.importPickFile(),

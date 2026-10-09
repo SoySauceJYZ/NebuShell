@@ -27,16 +27,20 @@ import {
   Laptop,
   ArrowRightLeft,
   ArrowDown,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
 import {
   useAgentStore,
   EMPTY_AGENT_SESSION,
+  currentProxyContext,
   type AgentStatus,
+  type ProxyMeta,
   type TransferMeta
 } from '../store/useAgentStore'
+import { useProxyUiStore } from '../lib/proxies'
 import { formatBytes } from '../lib/agentTransfer'
 import { AGENT_MODES, type AgentMode } from '../lib/agentPermissions'
 import {
@@ -44,6 +48,7 @@ import {
   buildAgentTools,
   buildLocalTarget,
   localTargetName,
+  PROXY_PLACEHOLDER,
   type AgentTarget
 } from '../lib/agentTools'
 import { detectMention, matchTargets, type MentionState } from '../lib/targetMention'
@@ -258,12 +263,19 @@ export function AgentPanel({
   // 系统提示、把工具定义 JSON.stringify 一次、再逐字符扫一遍**全部**历史消息 —— O(全会话字符)
   // 乘以出词速度。现在只有第三段随 token 变,而它只扫当前这一条回复。
   const targetKey = currentTargets.map((t) => t.name).join('|')
+  // 代理策略与代理数决定是否带上 use_proxy 工具和对应规则,订阅它们让估算跟着变。
+  const proxyMode = useProxyUiStore((s) => s.agentMode)
+  const proxyCount = useVaultStore((s) => s.proxies.length)
+  useEffect(() => {
+    void useProxyUiStore.getState().hydrate()
+  }, [])
   const overhead = useMemo(() => {
-    const sysText = buildSystemPrompt(currentTargets, mode)
-    const tools = buildAgentTools(currentTargets, mode)
+    const proxyCtx = currentProxyContext()
+    const sysText = buildSystemPrompt(currentTargets, mode, proxyCtx)
+    const tools = buildAgentTools(currentTargets, mode, proxyCtx)
     return estimateTokens(sysText) + estimateTokens(JSON.stringify(tools))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, mode])
+  }, [targetKey, mode, proxyMode, proxyCount])
   const historyTokens = useMemo(() => estimateMessagesTokens(session.messages), [session.messages])
   const usage = useMemo(() => {
     const used = overhead + historyTokens + estimateTokens(session.streamingText)
@@ -483,6 +495,11 @@ export function AgentPanel({
                   transferMeta={
                     m.tool_calls?.some((tc) => tc.function.name === 'transfer_file')
                       ? session.transferMeta
+                      : undefined
+                  }
+                  proxyMeta={
+                    m.tool_calls?.some((tc) => tc.function.name === 'use_proxy')
+                      ? session.proxyMeta
                       : undefined
                   }
                   fallbackTarget={currentTargets[0]?.name}
@@ -1519,6 +1536,131 @@ const TransferCard = memo(function TransferCard({
   )
 })
 
+const ProxyCard = memo(function ProxyCard({
+  sessionId,
+  tc,
+  meta,
+  result,
+  running,
+  disabled
+}: {
+  sessionId: string
+  tc: ToolCall
+  meta?: ProxyMeta
+  result?: string
+  running: boolean
+  disabled: boolean
+}): React.ReactElement {
+  const resolveProxy = useAgentStore((s) => s.resolveProxy)
+  const selectProxyOption = useAgentStore((s) => s.selectProxyOption)
+  const args = useMemo(() => {
+    try {
+      return JSON.parse(tc.function.arguments || '{}') as { site?: string; reason?: string }
+    } catch {
+      return {}
+    }
+  }, [tc])
+  const site = meta?.site ?? args.site
+  const reason = meta?.reason ?? args.reason
+  const isNote = result !== undefined && !result.startsWith('已为')
+  const chosen = meta?.options?.find((o) => o.id === meta.selectedId)
+
+  return (
+    <div className="self-start w-[92%] overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)]">
+      <div className="flex items-center gap-1.5 border-b border-[var(--panel-border)] px-2.5 py-1.5">
+        <Globe size={13} className="text-[var(--accent)]" />
+        <span className="text-xs font-medium text-[var(--text-muted)]">
+          {result === undefined && !running ? '请求使用代理' : '使用代理'}
+        </span>
+        {meta?.targetName && (
+          <span className="ml-auto flex items-center gap-1 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
+            {meta.targetName === localTargetName() ? <Laptop size={10} /> : <Server size={10} />}
+            {meta.targetName}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5 px-2.5 py-2 text-xs">
+        {site && (
+          <div className="text-[var(--text-dark)]">
+            访问 <span className="font-mono">{site}</span>
+          </div>
+        )}
+        {reason && <div className="text-[var(--text-muted)]">{reason}</div>}
+      </div>
+
+      {running ? (
+        <div className="flex items-center gap-1.5 border-t border-[var(--panel-border)] px-2.5 py-1.5 text-xs text-[var(--text-muted)]">
+          <Loader2 size={12} className="animate-spin" />
+          正在挑选并检测可用代理…
+        </div>
+      ) : result === undefined ? (
+        meta?.options?.length ? (
+          <div className="flex flex-col gap-1.5 border-t border-[var(--panel-border)] px-2.5 py-2">
+            <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+              {meta.options.map((o) => (
+                <label
+                  key={o.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-[var(--nav-bg-hover)] ${
+                    o.id === meta.selectedId ? 'bg-[var(--accent-soft)]' : ''
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`proxy-${tc.id}`}
+                    checked={o.id === meta.selectedId}
+                    disabled={disabled}
+                    onChange={() => selectProxyOption(sessionId, tc.id, o.id)}
+                  />
+                  <span className="min-w-0 truncate font-medium text-[var(--text-dark)]">
+                    {o.flag} {o.name}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[var(--text-muted)]">{o.summary}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={disabled || !meta.selectedId}
+                onClick={() => resolveProxy(sessionId, tc, meta.selectedId ?? null)}
+                className="flex items-center gap-1 rounded-md bg-[var(--accent)] px-2 py-1 text-xs font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              >
+                <Globe size={11} />
+                使用该代理
+              </button>
+              <button
+                disabled={disabled}
+                onClick={() => resolveProxy(sessionId, tc, null)}
+                className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs hover:bg-[var(--nav-bg-hover)] disabled:opacity-50"
+              >
+                <X size={11} />
+                不用代理
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-[var(--panel-border)] px-2.5 py-1.5 text-xs text-[var(--text-muted)]">
+            等待处理…
+          </div>
+        )
+      ) : (
+        <div className="border-t border-[var(--panel-border)] px-2.5 py-2 text-xs">
+          {isNote ? (
+            <div className="text-[var(--text-muted)]">{result}</div>
+          ) : (
+            <div className="flex items-start gap-1.5 text-[var(--text-dark)]">
+              <Check size={12} className="mt-0.5 shrink-0 text-green-600" />
+              <span>
+                已选用 {chosen ? `${chosen.flag} ${chosen.name}(${chosen.summary})` : '代理'}
+                ,命令中的 <code className="font-mono">{'{{proxy}}'}</code> 会在执行前替换为它。
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+})
+
 const ToolCard = memo(function ToolCard({
   sessionId,
   tc,
@@ -1563,6 +1705,12 @@ const ToolCard = memo(function ToolCard({
       <pre className="selectable overflow-x-auto px-2.5 py-2 font-mono text-xs text-[var(--text-dark)]">
         {command}
       </pre>
+      {command.includes(PROXY_PLACEHOLDER) && (
+        <div className="flex items-center gap-1 px-2.5 pb-1.5 text-[11px] text-[var(--text-muted)]">
+          <Globe size={11} />
+          {PROXY_PLACEHOLDER} 执行时替换为已为该目标选定的代理地址
+        </div>
+      )}
       {result === undefined ? (
         <div className="flex items-center gap-2 border-t border-[var(--panel-border)] px-2.5 py-1.5">
           {running ? (
@@ -1688,6 +1836,7 @@ const AssistantRow = memo(function AssistantRow({
   results,
   runningIds,
   transferMeta,
+  proxyMeta,
   fallbackTarget,
   showTarget,
   interactive
@@ -1697,6 +1846,7 @@ const AssistantRow = memo(function AssistantRow({
   results: Map<string, string>
   runningIds?: string[]
   transferMeta?: Record<string, TransferMeta>
+  proxyMeta?: Record<string, ProxyMeta>
   fallbackTarget?: string
   showTarget: boolean
   interactive: boolean
@@ -1739,6 +1889,19 @@ const AssistantRow = memo(function AssistantRow({
               meta={transferMeta?.[tc.id]}
               result={result}
               running={running}
+            />
+          )
+        }
+        if (tc.function.name === 'use_proxy') {
+          return (
+            <ProxyCard
+              key={tc.id}
+              sessionId={sessionId}
+              tc={tc}
+              meta={proxyMeta?.[tc.id]}
+              result={result}
+              running={running}
+              disabled={!interactive}
             />
           )
         }

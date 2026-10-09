@@ -49,7 +49,11 @@ export class SettingsManager {
         Number.isInteger(raw.mcpPort) && raw.mcpPort! >= 1024 && raw.mcpPort! <= 65535
           ? raw.mcpPort!
           : DEFAULT_APP_SETTINGS.mcpPort,
-      mcpToken: typeof raw.mcpToken === 'string' ? raw.mcpToken : DEFAULT_APP_SETTINGS.mcpToken
+      mcpToken: typeof raw.mcpToken === 'string' ? raw.mcpToken : DEFAULT_APP_SETTINGS.mcpToken,
+      agentProxyMode:
+        raw.agentProxyMode === 'off' || raw.agentProxyMode === 'ask' || raw.agentProxyMode === 'auto'
+          ? raw.agentProxyMode
+          : DEFAULT_APP_SETTINGS.agentProxyMode
     }
   }
 

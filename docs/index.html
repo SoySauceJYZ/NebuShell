@@ -843,6 +843,31 @@
             </p>
           </div>
           <div class="card">
+            <div class="ico">🌐</div>
+            <h3 data-zh="代理管理">Proxy manager</h3>
+            <p
+              data-zh="维护 HTTP / HTTPS / SOCKS5 代理（可带账号密码，存放在加密保险库），支持批量导入，一键检测出口 IP、地区、运营商与延迟——可从本机检测，也可从任意一台主机检测。智能体在服务器上访问 GitHub、Docker Hub 等失败时，可先询问你或自动选用代理，代理账号密码不会发送给模型。"
+            >
+              Keep HTTP / HTTPS / SOCKS5 proxies (with optional credentials, in the encrypted vault),
+              bulk-import a list, and check each one’s exit IP, region, ISP and latency — from this
+              computer or from any of your hosts. When the agent can’t reach GitHub, Docker Hub and
+              the like from a server, it can ask you for a proxy or pick one itself, and the proxy’s
+              credentials never reach the model.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔌</div>
+            <h3 data-zh="内置 MCP 服务">Built-in MCP server</h3>
+            <p
+              data-zh="在设置里打开后，Claude Code、Cursor 等支持 MCP 的智能体就能使用你在 NebuShell 里保存的服务器：执行命令、列目录与读写文件、查看 Docker 容器与日志。Bearer 令牌鉴权，一键复制接入配置，每次调用都记入审计日志。"
+            >
+              Switch it on in Settings and Claude Code, Cursor or any MCP-capable agent can use the
+              servers saved in NebuShell — run commands, list / read / write files, and look at
+              Docker containers and logs. Bearer-token auth, one-click connection config, and an
+              audit log of every call.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">📝</div>
             <h3 data-zh="Monaco 编辑器">Monaco editor</h3>
             <p
@@ -891,8 +916,68 @@
     <section id="whats-new">
       <div class="wrap">
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
-        <p class="sec-sub" data-zh="近期更新——2026 年 7–9 月。">Recent updates — July–September 2026.</p>
+        <p class="sec-sub" data-zh="近期更新——2026 年 7–10 月。">Recent updates — July–October 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🌐</div>
+            <h3 data-zh="代理管理，以及「网络不通时会自己找代理」的智能体（2026‑10‑07）">
+              Proxy manager, and an agent that reaches for a proxy when the network fails it
+              (2026‑10‑07)
+            </h3>
+            <p
+              data-zh="左侧新增「代理」标签。可逐个添加 HTTP / HTTPS / SOCKS5 代理（粘贴一条 <code>socks5://user:pass@1.2.3.4:1080</code> 这样的链接，各字段自动填好），也可批量导入整段列表——支持 <code>协议://用户:密码@IP:端口</code>、<code>IP:端口</code>、<code>IP:端口:用户:密码</code>、<code>用户:密码@IP:端口</code>，行尾 <code>#名称</code> 作为名称；识别不了的行会标出行号，重复的自动跳过。代理与主机一起存放在加密保险库里。检测会给出每个代理的出口 IP、国家 / 省份 / 城市、运营商和延迟，而「检测位置」决定在哪儿测：本机，或任意一台已保存的主机——同一个代理在你桌上很快，换到另一个机房的服务器上可能根本连不上，所以每个位置的结果分开保存。本机检测直接自建 HTTP <code>CONNECT</code> / SOCKS5 隧道；从主机检测则经 SSH 在远端跑 <code>curl</code>，代理地址和密码经 stdin 写进临时文件，不会出现在服务器的进程列表里。真正的用处在智能体：服务器上的命令访问 GitHub、Docker Hub、PyPI、npm 等站点失败时，它会调用新工具 <code>use_proxy</code>，挑出在那台机器上可用、并且确实能访问该站点的代理，延迟低的优先。三档开关决定接下来怎么做：关闭、询问（对话里弹出卡片，由你选一个或拒绝）、自动。智能体在命令里写占位符 <code>{{proxy}}</code>（如 <code>curl -x {{proxy}} …</code>、<code>git -c http.proxy={{proxy}} clone …</code>），直到真正执行的那一刻才替换成真实地址，返回给模型的输出里密码也会被遮成 <code>***</code>——代理账号密码不会发送给模型供应商。代理只对当次命令生效，再次调用 <code>use_proxy</code> 会换一个。"
+            >
+              A new 代理 (Proxies) tab in the left sidebar. Add HTTP / HTTPS / SOCKS5 proxies one at
+              a time (paste a link like <code>socks5://user:pass@1.2.3.4:1080</code> and the fields
+              fill themselves in), or bulk-import a whole list —
+              <code>scheme://user:pass@ip:port</code>, <code>ip:port</code>,
+              <code>ip:port:user:pass</code>, <code>user:pass@ip:port</code>, with
+              <code>#name</code> at the end of a line; unrecognised lines are pointed out by line
+              number and duplicates are skipped. Proxies live in the encrypted vault alongside your
+              hosts. Checking shows each proxy’s exit IP, country / region / city, ISP and latency,
+              and the Check-from picker decides where the check runs: this computer, or any saved
+              host — a proxy that is fast from your desk can be unreachable from a server in another
+              data centre, so results are kept per location. Local checks open the HTTP
+              <code>CONNECT</code> / SOCKS5 tunnel directly; checks from a host run
+              <code>curl</code> over SSH, with the proxy address and password passed through stdin
+              into a temporary file so they never show up in the server’s process list. The real
+              point is the agent: when a command on a server can’t reach GitHub, Docker Hub, PyPI,
+              npm and the like, it calls the new <code>use_proxy</code> tool, which picks the proxy
+              that works from that machine and can actually reach that site, lowest latency first.
+              A three-way switch decides what happens next: Off, Ask (a card lets you choose one or
+              decline) or Auto. The agent writes <code>{{proxy}}</code> in its command
+              (<code>curl -x {{proxy}} …</code>, <code>git -c http.proxy={{proxy}} clone …</code>),
+              which is swapped for the real address only at the moment it runs, and the password is
+              masked as <code>***</code> in the output the model sees — so proxy credentials never
+              reach the model provider. The proxy applies to that one command only, and calling
+              <code>use_proxy</code> again tries a different one.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔌</div>
+            <h3 data-zh="内置 MCP 服务：让其他智能体也能用你保存的服务器（2026‑10‑07）">
+              Built-in MCP server: let other agents use your saved servers (2026‑10‑07)
+            </h3>
+            <p
+              data-zh="「设置」里新增「MCP 服务」卡片。打开后，NebuShell 以 Streamable HTTP 提供 Model Context Protocol 服务，地址为 <code>http://&amp;lt;地址&amp;gt;:46300/mcp</code>（端口被占用时自动换一个），Claude Code、Cursor 等任何支持 MCP 的智能体都能直接使用保险库里已有的服务器——不用再到处复制密码或密钥。提供的工具：<code>list_hosts</code>（不含任何密码 / 密钥）、<code>exec_command</code>（非交互，可指定 <code>cwd</code>，超时最长 30 分钟）、<code>list_directory</code>、<code>read_file</code>、<code>write_file</code>、<code>docker_ps</code> 与 <code>docker_logs</code>。主机可以用 id 或名称指定。连接按主机复用，与终端标签完全独立，空闲 10 分钟自动断开——不会往你看得见的任何 shell 里写东西。访问需要随机生成的 Bearer 令牌（可随时重新生成），卡片列出所有可连接的局域网地址，并能一键复制现成的 <code>claude mcp add</code> 命令或 JSON 配置；每一次调用都写入审计日志。使用时需先解锁保险库。注意：服务监听所有网卡，经它执行的命令不会在 NebuShell 里弹窗确认，请妥善保管令牌。"
+            >
+              Settings gains an MCP card. Switch it on and NebuShell serves the Model Context
+              Protocol over Streamable HTTP at <code>http://&lt;address&gt;:46300/mcp</code>
+              (another port is picked if that one is taken), so Claude Code, Cursor and any other
+              MCP-capable agent can work with the servers already in your vault — no copying
+              passwords or keys anywhere. Tools: <code>list_hosts</code> (never includes passwords
+              or keys), <code>exec_command</code> (non-interactive, optional <code>cwd</code>,
+              timeout up to 30 min), <code>list_directory</code>, <code>read_file</code>,
+              <code>write_file</code>, <code>docker_ps</code> and <code>docker_logs</code>. Hosts
+              can be referred to by id or name. Connections are pooled per host, separate from your
+              terminal tabs and closed after 10 idle minutes — nothing is typed into a shell you can
+              see. Access requires a randomly generated Bearer token (regenerate it any time), the
+              card lists every LAN address and copies a ready-made <code>claude mcp add</code>
+              command or JSON config in one click, and every call is written to an audit log. The
+              vault has to be unlocked. It listens on all interfaces and commands run through it are
+              not confirmed in NebuShell — keep the token private.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🎯</div>
             <h3 data-zh="智能体输入框可以 @ 引用目标了（2026‑09‑22）">
@@ -1053,7 +1138,7 @@
               A terminal’s SFTP panel opens where the command line is (2026‑09‑11)
             </h3>
             <p
-              data-zh="终端旁边的 SFTP 面板一律从 <code>/</code> 起步，你在命令行里 <code>cd</code> 到哪儿，都得在文件树里再点回去一遍。现在这条会话第一次打开该面板时，起始目录就是终端命令行此刻所在的目录。探测不往你的 shell 里写任何东西——没有回显，scrollback 里也不留痕迹：在同一条 SSH 连接上另开一个 exec 通道，从 <code>/proc</code> 反查。exec 进程与交互 shell 是同一个 sshd 会话进程的兄弟，于是那个占着 pty 的兄弟就是这个终端的 shell，它的 <code>/proc/&lt;pid&gt;/cwd</code> 即当前目录；随后还会沿同一 pty 往下走几层，所以在 <code>su</code> 或嵌套 shell 里 <code>cd</code> 过的目录同样能找到。探测与 SFTP 连接并行发起（不额外多等），判断不出来时一律退回原来的默认目录——没有 <code>/proc</code>（非 Linux）、权限不足、或 4 秒超时。之后再开该面板，仍然回到你上次浏览的目录。"
+              data-zh="终端旁边的 SFTP 面板一律从 <code>/</code> 起步，你在命令行里 <code>cd</code> 到哪儿，都得在文件树里再点回去一遍。现在这条会话第一次打开该面板时，起始目录就是终端命令行此刻所在的目录。探测不往你的 shell 里写任何东西——没有回显，scrollback 里也不留痕迹：在同一条 SSH 连接上另开一个 exec 通道，从 <code>/proc</code> 反查。exec 进程与交互 shell 是同一个 sshd 会话进程的兄弟，于是那个占着 pty 的兄弟就是这个终端的 shell，它的 <code>/proc/&amp;lt;pid&amp;gt;/cwd</code> 即当前目录；随后还会沿同一 pty 往下走几层，所以在 <code>su</code> 或嵌套 shell 里 <code>cd</code> 过的目录同样能找到。探测与 SFTP 连接并行发起（不额外多等），判断不出来时一律退回原来的默认目录——没有 <code>/proc</code>（非 Linux）、权限不足、或 4 秒超时。之后再开该面板，仍然回到你上次浏览的目录。"
             >
               The SFTP panel beside a terminal always started at <code>/</code>, so wherever you had <code>cd</code>’d in the shell, you had to click your way back down the tree. The first time a session opens that panel, it now starts in the directory the terminal’s command line is in. Nothing is typed into your shell — no echo, no trace in the scrollback: a second exec channel on the same SSH connection looks the shell up through <code>/proc</code>. The exec process and the interactive shell are siblings under the same sshd session process, so the sibling holding a pty is that terminal’s shell, and its <code>/proc/&lt;pid&gt;/cwd</code> is the directory; the lookup then walks a few levels further down the same pty, so a directory you <code>cd</code>’d to inside <code>su</code> or a nested shell is found too. The probe runs in parallel with the SFTP connection (no extra wait) and falls back to the old default whenever it can’t tell — no <code>/proc</code> (non-Linux), no permission, or a 4s timeout. Reopening the panel later still returns to the last directory you browsed.
             </p>

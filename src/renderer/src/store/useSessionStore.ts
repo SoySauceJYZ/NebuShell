@@ -21,6 +21,7 @@ export type TabKind =
   | 'quickCommands'
   | 'settings'
   | 'remoteDesktop'
+  | 'proxies'
   | 'terminal'
   | 'sftp'
   | 'explorer'

@@ -1,6 +1,33 @@
 import { create } from 'zustand'
-import type { Attachment, ChatMessage, ToolCall, TransferPlan, TransferProgress } from '@shared/types'
-import { buildAgentTools, buildSystemPrompt, isLocalTarget, type AgentTarget } from '../lib/agentTools'
+import type {
+  Attachment,
+  ChatMessage,
+  ProxyEntry,
+  ToolCall,
+  TransferPlan,
+  TransferProgress
+} from '@shared/types'
+import {
+  buildAgentTools,
+  buildSystemPrompt,
+  isLocalTarget,
+  PROXY_PLACEHOLDER,
+  type AgentTarget,
+  type ProxyContext
+} from '../lib/agentTools'
+import {
+  describeProxyForModel,
+  flagEmoji,
+  maskSecret,
+  normalizeSite,
+  proxyUrl,
+  rankProxiesFor,
+  regionText,
+  targetKeyOf,
+  useProxyUiStore,
+  type RankedProxy
+} from '../lib/proxies'
+import { useVaultStore } from './useVaultStore'
 import {
   describeOutcome,
   planTransfer,
@@ -43,12 +70,37 @@ export interface TransferMeta {
   progress?: TransferProgress
 }
 
+/** use_proxy 卡片上可选的一个代理(不含凭据)。 */
+export interface ProxyOption {
+  id: string
+  name: string
+  /** 给人看的一行:地区 · 延迟 · 站点探测。 */
+  summary: string
+  flag: string
+}
+
+/** Per-tool-call state for a `use_proxy` call, keyed by tool_call_id. */
+export interface ProxyMeta {
+  targetName: string
+  /** 检测位置:'local' 或宿主机 hostId。 */
+  key: string
+  /** 目标是容器(代理按宿主机检测)。 */
+  container: boolean
+  site?: string
+  reason?: string
+  /** null = 正在挑选/检测中。 */
+  options: ProxyOption[] | null
+  /** 询问模式下卡片当前选中的代理;自动模式下为最终选用的代理。 */
+  selectedId?: string
+}
+
 export interface AgentSession {
   messages: ChatMessage[]
   status: AgentStatus
   streamingText: string
   runningIds: string[]
   transferMeta: Record<string, TransferMeta>
+  proxyMeta: Record<string, ProxyMeta>
   error: string
 }
 
@@ -59,7 +111,16 @@ export const EMPTY_AGENT_SESSION: AgentSession = {
   streamingText: '',
   runningIds: [],
   transferMeta: {},
+  proxyMeta: {},
   error: ''
+}
+
+/** 当前智能体代理上下文(策略 + 代理数),组装工具与系统提示时用。 */
+export function currentProxyContext(): ProxyContext {
+  return {
+    mode: useProxyUiStore.getState().agentMode,
+    count: useVaultStore.getState().proxies.length
+  }
 }
 
 const EMPTY_TARGETS: AgentTarget[] = []
@@ -93,6 +154,10 @@ interface AgentStore {
    */
   send: (sessionId: string, text: string, images?: string[], attachments?: Attachment[]) => void
   resolveCall: (sessionId: string, call: ToolCall, approve: boolean) => void
+  /** 询问模式下 use_proxy 卡片里切换代理。 */
+  selectProxyOption: (sessionId: string, callId: string, proxyId: string) => void
+  /** 回答 use_proxy:proxyId 为 null 表示用户不使用代理。 */
+  resolveProxy: (sessionId: string, call: ToolCall, proxyId: string | null) => void
   /** Answer an ask_user question tool call, then continue the conversation. */
   answerQuestion: (sessionId: string, call: ToolCall, answer: string) => void
   /** Approve a presented plan: switch to a run mode and let the model execute it. */
@@ -105,6 +170,52 @@ interface AgentStore {
 // Per-session runtime flags (not React state — read synchronously by the loop).
 const activeRunId: Record<string, string> = {}
 const stopped: Record<string, boolean> = {}
+/** 每个会话里、每个目标(按名字)当前选用的代理 id —— {{proxy}} 据此替换。 */
+const proxyChoice: Record<string, Record<string, string>> = {}
+/** 每个会话里、每个目标已经用过的代理,再次 use_proxy 时换一个。 */
+const proxyTried: Record<string, Record<string, string[]>> = {}
+
+function parseProxyArgs(call: ToolCall): { target?: string; site?: string; reason?: string } {
+  try {
+    const a = JSON.parse(call.function.arguments || '{}')
+    return {
+      target: typeof a.target === 'string' ? a.target : undefined,
+      site: typeof a.site === 'string' ? a.site : undefined,
+      reason: typeof a.reason === 'string' ? a.reason : undefined
+    }
+  } catch {
+    return {}
+  }
+}
+
+function toOption(x: RankedProxy): ProxyOption {
+  const r = x.result
+  const parts = [regionText(r) || '未知地区']
+  if (r.latencyMs !== undefined) parts.push(`${r.latencyMs}ms`)
+  if (r.probe) parts.push(r.probe.ok ? '站点可达' : '站点不可达')
+  return {
+    id: x.proxy.id,
+    name: x.proxy.name,
+    summary: parts.join(' · '),
+    flag: flagEmoji(r.countryCode) || (r.countryCode?.toUpperCase() ?? '')
+  }
+}
+
+/** 选定代理后回给模型的说明:不含账号密码,只有占位符用法。 */
+function proxyChosenMessage(x: RankedProxy, targetName: string, container: boolean): string {
+  const socks = x.proxy.type === 'socks5'
+  return [
+    `已为「${targetName}」选用代理 ${describeProxyForModel(x)}。`,
+    `在 run_command 的命令里用 ${PROXY_PLACEHOLDER} 代表该代理地址(执行前自动替换为真实地址),只对当次命令生效,例如:`,
+    `- curl -x ${PROXY_PLACEHOLDER} -fL <url> -o <file>`,
+    `- https_proxy=${PROXY_PLACEHOLDER} http_proxy=${PROXY_PLACEHOLDER} all_proxy=${PROXY_PLACEHOLDER} <命令>`,
+    `- git -c http.proxy=${PROXY_PLACEHOLDER} clone <repo>`,
+    socks
+      ? '这是 SOCKS5 代理(替换为 socks5h://,DNS 也走代理):curl、git 可直接用;pip 需要 PySocks,apt/yum 不支持 SOCKS,必要时告知用户。'
+      : `- pip install --proxy ${PROXY_PLACEHOLDER} <包>`,
+    ...(container ? ['注意:该目标是容器,代理是在其宿主机上检测的,容器网络可能与宿主机不同。'] : [])
+  ].join('\n')
+}
 
 function parseArgs(call: ToolCall): { command: string; target?: string } {
   try {
@@ -196,9 +307,24 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     patch(id, { status: 'running', runningIds: [...cur(id).runningIds, call.id] })
     const { command, target } = parseArgs(call)
     const resolved = resolveTarget(id, target)
+    // {{proxy}} → 该目标已选代理的真实地址。密码只在这里代入,回给模型的输出再把它遮掉。
+    let realCommand = command
+    let proxy: ProxyEntry | undefined
+    let proxyError = ''
+    if (resolved && command.includes(PROXY_PLACEHOLDER)) {
+      const pid = proxyChoice[id]?.[resolved.name]
+      proxy = pid ? useVaultStore.getState().proxies.find((p) => p.id === pid) : undefined
+      if (!proxy) {
+        proxyError = `执行出错: 命令中使用了 ${PROXY_PLACEHOLDER},但还没有为「${resolved.name}」选定代理(或该代理已被删除)。请先调用 use_proxy(target=${resolved.name})。`
+      } else {
+        realCommand = command.split(PROXY_PLACEHOLDER).join(proxyUrl(proxy, { remoteDns: true }))
+      }
+    }
     let content = ''
     if (!resolved) {
       content = '执行出错: 没有可用的目标终端。请先在「目标终端」里附加一个已连接的终端。'
+    } else if (proxyError) {
+      content = proxyError
     } else {
       // Record the agent command against the *target* terminal's host (the agent may
       // target a terminal on a different host than its own panel). Record on attempt so
@@ -209,9 +335,12 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       if (targetHostId) useCommandHistoryStore.getState().add(targetHostId, command, 'agent')
       try {
         // 本机目标走 local:exec(宿主机 shell),其余走 SSH PTY。
-        const res = isLocalTarget(resolved)
-          ? await window.api.local.exec(command)
-          : await window.api.ssh.runInShell(resolved.sessionId, command)
+        const raw = isLocalTarget(resolved)
+          ? await window.api.local.exec(realCommand)
+          : await window.api.ssh.runInShell(resolved.sessionId, realCommand)
+        const res = proxy
+          ? { ...raw, output: maskSecret(raw.output, proxy), note: raw.note && maskSecret(raw.note, proxy) }
+          : raw
         // 完整输出留在本地(供 read_command_output 分页检索),喂给模型的是策略裁剪版。
         const ref = saveCommandOutput({
           output: res.output,
@@ -231,7 +360,8 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           ref
         })
       } catch (e) {
-        content = `[终端: ${resolved.name}] 执行出错: ${e instanceof Error ? e.message : String(e)}`
+        const msg = e instanceof Error ? e.message : String(e)
+        content = `[终端: ${resolved.name}] 执行出错: ${maskSecret(msg, proxy)}`
       }
     }
     patch(id, { runningIds: cur(id).runningIds.filter((i) => i !== call.id) })
@@ -406,6 +536,87 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
   }
 
+  // ---- use_proxy ----
+
+  const patchProxyMeta = (id: string, callId: string, p: Partial<ProxyMeta>): void => {
+    const s = cur(id)
+    const prev = s.proxyMeta[callId]
+    if (!prev) return
+    patch(id, { proxyMeta: { ...s.proxyMeta, [callId]: { ...prev, ...p } } })
+  }
+
+  /** 校验 use_proxy 并登记卡片状态;不能继续时直接推说明性的 tool 消息并返回 null。 */
+  const prepareProxy = (id: string, call: ToolCall): ProxyMeta | null => {
+    const reply = (content: string): null => {
+      pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
+      return null
+    }
+    const ctx = currentProxyContext()
+    if (ctx.mode === 'off') {
+      return reply('用户已关闭智能体使用代理,不能使用代理。请改用其他方案(如镜像源)或向用户说明。')
+    }
+    if (ctx.count === 0) {
+      return reply('用户还没有配置任何代理。请告知用户可在左侧「代理」页添加,或改用镜像源等方案。')
+    }
+    const args = parseProxyArgs(call)
+    const target = resolveTarget(id, args.target)
+    if (!target) return reply('没有可用的目标,无法挑选代理。')
+    const key = targetKeyOf(target)
+    if (!key) return reply(`无法确定「${target.name}」对应的主机,不能为它检测代理。`)
+    const meta: ProxyMeta = {
+      targetName: target.name,
+      key,
+      container: Boolean(target.containerId),
+      site: normalizeSite(args.site),
+      reason: args.reason,
+      options: null
+    }
+    patch(id, { proxyMeta: { ...cur(id).proxyMeta, [call.id]: meta } })
+    return meta
+  }
+
+  /** 在目标所在机器上挑可用代理(必要时现测),排除本会话里该目标已经用过的。 */
+  const rankForCall = async (id: string, call: ToolCall, meta: ProxyMeta): Promise<RankedProxy[]> => {
+    patch(id, { status: 'running', runningIds: [...cur(id).runningIds, call.id] })
+    try {
+      const tried = proxyTried[id]?.[meta.targetName] ?? []
+      const ranked = (await rankProxiesFor(meta.key, meta.site)).filter(
+        (x) => !tried.includes(x.proxy.id)
+      )
+      patchProxyMeta(id, call.id, {
+        options: ranked.map(toOption),
+        selectedId: ranked[0]?.proxy.id
+      })
+      return ranked
+    } finally {
+      patch(id, { runningIds: cur(id).runningIds.filter((i) => i !== call.id) })
+    }
+  }
+
+  const applyProxyChoice = (id: string, call: ToolCall, meta: ProxyMeta, x: RankedProxy): void => {
+    proxyChoice[id] = { ...proxyChoice[id], [meta.targetName]: x.proxy.id }
+    const tried = proxyTried[id]?.[meta.targetName] ?? []
+    proxyTried[id] = { ...proxyTried[id], [meta.targetName]: [...tried, x.proxy.id] }
+    patchProxyMeta(id, call.id, { selectedId: x.proxy.id })
+    pushMsgs(id, [
+      {
+        role: 'tool',
+        tool_call_id: call.id,
+        content: proxyChosenMessage(x, meta.targetName, meta.container)
+      }
+    ])
+  }
+
+  const noProxyMessage = (id: string, meta: ProxyMeta): string => {
+    const tried = proxyTried[id]?.[meta.targetName]?.length ?? 0
+    return (
+      `没有找到可用代理:在「${meta.targetName}」上检测的代理均不可用` +
+      (meta.site ? `或无法访问 ${meta.site}` : '') +
+      (tried ? `(已排除本次会话里用过的 ${tried} 个)` : '') +
+      '。请向用户说明,建议到「代理」页添加或检测代理,或改用镜像源等替代方案。'
+    )
+  }
+
   const processToolCalls = async (id: string, calls: ToolCall[]): Promise<void> => {
     const mode = get().mode
     let anyAsk = false
@@ -451,6 +662,20 @@ export const useAgentStore = create<AgentStore>((set, get) => {
           ])
         } else {
           startPlanScan(id, call) // 后台预扫描,卡片先显示「正在统计…」
+          anyAsk = true
+        }
+        continue
+      }
+      // 代理:选代理本身没有副作用(计划模式也允许);询问模式出卡片让用户确认/换一个。
+      if (call.function.name === 'use_proxy') {
+        const meta = prepareProxy(id, call)
+        if (!meta) continue
+        const ranked = await rankForCall(id, call, meta)
+        if (ranked.length === 0) {
+          pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content: noProxyMessage(id, meta) }])
+        } else if (useProxyUiStore.getState().agentMode === 'auto') {
+          applyProxyChoice(id, call, meta, ranked[0])
+        } else {
           anyAsk = true
         }
         continue
@@ -518,10 +743,14 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         resolve({ role: 'assistant', content: '' })
       })
       const mode = get().mode
-      const sys: ChatMessage = { role: 'system', content: buildSystemPrompt(targets, mode) }
+      const proxyCtx = currentProxyContext()
+      const sys: ChatMessage = {
+        role: 'system',
+        content: buildSystemPrompt(targets, mode, proxyCtx)
+      }
       window.api.llm.chat(runId, {
         messages: [sys, ...cur(id).messages],
-        tools: buildAgentTools(targets, mode),
+        tools: buildAgentTools(targets, mode, proxyCtx),
         providerId: get().activeProviderId,
         model: get().activeModel
       })
@@ -659,6 +888,27 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         return
       }
       await (isTransfer ? executeTransfer(id, call) : executeCall(id, call))
+      maybeContinue(id)
+    },
+
+    selectProxyOption: (id, callId, proxyId) => patchProxyMeta(id, callId, { selectedId: proxyId }),
+
+    resolveProxy: (id, call, proxyId) => {
+      stopped[id] = false
+      const meta = cur(id).proxyMeta[call.id]
+      const proxy = proxyId
+        ? useVaultStore.getState().proxies.find((p) => p.id === proxyId)
+        : undefined
+      const result = meta && proxy?.checks?.[meta.key]
+      if (!meta || !proxy || !result) {
+        // 保留「用户已拒绝」前缀 —— 卡片据此显示为说明样式。
+        const content = proxyId
+          ? '用户已拒绝:所选代理已不存在,未使用代理。请改用其他方案或再次调用 use_proxy。'
+          : '用户已拒绝使用代理。请改用其他方案(如更换镜像源)继续,或向用户说明情况。'
+        pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
+      } else {
+        applyProxyChoice(id, call, meta, { proxy, result })
+      }
       maybeContinue(id)
     },
 

@@ -1,4 +1,4 @@
-import type { ChatTool } from '@shared/types'
+import type { AgentProxyMode, ChatTool } from '@shared/types'
 import type { AgentMode } from './agentPermissions'
 
 export interface AgentTarget {
@@ -247,11 +247,85 @@ export const PRESENT_PLAN_TOOL: ChatTool = {
   }
 }
 
+/** 智能体可用代理的情况:策略 + 已配置的代理数。 */
+export interface ProxyContext {
+  mode: AgentProxyMode
+  count: number
+}
+
+/** 命令里代表「已选代理地址」的占位符,执行前由客户端替换,账号密码不进对话。 */
+export const PROXY_PLACEHOLDER = '{{proxy}}'
+
+const proxyEnabled = (p?: ProxyContext): p is ProxyContext =>
+  Boolean(p && p.mode !== 'off' && p.count > 0)
+
+/**
+ * 让智能体在目标机器访问外网受阻时取一个可用代理。返回的是代理的地区/延迟等描述,
+ * 命令里用 {{proxy}} 占位,真实地址(含凭据)只在执行前由客户端代入。
+ */
+export function buildUseProxyTool(targets: AgentTarget[]): ChatTool {
+  const multi = targets.length > 1
+  const properties: Record<string, unknown> = {
+    site: {
+      type: 'string',
+      description: '访问失败的站点域名或 URL,例如 "github.com" 或 "https://pypi.org"。用于挑选能访问它的代理'
+    },
+    reason: {
+      type: 'string',
+      description: '一句话说明遇到的问题,例如 "git clone 超时"(会展示给用户)'
+    }
+  }
+  const required = ['site']
+  if (targets.length > 0) {
+    properties.target = {
+      type: 'string',
+      enum: targets.map((t) => t.name),
+      description: multi
+        ? '要在哪个目标上使用代理(代理在不同机器上的可用性不同)。'
+        : `目标(当前只有 ${targets[0].name})。`
+    }
+    if (multi) required.push('target')
+  }
+  return {
+    type: 'function',
+    function: {
+      name: 'use_proxy',
+      description:
+        '当某个目标上的命令访问外网站点(GitHub、Docker Hub、PyPI、npm 等)出现超时、连接被重置、无法连接、TLS 握手失败或速度极慢时,' +
+        '调用它为该目标挑选一个在该机器上检测可用、延迟最低的代理。成功后在 run_command 的命令里用占位符 ' +
+        `${PROXY_PLACEHOLDER} 代表代理地址。再次调用会换一个代理。`,
+      parameters: { type: 'object', properties, required }
+    }
+  }
+}
+
+function proxyRule(p: ProxyContext): string {
+  const ask = p.mode === 'ask' ? '系统会先请用户确认是否使用代理;' : ''
+  return (
+    `用户配置了 ${p.count} 个代理。目标上的命令访问外网站点失败(github.com、raw.githubusercontent.com、` +
+    'objects.githubusercontent.com、Docker Hub、PyPI、npm、Go/Rust 源等出现超时、Connection timed out/reset、' +
+    'Failed to connect、Could not resolve host、SSL/TLS 握手失败,或下载速度极慢)时,不要原样反复重试,' +
+    `调用 use_proxy(指明 target 与 site)获取代理;${ask}拿到后在 run_command 里用占位符 ${PROXY_PLACEHOLDER} ` +
+    '表示代理地址(系统执行前自动替换,账号密码不会出现在对话中),只对当次命令生效,例如:' +
+    `curl -x ${PROXY_PLACEHOLDER} -fL <url> -o <file>;` +
+    `https_proxy=${PROXY_PLACEHOLDER} http_proxy=${PROXY_PLACEHOLDER} all_proxy=${PROXY_PLACEHOLDER} <命令>` +
+    '(wget/git/pip/npm 等多数工具识别);' +
+    `git -c http.proxy=${PROXY_PLACEHOLDER} clone <repo>;pip install --proxy ${PROXY_PLACEHOLDER} <包>。` +
+    '不要把代理写入 /etc/environment、~/.bashrc、apt/yum 或 docker 的全局配置,除非用户明确要求' +
+    '(docker pull 走 dockerd,命令行代理变量对它无效,需要配置 daemon 代理,属于全局改动,先征得用户同意)。' +
+    '加了代理仍失败可再调用 use_proxy 换一个;没有可用代理时向用户说明,并建议镜像源等替代方案。'
+  )
+}
+
 /**
  * The exact tool set sent to the model. Single source of truth — the panel's
  * context-usage estimate calls this too, so the two can't drift apart.
  */
-export function buildAgentTools(targets: AgentTarget[], mode: AgentMode): ChatTool[] {
+export function buildAgentTools(
+  targets: AgentTarget[],
+  mode: AgentMode,
+  proxy?: ProxyContext
+): ChatTool[] {
   const tools = [
     buildRunCommandTool(targets),
     buildTransferFileTool(targets),
@@ -261,6 +335,8 @@ export function buildAgentTools(targets: AgentTarget[], mode: AgentMode): ChatTo
   ]
   // reconnect_terminal 只有在存在 SSH 终端目标时才有意义(本机目标无法重连)。
   if (targets.some((t) => !isLocalTarget(t))) tools.push(buildReconnectTerminalTool(targets))
+  // use_proxy:仅在开启了智能体代理且确有代理可用时提供。
+  if (proxyEnabled(proxy) && targets.length > 0) tools.push(buildUseProxyTool(targets))
   // present_plan only makes sense while planning.
   return mode === 'plan' ? [...tools, PRESENT_PLAN_TOOL] : tools
 }
@@ -300,7 +376,11 @@ function localTargetRule(): string {
   )
 }
 
-export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask'): string {
+export function buildSystemPrompt(
+  targets: AgentTarget[],
+  mode: AgentMode = 'ask',
+  proxy?: ProxyContext
+): string {
   const label = (t: AgentTarget, i: number): string => {
     const cur = i === 0 ? '(默认/当前)' : ''
     const kind = targetKind(t)
@@ -361,6 +441,9 @@ export function buildSystemPrompt(targets: AgentTarget[], mode: AgentMode = 'ask
       '遇到时就把它当作本次 run_command / transfer_file 的 target,不要自行换一台;' +
       '一条消息里点了多个目标,就按点到的目标分别下发。',
     '13. 回答使用 Markdown。',
-    ...(hasLocal ? [`14. ${localTargetRule()}`] : [])
+    ...(hasLocal ? [`14. ${localTargetRule()}`] : []),
+    ...(proxyEnabled(proxy) && targets.length > 0
+      ? [`${hasLocal ? 15 : 14}. ${proxyRule(proxy)}`]
+      : [])
   ].join('\n')
 }

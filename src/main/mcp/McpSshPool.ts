@@ -156,7 +156,7 @@ class McpSshPool {
   async exec(
     host: Host,
     command: string,
-    opts: { timeoutMs: number; maxBytes: number }
+    opts: { timeoutMs: number; maxBytes: number; stdin?: string }
   ): Promise<McpExecResult> {
     const entry = await this.acquire(host)
     return new Promise<McpExecResult>((resolve, reject) => {
@@ -202,6 +202,8 @@ class McpSshPool {
           clearTimeout(timer)
           reject(e)
         })
+        // 经 stdin 传入的内容不会出现在远端进程列表里(用于传递凭据等)。
+        if (opts.stdin !== undefined) stream.end(opts.stdin)
       })
     })
   }

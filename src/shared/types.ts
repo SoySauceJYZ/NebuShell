@@ -82,11 +82,57 @@ export interface LlmConfigLegacy {
   model: string
 }
 
+// ---- 代理管理 (Proxy Manager) ----------------------------------------------
+
+/** 'https' = 与代理之间走 TLS 的 HTTP 代理;'http' = 明文 HTTP 代理(CONNECT 隧道)。 */
+export type ProxyType = 'http' | 'https' | 'socks5'
+
+/** 一次代理检测的结果。按检测位置(本机 / 某台主机)分别保存。 */
+export interface ProxyCheckResult {
+  ok: boolean
+  checkedAt: number
+  /** TCP 连到代理本身的耗时(ms)。 */
+  connectMs?: number
+  /** 经代理完成一次 HTTPS 请求的总耗时(ms)。 */
+  latencyMs?: number
+  /** 经代理看到的出口 IP。 */
+  exitIp?: string
+  country?: string
+  countryCode?: string
+  region?: string
+  city?: string
+  isp?: string
+  /** 智能体检测时附带的站点可达性探测(如 https://github.com)。 */
+  probe?: { url: string; ok: boolean; status?: number; ms?: number; error?: string }
+  error?: string
+}
+
+/** 检测位置:本机。其余检测位置的 key 为主机的 vault id。 */
+export const PROXY_LOCAL_KEY = 'local'
+
+export interface ProxyEntry {
+  id: string
+  name: string
+  type: ProxyType
+  host: string
+  port: number
+  username?: string
+  password?: string
+  remark?: string
+  createdAt: number
+  /** key = 'local' 或 hostId。 */
+  checks?: Record<string, ProxyCheckResult>
+}
+
+/** 智能体遇到外网连接问题时如何使用代理:关闭 / 先询问用户 / 自动选用。 */
+export type AgentProxyMode = 'off' | 'ask' | 'auto'
+
 export interface VaultData {
   hosts: Host[]
   groups: Group[]
   credentials: Credential[]
   llm?: LlmSettings | LlmConfigLegacy
+  proxies?: ProxyEntry[]
 }
 
 /** Number of records merged in by an import operation. */
@@ -299,6 +345,8 @@ export interface AppSettings {
   mcpPort: number
   /** MCP 访问令牌(Bearer)。首次开启时自动生成,可在设置中重新生成。 */
   mcpToken: string
+  /** 智能体遇到外网连接问题时使用代理的策略。 */
+  agentProxyMode: AgentProxyMode
 }
 
 /** MCP 服务运行状态(设置页展示用)。 */
@@ -321,7 +369,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoCheckUpdate: true,
   mcpEnabled: false,
   mcpPort: DEFAULT_MCP_PORT,
-  mcpToken: ''
+  mcpToken: '',
+  agentProxyMode: 'ask'
 }
 
 // ---- 更新检查 (Update check) -------------------------------------------------

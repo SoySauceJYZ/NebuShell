@@ -9,6 +9,7 @@ import {
   Settings,
   Zap,
   Monitor,
+  Globe,
   Image as ImageIcon
 } from 'lucide-react'
 import type { TabKind } from '../store/useSessionStore'
@@ -18,6 +19,7 @@ export const KIND_ICON: Record<TabKind, typeof Server> = {
   keychain: KeyRound,
   quickCommands: Zap,
   remoteDesktop: Monitor,
+  proxies: Globe,
   history: FileClock,
   settings: Settings,
   terminal: SquareTerminal,
