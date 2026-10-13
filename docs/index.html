@@ -868,6 +868,19 @@
             </p>
           </div>
           <div class="card">
+            <div class="ico">🌍</div>
+            <h3 data-zh="Web 版（无桌面 Linux 服务器）">Web edition for headless servers</h3>
+            <p
+              data-zh="服务器没有桌面？把后端作为 Node 服务跑在上面（Docker 镜像或 tar.gz + systemd），用任意浏览器访问完整功能——主机、终端、SFTP、Docker、AI 智能体、代理与 MCP 都与桌面版一致。主密码即登录密码，「本地」即服务器本机，你电脑上的文件通过浏览器上传 / 下载互传。"
+            >
+              No desktop on the box? Run the backend there as a Node service (Docker image or tar.gz
+              + systemd) and use the whole app from any browser — hosts, terminals, SFTP, Docker,
+              the agent, proxies and MCP work as on desktop. The master password is the login,
+              “local” is the server itself, and files reach your own computer via browser upload /
+              download.
+            </p>
+          </div>
+          <div class="card">
             <div class="ico">📝</div>
             <h3 data-zh="Monaco 编辑器">Monaco editor</h3>
             <p
@@ -918,6 +931,50 @@
         <h2 class="sec-title" data-zh="更新内容">What's New</h2>
         <p class="sec-sub" data-zh="近期更新——2026 年 7–10 月。">Recent updates — July–October 2026.</p>
         <div class="grid">
+          <div class="card">
+            <div class="ico">🌍</div>
+            <h3 data-zh="Web 版：在无桌面的 Linux 服务器上运行，用浏览器访问（2026‑10‑10）">
+              Web edition: NebuShell on a headless Linux server, in your browser (2026‑10‑10)
+            </h3>
+            <p
+              data-zh="以前 Linux 只有桌面客户端，没有桌面的服务器跑不起来。现在同一套后端作为普通 Node.js 服务跑在服务器上，同一套界面交给任意浏览器——主机、终端、SFTP、Docker 面板、AI 智能体（含流式输出）、代理与 MCP 服务都与桌面版一致。部署方式二选一：Docker 镜像（以非 root 用户运行，数据在 <code>/data</code> 卷里，自带健康检查），或 tar.gz + systemd 单元（<code>npm run build:web &amp;&amp; npm run package:web</code>；服务端是一个自包含文件，无需 <code>node_modules</code>、没有原生模块，只要求 Node.js 22）。默认只监听 <code>127.0.0.1:8080</code>，请在前面放带 HTTPS 的 Nginx 或 Caddy。登录用保险库主密码：会话是只存在内存里的 <code>HttpOnly</code> + <code>SameSite=Strict</code> Cookie，输错密码按 IP 指数退避，WebSocket 握手同时校验 Cookie 与 <code>Origin</code>；任一浏览器锁定保险库，所有浏览器都会回到解锁页。「本地」即服务器本机——本地文件面板浏览服务器的文件系统，智能体的本机命令也在服务器上执行（<code>--no-local</code> 可关闭）。你电脑上的文件经浏览器中转：上传和拖进面板的文件先暂存到服务器再走原有传输队列，「下载到…」直接交给浏览器下载，文件夹打包为 <code>.tar.gz</code>。网络闪断时自动重连，终端按服务器端缓冲重画，掉线期间的输出不会丢。Web 版暂不提供远程桌面与标签页拖出成窗口；桌面版不受影响，两个版本共用同一份代码。"
+            >
+              The Linux build used to be desktop-only, so a server without a desktop couldn’t run
+              it. Now the same backend runs there as a plain Node.js service and the same UI is
+              served to any browser — hosts, terminals, SFTP, the Docker panel, the AI agent
+              (streaming included), proxies and the MCP server behave as on desktop. Deploy it as a
+              Docker image (unprivileged user, data in the <code>/data</code> volume, built-in
+              healthcheck) or as a tar.gz with a systemd unit
+              (<code>npm run build:web &amp;&amp; npm run package:web</code>; the server is one
+              self-contained file with no <code>node_modules</code> and no native modules — it only
+              needs Node.js 22). It listens on <code>127.0.0.1:8080</code>; put Nginx or Caddy with
+              HTTPS in front. Signing in uses the vault master password: an in-memory
+              <code>HttpOnly</code> + <code>SameSite=Strict</code> session cookie, per-IP back-off on
+              wrong passwords, and a WebSocket handshake that checks both the cookie and the
+              <code>Origin</code>; locking the vault in any browser sends every browser back to the
+              unlock screen. “Local” means the server itself — the local file pane and the agent’s
+              local commands act on it (turn off with <code>--no-local</code>). Files on your own
+              computer travel through the browser: uploads and drops are staged on the server and
+              then use the usual transfer queue; “download to…” lands in the browser’s downloads,
+              folders as <code>.tar.gz</code>. After a network blip the page reconnects and each
+              terminal redraws from the server’s scrollback, so nothing printed meanwhile is lost.
+              Not on the web: remote desktop and tearing tabs into windows. The desktop app is
+              unchanged — both editions share the same code.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🔒</div>
+            <h3 data-zh="LLM API Key 只留在主进程（2026‑10‑10）">
+              LLM API keys stay in the main process (2026‑10‑10)
+            </h3>
+            <p
+              data-zh="交给界面的保险库数据不再包含 AI 供应商的 API Key（界面只需要知道「是否已配置」）——桌面版里它只留在主进程，Web 版里根本不会到达浏览器。"
+            >
+              The vault data handed to the UI no longer carries the AI providers’ API keys (the UI
+              only needs to know whether one is set) — on desktop they stay in the main process, and
+              on the web edition they never reach the browser.
+            </p>
+          </div>
           <div class="card">
             <div class="ico">🌐</div>
             <h3 data-zh="代理管理，以及「网络不通时会自己找代理」的智能体（2026‑10‑07）">
@@ -1796,8 +1853,12 @@
               >◇ View on GitHub</a
             >
           </div>
-          <div class="alt" data-zh="macOS（.dmg） · Linux（AppImage / snap / deb）">
-            macOS (.dmg) · Linux (AppImage / snap / deb)
+          <div
+            class="alt"
+            data-zh="macOS（.dmg） · Linux（AppImage / snap / deb） · Linux 服务器 Web 版（Docker / tar.gz）"
+          >
+            macOS (.dmg) · Linux (AppImage / snap / deb) · Linux server web edition (Docker /
+            tar.gz)
           </div>
         </div>
       </div>

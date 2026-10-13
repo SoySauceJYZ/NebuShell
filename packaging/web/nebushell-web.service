@@ -1,0 +1,43 @@
+# systemd unit for the NebuShell web edition (tarball install under /opt/nebushell-web).
+#
+#   sudo useradd --system --home-dir /var/lib/nebushell --shell /usr/sbin/nologin nebushell
+#   sudo cp nebushell-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now nebushell-web
+#
+# It listens on 127.0.0.1 only: publish it through an HTTPS reverse proxy
+# (see README.md for Nginx / Caddy snippets).
+
+[Unit]
+Description=NebuShell Web (SSH client + AI ops agent in the browser)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nebushell
+Group=nebushell
+Environment=NEBUSHELL_HOST=127.0.0.1
+Environment=NEBUSHELL_PORT=8080
+Environment=NEBUSHELL_DATA_DIR=/var/lib/nebushell
+# The proxy in front sets X-Forwarded-For / -Proto / -Host.
+Environment=NEBUSHELL_TRUST_PROXY=1
+# Uncomment to turn off the server-local file pane and local command execution:
+#Environment=NEBUSHELL_NO_LOCAL=1
+ExecStart=/bin/sh /opt/nebushell-web/nebushell-web
+Restart=on-failure
+RestartSec=3
+
+# /var/lib/nebushell, owned by the service user.
+StateDirectory=nebushell
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+# "full" keeps /usr, /boot and /etc read-only. "strict" (everything read-only except
+# ReadWritePaths) is tighter but also makes the server-local file pane read-only.
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -57,6 +57,7 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 - 🖥️ **Remote desktop control** — a Sunlogin‑style remote desktop right in the left sidebar. On the machine you want to control, run NebuShell and click **启动被控端 (Start agent)** — it shows that machine's LAN address and a random access code; on the controller, enter the **IP + code** for a live screen with **full mouse & keyboard control**. Video streams **peer‑to‑peer over WebRTC** on your LAN (no relay server, no cloud), input is injected natively on the remote, and it ships with **multi‑monitor switching**, **two‑way text clipboard sync**, **file push** straight into the remote machine's Downloads (with a progress bar), and a **remote command line** (a real PowerShell / cmd terminal running on the controlled machine). First step: LAN direct‑connect, **Windows** controlled‑side.
 - 🌐 **Proxy manager** — keep a list of **HTTP / HTTPS / SOCKS5** proxies (with optional username & password, stored in the encrypted vault), add them one at a time or **bulk‑paste** a whole list, and **check** each one's **exit IP, region, ISP and latency** — either **from this computer** or **from any of your hosts** (the same proxy can be fast here and dead there). When the AI agent hits a download or connection failure on a server (GitHub, Docker Hub, PyPI, npm…), it can **ask you to pick a proxy or pick one automatically** — and the proxy's credentials are **never sent to the model**.
 - 🔌 **Built‑in MCP server** — turn it on in Settings and **Claude Code, Cursor or any MCP‑capable agent** can use the servers you've saved in NebuShell: run commands, list / read / write files and look at Docker containers and logs. Bearer‑token auth, one‑click copy of the `claude mcp add` command or JSON config, and an **audit log** of every call.
+- 🌍 **Web edition for headless Linux servers** — no desktop on the box? Run NebuShell's backend there as a plain Node service (**Docker image** or **tar.gz + systemd**) and use the full app **from any browser**: hosts, terminals, SFTP, Docker, the AI agent, proxies and the MCP server all work as on desktop. The vault master password is the login, "local" means **the server itself** (switch it off with `--no-local`), and files move between **your own computer** and the server or your hosts through browser **upload / download**. See [docs/web/README.md](docs/web/README.md).
 - 🗂️ **Host management** — organize connections into groups, **search by name or address**, **right‑click a host** to connect / duplicate / edit, edit host details **inline** with a save button, and **rename & reorder groups** from a group manager (the order flows through to the list). Duplicate sessions, reconnect, and jump between them from the tab bar.
 - ⌨️ **Command history & command palette** — every command you type is saved locally per server (tagged **User** / **Agent**) and shared across that host's tabs; a history panel splits **Local** vs the server's own `~/.bash_history`. Triple‑tap **Ctrl** to open a tabbed palette that searches history and runs quick actions — picking a command drops it into the prompt **without executing**.
 - 📜 **History docs** — keep track of past sessions and documents.
@@ -67,6 +68,9 @@ Everything is stored locally and secured by a master‑password vault. No cloud 
 ### What's New
 
 **Recent updates (July–October 2026)**
+
+- 🌍 **Web edition: NebuShell on a headless Linux server, in your browser** _(2026‑10‑10)_ — the Linux build used to be desktop‑only (AppImage / snap / deb), so a server without a desktop couldn't run it. Now the same backend runs there as a plain **Node.js service** and the same UI is served to **any browser** — hosts, terminals, SFTP, the Docker panel, the AI agent (streaming included), proxies and the MCP server all behave as on desktop. Deploy it as a **Docker image** (`docker/web/Dockerfile`, runs as an unprivileged user, data in the `/data` volume, built‑in healthcheck) or as a **tar.gz with a systemd unit** (`npm run build:web && npm run package:web`; the server is a single self‑contained file with no `node_modules` and no native modules, so one tarball serves x64 and arm64 — it only needs Node.js 22). It listens on `127.0.0.1:8080` by default and speaks plain HTTP: put **Nginx or Caddy with HTTPS** in front (examples in [docs/web/README.md](docs/web/README.md)). **Signing in** uses the vault master password: the session is an `HttpOnly` + `SameSite=Strict` cookie held only in memory, wrong passwords are throttled per IP with exponential back‑off, the WebSocket handshake checks both the cookie and the `Origin`, and **locking** the vault in any browser sends **every** browser back to the unlock screen. **"Local" means the server itself** — the local file pane browses the server's filesystem and the agent's local commands run there as the service user (turn both off with `--no-local`). Files on **your own computer** travel through the browser: **upload** and files **dropped onto a pane** are staged on the server and then go through the usual transfer queue with its progress; **"download to…"** hands the result to the browser's downloads, folders arriving as `.tar.gz`. If the network blips, the page **reconnects by itself** and each terminal **redraws from the server's scrollback**, so output produced while you were offline isn't lost; sessions of a page that is really gone are closed after 60 seconds. Not available on the web: **remote desktop** and tearing tabs off into windows; native dialogs become in‑page ones. The desktop app is unchanged — both editions share the same code, the web build just swaps the `electron` module for a WebSocket bridge.
+- 🔒 **LLM API keys stay in the main process** _(2026‑10‑10)_ — the vault data handed to the UI no longer includes the AI providers' **API keys** (the UI only ever needed "is a key set"), so on desktop they stay in the main process and on the web edition they **never reach the browser**.
 
 - 🌐 **Proxy manager, and an agent that reaches for a proxy when the network fails it** _(2026‑10‑07)_ — a new **代理 (Proxies)** tab in the left sidebar. Add **HTTP / HTTPS / SOCKS5** proxies one at a time (paste a link like `socks5://user:pass@1.2.3.4:1080` and the fields fill themselves in), or **bulk‑import** a whole list — `scheme://user:pass@ip:port`, `ip:port`, `ip:port:user:pass`, `user:pass@ip:port`, with `#name` at the end of a line; unrecognised lines are pointed out by line number and duplicates are skipped. Proxies live in the **encrypted vault** alongside your hosts. **Checking** shows each proxy's **exit IP, country / region / city, ISP and latency** (green / amber / red), and the **检测位置 (Check from)** picker decides **where** the check runs: **this computer**, or **any saved host** — because a proxy that is fast from your desk can be unreachable from a server in another data centre, so results are kept separately per location. Local checks open the HTTP `CONNECT` / SOCKS5 tunnel directly (no extra dependencies); checks from a host run `curl` over SSH, with the proxy address and password passed through **stdin into a temporary file**, so they never show up in the server's process list (a host without `curl` is reported as such). Sort by latency, search by name / IP / region, and **clean out** the ones that failed. The real point is the **agent**: when a command on a server fails to reach GitHub, Docker Hub, PyPI, npm and the like (timeouts, connection resets, TLS failures, crawling downloads), it calls the new **`use_proxy`** tool, which picks the proxy that **works from that machine and can actually reach that site**, lowest latency first (re‑checking when the results are older than 10 minutes). A three‑way switch decides what happens next: **关闭 (Off)**, **询问 (Ask)** — a card shows the site, the reason and the candidates, and you choose one or decline — or **自动 (Auto)**. The agent then writes **`{{proxy}}`** in its command (`curl -x {{proxy}} …`, `git -c http.proxy={{proxy}} clone …`, `https_proxy={{proxy}} …`), which is swapped for the real address **only at the moment it runs**, and the password is masked as `***` in the output the model sees — so **proxy credentials never reach the model provider**. The proxy applies to that one command only; the agent is told not to write it into global config without your say‑so, and calling `use_proxy` again tries a different one.
 - 🔌 **Built‑in MCP server: let other agents use your saved servers** _(2026‑10‑07)_ — **设置 (Settings)** gains an **MCP 服务** card. Switch it on and NebuShell serves the **Model Context Protocol** over Streamable HTTP at `http://<address>:46300/mcp` (another port is picked automatically if that one is taken), so **Claude Code, Cursor and any other MCP‑capable agent** can work with the servers already in your vault — no copying passwords or keys anywhere. Tools: `list_hosts` (never includes passwords or keys), `exec_command` (non‑interactive, optional `cwd`, timeout up to 30 min), `list_directory`, `read_file`, `write_file`, `docker_ps` and `docker_logs` (plain `docker` or `sudo -n docker`, tried automatically). Hosts can be referred to by id or name. Connections are pooled per host, separate from your terminal tabs, and closed after 10 idle minutes — nothing is ever typed into a shell you can see. Access requires a randomly generated **Bearer token** (compared in constant time; regenerate it any time), the card lists every LAN address to connect to and copies a ready‑made **`claude mcp add` command** or **JSON config** in one click, and **every call is written to an audit log** you can open from the card. The vault has to be unlocked for it to work. Note that it listens on all interfaces and commands run through it are **not** confirmed in NebuShell — keep the token private.
@@ -201,6 +205,21 @@ npm run build:linux
 npm run build:unpack
 ```
 
+### Web Edition (headless Linux server)
+
+For a Linux server without a desktop: run the backend as a Node service and open it in a browser. Full deployment notes, flags and reverse‑proxy examples: [docs/web/README.md](docs/web/README.md).
+
+```bash
+# Docker
+docker build -f docker/web/Dockerfile -t nebushell-web .
+docker run -d --name nebushell -p 127.0.0.1:8080:8080 -v nebushell-data:/data nebushell-web
+
+# tar.gz + systemd  →  dist-web/NebuShell-web-<version>-linux.tar.gz (needs Node.js 22 on the server)
+npm run build:web && npm run package:web
+```
+
+The service listens on `127.0.0.1:8080` over plain HTTP — publish it through an HTTPS reverse proxy (Nginx / Caddy).
+
 ### Configuring the AI Agent
 
 The agent talks to any **OpenAI‑compatible** endpoint. Open the agent settings in‑app and provide:
@@ -224,7 +243,10 @@ src/
 │   ├── proxy/      # Proxy checker (local tunnels / remote curl)
 │   └── ipc/        # IPC handlers
 ├── preload/        # Preload bridge
-└── renderer/       # React UI (terminals, SFTP, editor, agent panel)
+├── renderer/       # React UI (terminals, SFTP, editor, agent panel)
+└── web/            # Web edition: Node server + browser bridge (electron shims, WebSocket IPC)
+docker/web/         # Web edition Docker image
+packaging/web/      # Web edition launcher + systemd unit
 ```
 
 ### Credits
@@ -262,6 +284,7 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 - 🖥️ **远程桌面控制** —— 左侧边栏内置类似向日葵的远程桌面。在想被控的机器上运行 NebuShell,点「**启动被控端**」即显示该机的局域网地址和一个随机访问码;在控制端输入 **IP + 访问码**,即可看到实时画面并**完全操控其鼠标键盘**。画面在局域网内**经 WebRTC 点对点直传**(无中转服务器、不走云),输入在被控端**原生注入**,并自带**多显示器切换**、**文本剪贴板双向同步**、把文件直接**推送到被控机「下载」目录**(带进度条),以及**远程命令行**(在被控机上打开真实的 PowerShell / cmd 终端)。第一步:局域网直连、被控端仅 **Windows**。
 - 🌐 **代理管理** —— 维护一批 **HTTP / HTTPS / SOCKS5** 代理(可带账号密码,存放在加密保险库),支持逐个添加或**整段粘贴批量导入**,一键**检测**每个代理的**出口 IP、地区、运营商与延迟** —— 既可**从本机检测**,也可**从任意一台主机检测**(同一个代理在这台机器上快、换台机器可能根本连不上)。AI 智能体在服务器上下载或连接外网失败时(GitHub、Docker Hub、PyPI、npm……),可以**先询问你选哪个代理,或自动挑一个**,而且**代理账号密码不会发送给模型**。
 - 🔌 **内置 MCP 服务** —— 在设置里打开后,**Claude Code、Cursor 等支持 MCP 的智能体**就能使用你在 NebuShell 里保存的服务器:执行命令、列目录 / 读写文件、查看 Docker 容器与日志。Bearer 令牌鉴权,一键复制 `claude mcp add` 命令或 JSON 配置,每次调用都记入**审计日志**。
+- 🌍 **Web 版(无桌面 Linux 服务器)** —— 服务器没有桌面?把 NebuShell 的后端作为普通 Node 服务跑在上面(**Docker 镜像**或 **tar.gz + systemd**),**用任意浏览器**访问完整功能:主机、终端、SFTP、Docker、AI 智能体、代理和 MCP 服务都与桌面版一致。保险库主密码即登录密码,「本地」指**服务器本机**(可用 `--no-local` 关闭),**你自己电脑上的文件**通过浏览器**上传 / 下载**与服务器或各主机互传。详见 [docs/web/README.md](docs/web/README.md)。
 - 🗂️ **主机管理** —— 把连接整理进分组,支持**按名称或地址搜索**、**右键主机**连接 / 复制 / 编辑、带保存按钮的**就地编辑主机详情**,以及在分组管理里**重命名与排序分组**(顺序会同步到列表);并可复制会话、一键重连、在标签栏之间快速切换。
 - ⌨️ **命令历史与命令面板** —— 你输入的每条命令都会**按服务器本地持久化**(标记 **User / Agent**),并在该主机的所有标签页间共享;历史面板分「**本地 / 服务器**」两个子标签,服务器标签直接读取机器自身的 `~/.bash_history`。在终端里**连按三次 Ctrl** 可呼出分标签命令面板,搜索历史或执行快捷操作——选中的命令只**填入输入行、不自动执行**。
 - 📜 **历史文档** —— 记录过往会话与文档。
@@ -272,6 +295,9 @@ Released under the [MIT License](LICENSE). © 2026 jiayizhen / MrToken & Nebulae
 ### 更新记录
 
 **近期更新(2026 年 7–10 月)**
+
+- 🌍 **Web 版:在无桌面的 Linux 服务器上运行,用浏览器访问** _(2026‑10‑10)_ —— 以前 Linux 只有桌面客户端(AppImage / snap / deb),没有桌面的服务器跑不起来。现在同一套后端可以作为普通 **Node.js 服务**跑在服务器上,同一套界面交给**任意浏览器** —— 主机、终端、SFTP、Docker 面板、AI 智能体(含流式输出)、代理和 MCP 服务都与桌面版表现一致。部署方式二选一:**Docker 镜像**(`docker/web/Dockerfile`,以非 root 用户运行,数据在 `/data` 卷里,自带健康检查),或 **tar.gz + systemd 单元**(`npm run build:web && npm run package:web`;服务端是一个自包含文件,不需要 `node_modules`、没有原生模块,x64 与 arm64 共用一个包,只要求 Node.js 22)。默认只监听 `127.0.0.1:8080`、只说 HTTP,请在前面放 **带 HTTPS 的 Nginx 或 Caddy**(示例见 [docs/web/README.md](docs/web/README.md))。**登录**用保险库主密码:会话是只存在内存里的 `HttpOnly` + `SameSite=Strict` Cookie,输错密码按 IP 指数退避,WebSocket 握手同时校验 Cookie 与 `Origin`;在任一浏览器里**锁定**保险库,**所有**浏览器都会回到解锁页。**「本地」即服务器本机** —— 本地文件面板浏览的是服务器的文件系统,智能体的本机命令也以服务用户身份在服务器上执行(用 `--no-local` 可一并关闭)。**你自己电脑上的文件**经浏览器中转:「**上传**」和**拖进面板**的文件先暂存到服务器,再走原有的传输队列与进度;「**下载到…**」直接交给浏览器下载,文件夹自动打包为 `.tar.gz`。网络闪断时页面会**自动重连**,终端会**按服务器端的回滚缓冲重画**,掉线期间的输出不会丢;页面真正关闭后,它打开的会话 60 秒后释放。Web 版暂不提供:**远程桌面**、把标签页拖出成独立窗口;系统原生对话框改为页面内弹窗。桌面版不受影响 —— 两个版本共用同一份代码,Web 构建只是把 `electron` 模块换成了 WebSocket 桥接。
+- 🔒 **LLM API Key 只留在主进程** _(2026‑10‑10)_ —— 交给界面的保险库数据不再包含 AI 供应商的 **API Key**(界面只需要知道「是否已配置」),桌面版里它只留在主进程,Web 版里**根本不会到达浏览器**。
 
 - 🌐 **代理管理,以及「网络不通时会自己找代理」的智能体** _(2026‑10‑07)_ —— 左侧新增「**代理**」标签。可以逐个添加 **HTTP / HTTPS / SOCKS5** 代理(粘贴一条 `socks5://user:pass@1.2.3.4:1080` 这样的链接,各字段自动填好),也可以**批量导入**整段列表 —— 支持 `协议://用户:密码@IP:端口`、`IP:端口`、`IP:端口:用户:密码`、`用户:密码@IP:端口`,行尾 `#名称` 作为名称;识别不了的行会标出行号,重复的自动跳过。代理与主机一起存放在**加密保险库**里。**检测**会给出每个代理的**出口 IP、国家 / 省份 / 城市、运营商和延迟**(绿 / 黄 / 红三档),而「**检测位置**」决定**在哪儿测**:**本机**,或**任意一台已保存的主机** —— 同一个代理,在你桌上很快,换到另一个机房的服务器上可能根本连不上,所以每个位置的结果分开保存。本机检测直接自建 HTTP `CONNECT` / SOCKS5 隧道(不引入任何新依赖);从主机检测则经 SSH 在远端跑 `curl`,代理地址和密码**经 stdin 写进临时文件**,不会出现在服务器的进程列表里(远端没装 `curl` 会明确提示)。支持按延迟排序、按名称 / IP / 地区搜索,以及一键**清理不可用**的代理。真正的用处在**智能体**:当服务器上的命令访问 GitHub、Docker Hub、PyPI、npm 等站点失败时(超时、连接被重置、TLS 握手失败、下载慢得离谱),它会调用新工具 **`use_proxy`**,挑出**在那台机器上可用、并且确实能访问该站点**的代理,延迟低的优先(检测结果超过 10 分钟会自动重测)。接下来怎么做由一个三档开关决定:**关闭**、**询问** —— 对话里弹出卡片,列出站点、原因和候选代理,由你选一个或拒绝 —— 或**自动**。拿到代理后,智能体在命令里写占位符 **`{{proxy}}`**(`curl -x {{proxy}} …`、`git -c http.proxy={{proxy}} clone …`、`https_proxy={{proxy}} …`),**直到真正执行的那一刻**才替换成真实地址,返回给模型的输出里密码也会被遮成 `***` —— **代理账号密码不会发送给模型供应商**。代理只对当次命令生效;智能体被要求未经你同意不得写入全局配置,再次调用 `use_proxy` 会换一个代理。
 - 🔌 **内置 MCP 服务:让其他智能体也能用你保存的服务器** _(2026‑10‑07)_ —— 「**设置**」里新增「**MCP 服务**」卡片。打开后,NebuShell 以 Streamable HTTP 提供 **Model Context Protocol** 服务,地址为 `http://<地址>:46300/mcp`(端口被占用时自动换一个),**Claude Code、Cursor 等任何支持 MCP 的智能体**都能直接使用保险库里已有的服务器 —— 不用再到处复制密码或密钥。提供的工具:`list_hosts`(不含任何密码 / 密钥)、`exec_command`(非交互,可指定 `cwd`,超时最长 30 分钟)、`list_directory`、`read_file`、`write_file`、`docker_ps` 与 `docker_logs`(自动尝试 `docker` 与 `sudo -n docker`)。主机可以用 id 或名称指定。连接按主机复用,与终端标签完全独立,空闲 10 分钟自动断开 —— 不会往你看得见的任何 shell 里写东西。访问需要随机生成的 **Bearer 令牌**(常数时间比对,可随时重新生成),卡片列出所有可连接的局域网地址,并能一键复制现成的 **`claude mcp add` 命令**或 **JSON 配置**;**每一次调用都写入审计日志**,可从卡片直接打开。使用时需先解锁保险库。注意:服务监听所有网卡,经它执行的命令**不会**在 NebuShell 里弹窗确认,请妥善保管令牌。
@@ -390,6 +416,21 @@ npm run build:linux
 npm run build:unpack
 ```
 
+### Web 版(无桌面 Linux 服务器)
+
+服务器没有桌面时:把后端作为 Node 服务运行,用浏览器访问。完整的部署说明、参数和反向代理示例见 [docs/web/README.md](docs/web/README.md)。
+
+```bash
+# Docker
+docker build -f docker/web/Dockerfile -t nebushell-web .
+docker run -d --name nebushell -p 127.0.0.1:8080:8080 -v nebushell-data:/data nebushell-web
+
+# tar.gz + systemd  →  dist-web/NebuShell-web-<版本号>-linux.tar.gz(服务器需 Node.js 22)
+npm run build:web && npm run package:web
+```
+
+服务默认以 HTTP 监听 `127.0.0.1:8080`,请通过 HTTPS 反向代理(Nginx / Caddy)对外提供。
+
 ### 配置 AI 智能体
 
 智能体支持任意 **兼容 OpenAI** 的接口。在应用内打开智能体设置,填写:
@@ -413,7 +454,10 @@ src/
 │   ├── proxy/      # 代理检测(本机隧道 / 远端 curl)
 │   └── ipc/        # IPC 处理
 ├── preload/        # 预加载桥接
-└── renderer/       # React 界面(终端、SFTP、编辑器、智能体面板)
+├── renderer/       # React 界面(终端、SFTP、编辑器、智能体面板)
+└── web/            # Web 版:Node 服务端 + 浏览器桥接(electron 替身、WebSocket IPC)
+docker/web/         # Web 版 Docker 镜像
+packaging/web/      # Web 版启动脚本与 systemd 单元
 ```
 
 ### 致谢

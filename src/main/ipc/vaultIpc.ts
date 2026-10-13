@@ -1,7 +1,18 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { writeFileSync, readFileSync } from 'fs'
 import { vaultManager } from '../vault/VaultManager'
-import type { Host, Group, Credential, VaultImportResult } from '../../shared/types'
+import type { Host, Group, Credential, VaultImportResult, VaultData } from '../../shared/types'
+
+/**
+ * The vault as the renderer sees it: without the LLM settings, whose provider API keys
+ * stay in main (the renderer reads the public view via `llm:getSettings`). On the web
+ * edition this is what keeps the keys from ever reaching the browser.
+ */
+function rendererView(): Omit<VaultData, 'llm'> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { llm, ...rest } = vaultManager.getData()
+  return rest
+}
 
 export function registerVaultIpc(): void {
   ipcMain.handle('vault:isInitialized', () => vaultManager.isInitialized())
@@ -9,12 +20,12 @@ export function registerVaultIpc(): void {
 
   ipcMain.handle('vault:create', (_e, masterPassword: string) => {
     vaultManager.create(masterPassword)
-    return vaultManager.getData()
+    return rendererView()
   })
 
   ipcMain.handle('vault:unlock', (_e, masterPassword: string) => {
     vaultManager.unlock(masterPassword)
-    return vaultManager.getData()
+    return rendererView()
   })
 
   ipcMain.handle('vault:lock', () => {
@@ -28,7 +39,7 @@ export function registerVaultIpc(): void {
   // stored password no longer works), which means the gate must ask for one.
   ipcMain.handle('vault:unlockTrusted', () => {
     if (!vaultManager.unlockWithTrust()) return null
-    return vaultManager.getData()
+    return rendererView()
   })
 
   ipcMain.handle('vault:setTrusted', (_e, trusted: boolean) => {
@@ -37,7 +48,7 @@ export function registerVaultIpc(): void {
     return vaultManager.isTrusted()
   })
 
-  ipcMain.handle('vault:getData', () => vaultManager.getData())
+  ipcMain.handle('vault:getData', () => rendererView())
 
   ipcMain.handle('vault:host:add', (_e, host: Omit<Host, 'id'>) => vaultManager.addHost(host))
   ipcMain.handle('vault:host:update', (_e, id: string, patch: Partial<Host>) =>
@@ -78,6 +89,12 @@ export function registerVaultIpc(): void {
     writeFileSync(result.filePath, json, 'utf8')
     return result.filePath
   })
+
+  // Export without a save dialog: the web edition hands the text to the browser, which
+  // downloads it on the user's own machine.
+  ipcMain.handle('vault:exportContent', (_e, password: string): string =>
+    vaultManager.exportEncrypted(password)
+  )
 
   // Import step 1: pick a file and return its raw contents (decryption happens
   // in step 2 so a wrong password doesn't force re-picking the file).

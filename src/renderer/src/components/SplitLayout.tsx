@@ -12,6 +12,7 @@ import {
   type SplitterRect
 } from '../lib/layoutTree'
 import { TAB_DRAG_START, type TabDragStartDetail } from '../lib/tabDrag'
+import { IS_WEB } from '../lib/env'
 import { TabContent } from './TabContent'
 import { PaneTabStrip } from './PaneTabStrip'
 
@@ -26,6 +27,8 @@ function box(r: Rect): React.CSSProperties {
 
 /** Whether a screen-coordinate point falls outside this window's content viewport. */
 function isOutsideWindow(screenX: number, screenY: number): boolean {
+  // A browser tab can't spawn app windows, so tabs never tear off on the web edition.
+  if (IS_WEB) return false
   const left = window.screenX
   const top = window.screenY
   return (

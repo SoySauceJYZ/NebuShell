@@ -5,7 +5,7 @@ import { join, basename, extname } from 'path'
 import { remoteDesktopManager } from '../remoteDesktop/RemoteDesktopManager'
 import { inputInjector } from '../remoteDesktop/InputInjector'
 import { remoteShell } from '../remoteDesktop/RemoteShell'
-import { broadcast } from '../windows'
+import { broadcast } from '../broadcast'
 import type { RdSignal, RdInputEvent, RdScreen, RdShellOpts } from '../../shared/types'
 
 /** 把一块 Electron display 的边界换算成物理像素,配置给注入器。 */

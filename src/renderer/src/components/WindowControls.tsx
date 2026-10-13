@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, X } from 'lucide-react'
+import { IS_WEB } from '../lib/env'
 
-const isMac = window.electron.process.platform === 'darwin'
+// macOS draws native traffic lights; a browser tab has its own chrome.
+const hidden = IS_WEB || window.electron.process.platform === 'darwin'
 
 export function WindowControls(): React.ReactElement | null {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
-    if (isMac) return
+    if (hidden) return
     window.api.window.isMaximized().then(setMaximized)
     const unsub = window.api.window.onMaximizeChanged(setMaximized)
     return unsub
   }, [])
 
-  // macOS draws native traffic lights on the left; no custom controls needed.
-  if (isMac) return null
+  if (hidden) return null
 
   return (
     <div

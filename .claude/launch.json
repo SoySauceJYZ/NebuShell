@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "docs", "-l", "15080"],
       "port": 15080
+    },
+    {
+      "name": "web-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["out/web/server/index.js", "--port", "18080", "--data-dir", ".web-data"],
+      "port": 18080
     }
   ]
 }

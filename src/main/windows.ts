@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { AdoptPayload } from '../shared/types'
+import { setBroadcastSink } from './broadcast'
 
 // All live app windows. Used to broadcast session-scoped events (each channel is keyed
 // by a unique sessionId, so only the window holding that tab actually listens) and to
@@ -61,12 +62,12 @@ export function createAppWindow(): BrowserWindow {
   return win
 }
 
-/** Send an event to every live window. Session channels are unique, so only the owner reacts. */
-export function broadcast(channel: string, ...args: unknown[]): void {
+// Session-scoped events fan out to every live window (see ./broadcast).
+setBroadcastSink((channel, args) => {
   for (const win of windows) {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
   }
-}
+})
 
 /**
  * The window whose bounds contain the given screen point, excluding `exclude`. Electron

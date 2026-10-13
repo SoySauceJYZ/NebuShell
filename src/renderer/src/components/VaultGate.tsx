@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useVaultStore } from '../store/useVaultStore'
 import appIcon from '../assets/app-icon.png'
+import { IS_WEB } from '../lib/env'
 
 export function VaultGate({ children }: { children: React.ReactNode }): React.ReactElement {
   const { initialized, unlocked, checkStatus, createVault, unlock, setTrusted } = useVaultStore()
@@ -94,9 +95,7 @@ export function VaultGate({ children }: { children: React.ReactNode }): React.Re
             className="mx-auto mb-3 h-16 w-16 rounded-2xl object-contain drop-shadow-sm"
           />
           <h1 className="text-xl font-semibold text-[var(--text-dark)]">NebuShell</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            由 AI 智能体驱动的运维终端
-          </p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">由 AI 智能体驱动的运维终端</p>
           <p className="mt-2.5 text-xs text-[var(--text-muted)]">
             {initialized ? '输入主密码解锁保险库' : '创建主密码以初始化保险库'}
           </p>
@@ -127,25 +126,28 @@ export function VaultGate({ children }: { children: React.ReactNode }): React.Re
           </>
         )}
 
-        <label
-          className={`mb-4 flex items-start gap-2 ${trustSupported ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
-        >
-          <input
-            type="checkbox"
-            checked={trustDevice}
-            disabled={!trustSupported}
-            onChange={(e) => setTrustDevice(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-          />
-          <span className="text-xs leading-relaxed text-[var(--text-muted)]">
-            <span className="text-[var(--text-dark)]">信任此设备</span>
-            <span className="ml-1">
-              {trustSupported
-                ? '下次打开将自动解锁,无需输入主密码。主密码会用系统凭据存储加密后保存在本机。'
-                : '当前系统不支持安全存储,无法使用此功能。'}
+        {/* Web edition: the server signs browsers in with a session cookie instead. */}
+        {!IS_WEB && (
+          <label
+            className={`mb-4 flex items-start gap-2 ${trustSupported ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+          >
+            <input
+              type="checkbox"
+              checked={trustDevice}
+              disabled={!trustSupported}
+              onChange={(e) => setTrustDevice(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+            />
+            <span className="text-xs leading-relaxed text-[var(--text-muted)]">
+              <span className="text-[var(--text-dark)]">信任此设备</span>
+              <span className="ml-1">
+                {trustSupported
+                  ? '下次打开将自动解锁,无需输入主密码。主密码会用系统凭据存储加密后保存在本机。'
+                  : '当前系统不支持安全存储,无法使用此功能。'}
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         {error && <div className="mb-3 text-sm text-[var(--danger)]">{error}</div>}
 

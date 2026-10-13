@@ -1,6 +1,7 @@
 import { Server, KeyRound, FileClock, Settings, Zap, Monitor, Globe } from 'lucide-react'
 import { useSessionStore, type TabKind } from '../store/useSessionStore'
 import { useUpdateStore } from '../store/useUpdateStore'
+import { IS_WEB } from '../lib/env'
 
 const NAV_ITEMS: {
   id: Extract<
@@ -19,6 +20,11 @@ const NAV_ITEMS: {
   { id: 'settings', label: '设置', icon: Settings }
 ]
 
+// Remote desktop captures and drives this machine's screen: desktop app only.
+const VISIBLE_NAV_ITEMS = IS_WEB
+  ? NAV_ITEMS.filter((item) => item.id !== 'remoteDesktop')
+  : NAV_ITEMS
+
 export function Sidebar(): React.ReactElement {
   const { activeTabId, openTab } = useSessionStore()
   // 设置页里放着更新检查,有未看过的新版本就在图标上点个红点。
@@ -26,7 +32,7 @@ export function Sidebar(): React.ReactElement {
 
   return (
     <div className="flex w-16 flex-col items-center gap-1.5 border-r border-[var(--nav-border)] bg-[var(--nav-bg)] py-3">
-      {NAV_ITEMS.map((item) => {
+      {VISIBLE_NAV_ITEMS.map((item) => {
         const active = activeTabId === item.id
         const Icon = item.icon
         return (

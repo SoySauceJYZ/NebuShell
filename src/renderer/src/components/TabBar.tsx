@@ -17,8 +17,10 @@ import { requestCloseTab } from '../lib/requestCloseTab'
 import { startTabDrag } from '../lib/tabDrag'
 import { WindowControls } from './WindowControls'
 import appIcon from '../assets/app-icon.png'
+import { IS_WEB } from '../lib/env'
 
-const isMac = window.electron.process.platform === 'darwin'
+// In a browser there are no traffic lights to make room for, whatever the server runs.
+const isMac = !IS_WEB && window.electron.process.platform === 'darwin'
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export function TabBar(): React.ReactElement {

@@ -7,6 +7,7 @@ import { RemotePane } from './RemotePane'
 import { LocalPane } from './LocalPane'
 import { ContainerPane } from './ContainerPane'
 import { TransfersPanel } from './TransfersPanel'
+import { LOCAL_LABEL, webFeatures } from '../../lib/env'
 
 interface BasePane {
   paneId: string
@@ -50,7 +51,10 @@ export function ExplorerTab({
 }): React.ReactElement {
   const hosts = useVaultStore((s) => s.hosts)
   const [panes, setPanes] = useState<PaneState[]>(() => {
-    const init: PaneState[] = [{ paneId: pid(), kind: 'local', weight: 1 }]
+    // Web edition started with --no-local: the server's own filesystem is off limits.
+    const init: PaneState[] = webFeatures().local
+      ? [{ paneId: pid(), kind: 'local', weight: 1 }]
+      : []
     if (initialContainer) {
       init.push({ paneId: pid(), kind: 'container', weight: 1, ...initialContainer })
     } else if (initialHostId) {
@@ -121,13 +125,15 @@ export function ExplorerTab({
               sideOffset={4}
               className="z-[70] max-h-80 min-w-[200px] overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-1 shadow-lg"
             >
-              <DropdownMenu.Item
-                onSelect={() => addPane({ paneId: pid(), kind: 'local', weight: 1 })}
-                className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
-              >
-                <HardDrive size={15} className="text-[var(--text-muted)]" />
-                本地文件
-              </DropdownMenu.Item>
+              {webFeatures().local && (
+                <DropdownMenu.Item
+                  onSelect={() => addPane({ paneId: pid(), kind: 'local', weight: 1 })}
+                  className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--text-dark)] outline-none data-[highlighted]:bg-[var(--nav-bg-hover)]"
+                >
+                  <HardDrive size={15} className="text-[var(--text-muted)]" />
+                  {LOCAL_LABEL}文件
+                </DropdownMenu.Item>
+              )}
               {openPanes.length > 0 && (
                 <>
                   <DropdownMenu.Separator className="my-1 h-px bg-[var(--panel-border)]" />
@@ -206,7 +212,7 @@ export function ExplorerTab({
           const host = pane.kind !== 'local' ? hosts.find((h) => h.id === pane.hostId) : null
           const title =
             pane.kind === 'local'
-              ? '本地'
+              ? LOCAL_LABEL
               : pane.kind === 'container'
                 ? `${pane.containerName} @ ${host?.label ?? '主机'}`
                 : (host?.label ?? '远程')

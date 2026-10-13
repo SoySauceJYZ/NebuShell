@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plug, Copy, Check, RefreshCw, Eye, EyeOff, FileText } from 'lucide-react'
 import type { McpStatus } from '@shared/types'
+import { IS_WEB } from '../lib/env'
 
 /** 设置页里的「MCP 服务」卡片:开关、地址、令牌、客户端配置。 */
 export function McpSettingsCard(): React.ReactElement {
@@ -57,7 +58,15 @@ export function McpSettingsCard(): React.ReactElement {
     2
   )
 
-  const CopyBtn = ({ k, text, label }: { k: string; text: string; label: string }): React.ReactElement => (
+  const CopyBtn = ({
+    k,
+    text,
+    label
+  }: {
+    k: string
+    text: string
+    label: string
+  }): React.ReactElement => (
     <button onClick={() => copy(k, text)} className="btn-secondary">
       {copied === k ? <Check size={14} /> : <Copy size={14} />}
       {copied === k ? '已复制' : label}
@@ -73,8 +82,8 @@ export function McpSettingsCard(): React.ReactElement {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-[var(--text-dark)]">MCP 服务</div>
           <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
-            开启后,Claude Code、Cursor 等支持 MCP 的智能体可以连接 NebuShell,使用你已保存的服务器执行命令、
-            读写文件、查看 Docker。需先解锁保险库。
+            开启后,Claude Code、Cursor 等支持 MCP 的智能体可以连接
+            NebuShell,使用你已保存的服务器执行命令、 读写文件、查看 Docker。需先解锁保险库。
           </p>
 
           <label className="mt-4 flex cursor-pointer items-center gap-2">
@@ -129,10 +138,16 @@ export function McpSettingsCard(): React.ReactElement {
               <div className="flex flex-wrap gap-2">
                 <CopyBtn k="cmd" text={claudeCmd} label="复制 Claude Code 命令" />
                 <CopyBtn k="json" text={jsonCfg} label="复制 JSON 配置" />
-                <button onClick={() => void window.api.mcp.showAuditLog()} className="btn-secondary">
-                  <FileText size={14} />
-                  审计日志
-                </button>
+                {/* Web: the log sits in the server's data dir; no file manager to reveal it in. */}
+                {!IS_WEB && (
+                  <button
+                    onClick={() => void window.api.mcp.showAuditLog()}
+                    className="btn-secondary"
+                  >
+                    <FileText size={14} />
+                    审计日志
+                  </button>
+                )}
               </div>
 
               <p className="text-[11px] leading-relaxed text-amber-500">

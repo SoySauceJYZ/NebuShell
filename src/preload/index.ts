@@ -41,7 +41,10 @@ import type {
 const api = {
   clipboard: {
     writeText: (text: string): void => clipboard.writeText(text),
-    readText: (): string => clipboard.readText()
+    readText: (): string => clipboard.readText(),
+    // The web edition can only read the clipboard asynchronously (navigator.clipboard),
+    // so paste paths use this form.
+    readTextAsync: (): Promise<string> => Promise.resolve(clipboard.readText())
   },
   os: {
     // Electron 39 removed File.path; webUtils is the only way to resolve a dropped
@@ -267,8 +270,7 @@ const api = {
     remove: (p: string, isDirectory: boolean): Promise<void> =>
       ipcRenderer.invoke('local:remove', p, isDirectory),
     /** 多选删除:逐条递归删除。 */
-    removePaths: (paths: string[]): Promise<void> =>
-      ipcRenderer.invoke('local:removePaths', paths),
+    removePaths: (paths: string[]): Promise<void> => ipcRenderer.invoke('local:removePaths', paths),
     readFile: (p: string): Promise<string> => ipcRenderer.invoke('local:readFile', p),
     writeFile: (p: string, content: string): Promise<void> =>
       ipcRenderer.invoke('local:writeFile', p, content),

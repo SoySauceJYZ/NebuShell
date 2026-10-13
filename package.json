@@ -18,7 +18,14 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:web:client": "vite build -c vite.web.config.ts --mode client",
+    "build:web:server": "vite build -c vite.web.config.ts --mode server",
+    "build:web": "npm run typecheck && npm run build:web:client && npm run build:web:server",
+    "start:web": "node out/web/server/index.js --port 18080 --data-dir .web-data",
+    "dev:web:server": "vite build -c vite.web.config.ts --mode server --watch",
+    "dev:web:client": "vite -c vite.web.config.ts --mode client",
+    "package:web": "node scripts/package-web.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

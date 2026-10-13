@@ -14,6 +14,7 @@ import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
 import { registerReconnect } from '../lib/reconnectRegistry'
 import { releaseAgentFs } from '../lib/agentTransfer'
+import { WEB_RECONNECTED_EVENT } from '../lib/env'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
 import { TerminalLeftPanel, TerminalRightPanel } from './TerminalRightPanel'
 import { TerminalContextMenu } from './TerminalContextMenu'
@@ -243,6 +244,28 @@ export function TerminalTab({
       }
     })
 
+    // Web edition: output pushed while the browser's socket was down never arrived, so
+    // redraw from the server's scrollback. Events and the replay reply share one ordered
+    // socket, so anything that lands before the reply is already in the snapshot.
+    const onWebReconnected = (): void => {
+      if (statusRef.current !== 'connected') return
+      replaying = true
+      void window.api.ssh
+        .replay(sessionId)
+        .then((buf) => {
+          pending.length = 0
+          term.reset()
+          if (buf) term.write(buf)
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          replaying = false
+          for (const chunk of pending) term.write(chunk)
+          pending.length = 0
+        })
+    }
+    window.addEventListener(WEB_RECONNECTED_EVENT, onWebReconnected)
+
     if (adopted) {
       useSessionStore.getState().clearAdopted(sessionId)
       window.api.ssh.replay(sessionId).then((buf) => {
@@ -278,8 +301,9 @@ export function TerminalTab({
     })
 
     const paste = (): void => {
-      const text = window.api.clipboard.readText()
-      if (text) term.paste(text)
+      void window.api.clipboard.readTextAsync().then((text) => {
+        if (text) term.paste(text)
+      })
     }
 
     term.attachCustomKeyEventHandler((e) => {
@@ -355,6 +379,7 @@ export function TerminalTab({
       el.removeEventListener('keydown', onKeyDownCapture, true)
       el.removeEventListener('keyup', onKeyUpCapture, true)
       window.removeEventListener('ssh-reconnect', onReconnectEvent)
+      window.removeEventListener(WEB_RECONNECTED_EVENT, onWebReconnected)
       unsubData()
       unsubClosed()
       unsubError()
@@ -398,8 +423,9 @@ export function TerminalTab({
     if (!selection) {
       e.preventDefault()
       e.stopPropagation()
-      const text = window.api.clipboard.readText()
-      if (text) termRef.current?.paste(text)
+      void window.api.clipboard.readTextAsync().then((text) => {
+        if (text) termRef.current?.paste(text)
+      })
     } else {
       selectionRef.current = selection
     }
@@ -409,8 +435,9 @@ export function TerminalTab({
     if (selectionRef.current) window.api.clipboard.writeText(selectionRef.current)
   }
   const onPaste = (): void => {
-    const text = window.api.clipboard.readText()
-    if (text) termRef.current?.paste(text)
+    void window.api.clipboard.readTextAsync().then((text) => {
+      if (text) termRef.current?.paste(text)
+    })
   }
   const onEdit = (): void => {
     const sel = selectionRef.current

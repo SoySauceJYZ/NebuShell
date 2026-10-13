@@ -1,0 +1,17 @@
+#!/bin/sh
+# Launcher for the NebuShell web edition tarball. All flags are passed through
+# (see `nebushell-web --help`); NEBUSHELL_* environment variables work too.
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "nebushell-web: Node.js >= 22 is required but 'node' was not found in PATH" >&2
+  exit 1
+fi
+MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$MAJOR" -lt 22 ]; then
+  echo "nebushell-web: Node.js >= 22 is required (found $(node -v))" >&2
+  exit 1
+fi
+
+exec node "$DIR/server/index.js" --static-dir "$DIR/client" "$@"

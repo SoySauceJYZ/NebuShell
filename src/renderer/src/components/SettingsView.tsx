@@ -19,6 +19,7 @@ import { useVaultStore } from '../store/useVaultStore'
 import { useUpdateStore } from '../store/useUpdateStore'
 import { formatBytes } from '../lib/agentTransfer'
 import { McpSettingsCard } from './McpSettingsCard'
+import { IS_WEB } from '../lib/env'
 
 function clamp(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_TRANSFER_CONCURRENCY
@@ -158,10 +159,14 @@ export function SettingsView(): React.ReactElement {
                 )}
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button onClick={openDownload} className="btn-primary">
-                    <Download size={14} />
-                    {info.asset ? '下载安装包' : '打开发布页'}
-                  </button>
+                  {/* The web edition is upgraded on the server (new image / tarball), not
+                      by an installer for the browser's machine. */}
+                  {!IS_WEB && (
+                    <button onClick={openDownload} className="btn-primary">
+                      <Download size={14} />
+                      {info.asset ? '下载安装包' : '打开发布页'}
+                    </button>
+                  )}
                   <button
                     onClick={() => void window.api.update.openDownload(info.releaseUrl)}
                     className="btn-secondary"
@@ -169,14 +174,19 @@ export function SettingsView(): React.ReactElement {
                     <ExternalLink size={14} />
                     发布说明
                   </button>
-                  {info.asset && (
+                  {!IS_WEB && info.asset && (
                     <span className="text-[11px] text-[var(--text-muted)]">
                       {info.asset.name} · {formatBytes(info.asset.size)}
                     </span>
                   )}
                 </div>
 
-                {!info.asset && (
+                {IS_WEB && (
+                  <div className="mt-2 text-[11px] text-[var(--text-muted)]">
+                    Web 版在服务器上升级:拉取新的 Docker 镜像,或下载新的 tar.gz 覆盖后重启服务。
+                  </div>
+                )}
+                {!IS_WEB && !info.asset && (
                   <div className="mt-2 text-[11px] text-[var(--text-muted)]">
                     该发布里没有适配当前系统的安装包,请到发布页手动选择。
                   </div>

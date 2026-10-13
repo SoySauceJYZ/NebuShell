@@ -4,7 +4,7 @@ import type { SshConnectOptions, RunShellResult, ExecResult } from '../../shared
 import { SAFE_ALGORITHMS, SAFE_KEEPALIVE_INTERVAL } from './algorithms'
 import { createNoDelaySocket } from './createSocket'
 import { foldTerminalOutput } from '../../shared/terminalFold'
-import { broadcast } from '../windows'
+import { broadcast } from '../broadcast'
 
 interface Session {
   client: Client

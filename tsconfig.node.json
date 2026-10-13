@@ -4,7 +4,10 @@
     "electron.vite.config.*",
     "src/main/**/*",
     "src/preload/**/*",
-    "src/shared/**/*"
+    "src/shared/**/*",
+    "vite.web.config.ts",
+    "src/web/server/**/*",
+    "src/web/shared/**/*"
   ],
   "compilerOptions": {
     "composite": true,

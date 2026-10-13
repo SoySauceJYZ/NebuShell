@@ -1,5 +1,13 @@
 import { app, safeStorage } from 'electron'
-import { randomUUID, randomBytes, scryptSync, createCipheriv, createDecipheriv } from 'crypto'
+import {
+  randomUUID,
+  randomBytes,
+  scryptSync,
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  timingSafeEqual
+} from 'crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join, dirname } from 'path'
 import type {
@@ -104,6 +112,17 @@ export class VaultManager {
     this.key = key
     this.data = JSON.parse(plaintext.toString('utf8'))
     this.masterPassword = masterPassword
+  }
+
+  /**
+   * Check a master password without touching the unlocked state. The web edition uses
+   * this when a second browser signs in while the vault is already open in memory.
+   */
+  verifyPassword(masterPassword: string): boolean {
+    if (this.masterPassword === null) return false
+    const a = createHash('sha256').update(masterPassword).digest()
+    const b = createHash('sha256').update(this.masterPassword).digest()
+    return timingSafeEqual(a, b)
   }
 
   lock(): void {

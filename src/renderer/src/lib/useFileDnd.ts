@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useTransfersStore } from '../store/useTransfersStore'
 import { baseName } from './pathUtils'
+import { IS_WEB } from './env'
+import { uploadToServer } from './webTransfer'
 
 const MIME = 'application/x-nebushell'
 
@@ -80,26 +82,57 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
 
     // 1) OS / Explorer file drop.
     if (e.dataTransfer.types.includes('Files') && e.dataTransfer.files.length > 0) {
-      const paths = Array.from(e.dataTransfer.files)
-        .map((f) => window.api.os.getPathForFile(f))
-        .filter(Boolean)
-      if (paths.length === 0) return
-      const label = `${ctx.kind === 'local' ? '复制' : '上传'} ${
-        paths.length === 1 ? baseName(paths[0]) : `${paths.length} 项`
-      }`
-      void runTransfer(label, async (transferId) => {
-        if (ctx.kind === 'remote' && ctx.sessionId) {
-          await window.api.sftp.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
-        } else if (ctx.kind === 'container' && ctx.sessionId) {
-          await window.api.containerFs.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
-        } else {
-          for (const p of paths) await window.api.local.copy(p, ctx.dir, transferId)
+      const items = Array.from(e.dataTransfer.items)
+      if (IS_WEB) {
+        // A browser exposes no disk paths: stage the files on the server first, then run
+        // the same transfer with the server-side copies. A dropped folder can't be read
+        // as a single File, so those are skipped with a note.
+        const files: File[] = []
+        let skippedDirs = 0
+        for (const item of items) {
+          if (item.kind !== 'file') continue
+          if (item.webkitGetAsEntry()?.isDirectory) skippedDirs++
+          else {
+            const f = item.getAsFile()
+            if (f) files.push(f)
+          }
         }
-      })
+        if (skippedDirs > 0) ctx.notify?.('浏览器无法直接拖入文件夹,请先打包成压缩文件再上传')
+        void uploadToServer(files)
+          .then(startOsDrop)
+          .catch((err: unknown) => ctx.notify?.(err instanceof Error ? err.message : String(err)))
+        return
+      }
+      startOsDrop(
+        Array.from(e.dataTransfer.files)
+          .map((f) => window.api.os.getPathForFile(f))
+          .filter(Boolean)
+      )
       return
     }
 
     // 2) Inter-pane drag (custom payload).
+    onPaneDrop(e)
+  }
+
+  /** Copy/upload absolute paths from the OS (desktop) or server staging (web) into this pane. */
+  const startOsDrop = (paths: string[]): void => {
+    if (paths.length === 0) return
+    const label = `${ctx.kind === 'local' ? '复制' : '上传'} ${
+      paths.length === 1 ? baseName(paths[0]) : `${paths.length} 项`
+    }`
+    void runTransfer(label, async (transferId) => {
+      if (ctx.kind === 'remote' && ctx.sessionId) {
+        await window.api.sftp.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
+      } else if (ctx.kind === 'container' && ctx.sessionId) {
+        await window.api.containerFs.uploadPaths(ctx.sessionId, ctx.dir, paths, transferId)
+      } else {
+        for (const p of paths) await window.api.local.copy(p, ctx.dir, transferId)
+      }
+    })
+  }
+
+  const onPaneDrop = (e: React.DragEvent): void => {
     const raw = e.dataTransfer.getData(MIME)
     if (!raw) return
     let src: DragPayload

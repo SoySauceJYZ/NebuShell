@@ -27,3 +27,8 @@ target/
 .idea/
 .vscode/
 .DS_Store
+# web edition local data
+.web-data/
+
+# web edition tarball
+dist-web/

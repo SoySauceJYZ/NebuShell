@@ -1,7 +1,7 @@
 import { ipcMain, shell, app } from 'electron'
 import { checkForUpdate, getCachedUpdate } from '../update/UpdateChecker'
 import { settingsManager } from '../settings/SettingsManager'
-import { broadcast } from '../windows'
+import { broadcast } from '../broadcast'
 
 // 启动后稍等再查,别和首屏的连接/解锁抢网络。
 const AUTO_CHECK_DELAY_MS = 5000
