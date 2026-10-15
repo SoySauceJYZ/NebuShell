@@ -75,7 +75,7 @@ export function resolveHost(query: string): Host {
  * MCP 专用的 SSH 连接池:按 hostId 懒连接、复用、空闲回收。
  * 与终端标签的会话完全独立,不会往用户可见的 shell 里写任何东西。
  */
-class McpSshPool {
+export class McpSshPool {
   private entries = new Map<string, PoolEntry>()
   private pending = new Map<string, Promise<PoolEntry>>()
 

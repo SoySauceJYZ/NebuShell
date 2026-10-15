@@ -22,6 +22,7 @@ export type TabKind =
   | 'settings'
   | 'remoteDesktop'
   | 'proxies'
+  | 'monitorCenter'
   | 'terminal'
   | 'sftp'
   | 'explorer'

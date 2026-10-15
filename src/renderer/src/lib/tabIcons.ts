@@ -10,6 +10,7 @@ import {
   Zap,
   Monitor,
   Globe,
+  Activity,
   Image as ImageIcon
 } from 'lucide-react'
 import type { TabKind } from '../store/useSessionStore'
@@ -20,6 +21,7 @@ export const KIND_ICON: Record<TabKind, typeof Server> = {
   quickCommands: Zap,
   remoteDesktop: Monitor,
   proxies: Globe,
+  monitorCenter: Activity,
   history: FileClock,
   settings: Settings,
   terminal: SquareTerminal,

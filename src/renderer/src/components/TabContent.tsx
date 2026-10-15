@@ -5,6 +5,7 @@ import { HistoryDocsView } from './HistoryDocsView'
 import { SettingsView } from './SettingsView'
 import { RemoteDesktopView } from './RemoteDesktopView'
 import { ProxiesView } from './ProxiesView'
+import { MonitorCenterView } from './MonitorCenterView'
 import { TerminalTab } from './TerminalTab'
 import { SftpPanel } from './SftpPanel'
 import { ExplorerTab } from './sftp/ExplorerTab'
@@ -29,6 +30,8 @@ export function TabContent({ tab }: { tab: Tab }): React.ReactElement | null {
       return <RemoteDesktopView />
     case 'proxies':
       return <ProxiesView />
+    case 'monitorCenter':
+      return <MonitorCenterView />
     case 'terminal':
       return tab.hostId ? (
         <TerminalTab

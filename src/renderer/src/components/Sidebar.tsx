@@ -1,4 +1,4 @@
-import { Server, KeyRound, FileClock, Settings, Zap, Monitor, Globe } from 'lucide-react'
+import { Server, KeyRound, FileClock, Settings, Zap, Monitor, Globe, Activity } from 'lucide-react'
 import { useSessionStore, type TabKind } from '../store/useSessionStore'
 import { useUpdateStore } from '../store/useUpdateStore'
 import { IS_WEB } from '../lib/env'
@@ -6,7 +6,14 @@ import { IS_WEB } from '../lib/env'
 const NAV_ITEMS: {
   id: Extract<
     TabKind,
-    'hosts' | 'keychain' | 'history' | 'quickCommands' | 'settings' | 'remoteDesktop' | 'proxies'
+    | 'hosts'
+    | 'keychain'
+    | 'history'
+    | 'quickCommands'
+    | 'settings'
+    | 'remoteDesktop'
+    | 'proxies'
+    | 'monitorCenter'
   >
   label: string
   icon: typeof Server
@@ -16,6 +23,7 @@ const NAV_ITEMS: {
   { id: 'quickCommands', label: '快捷操作', icon: Zap },
   { id: 'remoteDesktop', label: '远程桌面', icon: Monitor },
   { id: 'proxies', label: '代理', icon: Globe },
+  { id: 'monitorCenter', label: '监控中心', icon: Activity },
   { id: 'history', label: '历史文档', icon: FileClock },
   { id: 'settings', label: '设置', icon: Settings }
 ]

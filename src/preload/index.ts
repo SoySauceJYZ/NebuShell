@@ -37,6 +37,7 @@ import type {
   RdInputEvent,
   RdShellOpts
 } from '../shared/types'
+import type { McDiscoveryProgress, McEvent, McTick, McTopology } from '../shared/monitorCenter'
 
 const api = {
   clipboard: {
@@ -379,6 +380,47 @@ const api = {
     /** targetKey: 'local' = 本机检测,否则为主机 id(在该主机上经 curl 检测)。 */
     check: (id: string, targetKey: string, probeUrl?: string): Promise<ProxyCheckResult> =>
       ipcRenderer.invoke('proxy:check', id, targetKey, probeUrl)
+  },
+  /** 监控中心(GRID-WATCH):数据形状沿用 resource-monitor 原 HTTP API,由移植的前端视图直接消费。 */
+  monitorCenter: {
+    acquire: (): Promise<string> => ipcRenderer.invoke('monitorCenter:acquire'),
+    renew: (leaseId: string): Promise<boolean> => ipcRenderer.invoke('monitorCenter:renew', leaseId),
+    release: (leaseId: string): Promise<void> =>
+      ipcRenderer.invoke('monitorCenter:release', leaseId),
+    state: (): Promise<{ locked: boolean; running: boolean }> =>
+      ipcRenderer.invoke('monitorCenter:state'),
+    devices: (): Promise<unknown[]> => ipcRenderer.invoke('monitorCenter:devices'),
+    device: (id: string): Promise<unknown> => ipcRenderer.invoke('monitorCenter:device', id),
+    events: (limit?: number): Promise<McEvent[]> => ipcRenderer.invoke('monitorCenter:events', limit),
+    services: (): Promise<unknown[]> => ipcRenderer.invoke('monitorCenter:services'),
+    llm: (): Promise<unknown[]> => ipcRenderer.invoke('monitorCenter:llm'),
+    totals: (): Promise<unknown> => ipcRenderer.invoke('monitorCenter:totals'),
+    managed: (): Promise<unknown[]> => ipcRenderer.invoke('monitorCenter:managed'),
+    setEnabled: (id: string, enabled: boolean): Promise<unknown[]> =>
+      ipcRenderer.invoke('monitorCenter:setEnabled', id, enabled),
+    setOrder: (id: string, sortOrder: number): Promise<unknown[]> =>
+      ipcRenderer.invoke('monitorCenter:setOrder', id, sortOrder),
+    test: (id: string): Promise<unknown> => ipcRenderer.invoke('monitorCenter:test', id),
+    topology: (): Promise<{ topology: McTopology; progress: McDiscoveryProgress }> =>
+      ipcRenderer.invoke('monitorCenter:topology'),
+    discover: (hostIds?: string[]): Promise<{ started: boolean }> =>
+      ipcRenderer.invoke('monitorCenter:discover', hostIds),
+    cancelDiscovery: (): Promise<void> => ipcRenderer.invoke('monitorCenter:cancelDiscovery'),
+    onTick: (cb: (tick: McTick) => void): (() => void) => {
+      const listener = (_e: unknown, tick: McTick): void => cb(tick)
+      ipcRenderer.on('monitorCenter:tick', listener)
+      return () => ipcRenderer.removeListener('monitorCenter:tick', listener)
+    },
+    onDiscovery: (cb: (p: McDiscoveryProgress) => void): (() => void) => {
+      const listener = (_e: unknown, p: McDiscoveryProgress): void => cb(p)
+      ipcRenderer.on('monitorCenter:discovery', listener)
+      return () => ipcRenderer.removeListener('monitorCenter:discovery', listener)
+    },
+    onTopology: (cb: (t: McTopology) => void): (() => void) => {
+      const listener = (_e: unknown, t: McTopology): void => cb(t)
+      ipcRenderer.on('monitorCenter:topology', listener)
+      return () => ipcRenderer.removeListener('monitorCenter:topology', listener)
+    }
   },
   llm: {
     getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),

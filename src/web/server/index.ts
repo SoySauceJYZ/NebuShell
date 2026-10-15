@@ -22,6 +22,7 @@ import { registerSettingsIpc } from '../../main/ipc/settingsIpc'
 import { registerUpdateIpc } from '../../main/ipc/updateIpc'
 import { registerMcpIpc } from '../../main/ipc/mcpIpc'
 import { registerProxyIpc } from '../../main/ipc/proxyIpc'
+import { registerMonitorCenterIpc } from '../../main/ipc/monitorCenterIpc'
 import { createWebServer } from './http'
 import { attachWsHub, broadcastToClients, logoutAll } from './wsHub'
 import { revokeAllSessions } from './auth'
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
   registerUpdateIpc()
   registerMcpIpc()
   registerProxyIpc()
+  registerMonitorCenterIpc()
 
   // Locking is a sign-out for every browser: the vault lives in this one process.
   ipcMain.removeHandler('vault:lock')
