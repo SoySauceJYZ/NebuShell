@@ -1,0 +1,76 @@
+/* NebuShell 移植补充:Shadow DOM 宿主、全屏、拓扑发现面板。原有样式见 wasteland.css / pipboy.css。 */
+
+:host { display: block; width: 100%; height: 100%; }
+:host(:fullscreen) { width: 100vw; height: 100vh; background: #0a0805; }
+:host(.gw-pseudo-fs) { position: fixed; inset: 0; z-index: 2147483000; width: 100vw; height: 100vh; background: #0a0805; }
+
+/* contain 让原样式里 position:fixed 的遮罩/抽屉/CRT 扫描线只覆盖本模块,而不是整个 NebuShell 窗口 */
+.gw-root {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  contain: layout paint;
+  line-height: normal;
+  text-align: left;
+}
+
+.fs-btn { white-space: nowrap; }
+@media (max-width: 1400px) { .fs-btn .fs-text { display: none; } }
+
+.btn.sm { font-size: 12px; letter-spacing: 1px; padding: 6px 12px; }
+
+/* ---- 拓扑发现 ---- */
+.topo-wrap { grid-template-columns: 1fr 340px; }
+.topo-toolbar { position: absolute; top: 10px; right: 12px; display: flex; gap: 8px; align-items: center; z-index: 2; }
+.topo-toolbar .skin-btn { padding: 6px 10px; }
+.topo-progress {
+  position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
+  width: min(420px, 60%); z-index: 2; display: none;
+  background: rgba(10,8,5,.86); border: 1px solid var(--line2); padding: 8px 12px;
+  clip-path: var(--chamfer-sm);
+}
+.topo-progress .tp-t { font-size: 10px; letter-spacing: 2px; color: var(--toxic); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topo-zoom { position: absolute; right: 14px; bottom: 10px; font-size: 10px; color: var(--dimmer); letter-spacing: 1px; }
+.topo-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 460px; text-align: center; color: var(--dim); font-size: 12px; line-height: 1.7; pointer-events: none; }
+.topo-empty-t { font-family: var(--font-disp); font-size: 18px; letter-spacing: 3px; color: var(--amber); margin-bottom: 8px; }
+.topo-legend b { font-weight: 400; margin-right: 4px; }
+.topo-side .panel { flex: 0 0 auto; }
+.topo-muted { color: var(--dimmer); font-size: 11px; padding: 6px 2px; line-height: 1.6; }
+
+.topo-host { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 7px 2px; border-bottom: 1px dashed #2a2314; cursor: pointer; }
+.topo-host:hover { background: rgba(255,176,0,.04); }
+.topo-host .th-l { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.topo-host .th-l b { color: var(--bone); font-family: var(--font-disp); letter-spacing: 1px; font-size: 13px; font-weight: 400; }
+.topo-host small { color: var(--dimmer); font-size: 10px; }
+.topo-host .th-err { color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.topo-host .th-r { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.topo-host .th-r .btn { padding: 4px 8px; font-size: 11px; }
+
+.td-title { font-family: var(--font-disp); font-size: 16px; letter-spacing: 1px; color: var(--bone); margin-bottom: 6px; word-break: break-all; }
+.td-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.td-grid { grid-template-columns: 1fr 1fr; }
+.td-grid .v { font-size: 11px; word-break: break-all; }
+.td-sub { margin: 10px 0 4px; font-size: 10px; letter-spacing: 2px; color: var(--dim); }
+.td-cmd { font-size: 10px; color: var(--bone); background: #0d0a06; border: 1px solid var(--line); padding: 6px 8px; word-break: break-all; max-height: 120px; overflow: auto; }
+.td-err { margin-top: 8px; font-size: 11px; color: var(--amber); line-height: 1.5; }
+.td-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.td-routes { max-height: 180px; overflow: auto; font-size: 10px; }
+.td-routes div { display: flex; flex-direction: column; padding: 3px 0; border-bottom: 1px dashed #2a2314; }
+.td-routes span { color: var(--dim); }
+.td-routes b { color: var(--cyan); font-weight: 400; word-break: break-all; }
+
+.topo-filter { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 11px; color: var(--dim); }
+.topo-filter label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.topo-filter i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+.topo-edge { padding: 6px 2px; border-bottom: 1px dashed #2a2314; cursor: pointer; font-size: 10.5px; }
+.topo-edge:hover { background: rgba(255,176,0,.04); }
+.topo-edge small { color: var(--dim); margin-left: 6px; }
+.topo-edge .te-path { color: var(--bone); margin-top: 4px; word-break: break-all; }
+.topo-edge .te-path b { color: var(--amber); font-weight: 400; }
+.topo-edge .te-label { color: var(--cyan); margin-top: 2px; word-break: break-all; }
+.topo-edge .te-ev { color: var(--dimmer); margin-top: 2px; word-break: break-all; }
+
+.devman-order { width: 64px; background: #0d0a06; border: 1px solid var(--line); color: var(--bone); font-family: var(--font-mono); font-size: 12px; padding: 4px 6px; }
+
+.gw-root.theme-pipboy .topo-progress, .gw-root.theme-pipboy .td-cmd { border-radius: 6px; }
