@@ -18,6 +18,7 @@ import { registerRemoteDesktopIpc } from './ipc/remoteDesktopIpc'
 import { registerUpdateIpc } from './ipc/updateIpc'
 import { registerMcpIpc } from './ipc/mcpIpc'
 import { registerProxyIpc } from './ipc/proxyIpc'
+import { registerMonitorCenterIpc } from './ipc/monitorCenterIpc'
 import { mcpManager } from './mcp/McpManager'
 
 // Window creation lives in ./windows so both the initial window and torn-off tab
@@ -54,6 +55,7 @@ app.whenReady().then(() => {
   registerUpdateIpc()
   registerMcpIpc()
   registerProxyIpc()
+  registerMonitorCenterIpc()
 
   createAppWindow()
 
