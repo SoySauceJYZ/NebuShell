@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlink
 import { join } from 'path'
 import type { ChatMessage, AgentConversationMeta } from '../../shared/types'
 
-interface ConvFile {
+export interface ConvFile {
   id: string
   hostId: string
   title: string
@@ -41,21 +41,41 @@ function listDir(hostId: string): AgentConversationMeta[] {
 /** listAll 的上限:@ 菜单只需要最近的一批。 */
 const LIST_ALL_CAP = 200
 
+/** 跨目录列出所有会话(远程桌面智能体的会话也按 peerKey 存在这里),按更新时间倒序。 */
+export function listAllConversations(cap = LIST_ALL_CAP): AgentConversationMeta[] {
+  const root = join(app.getPath('userData'), 'agent-chats')
+  if (!existsSync(root)) return []
+  const all: AgentConversationMeta[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory()) all.push(...listDir(entry.name))
+  }
+  return all.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, cap)
+}
+
+export function listHostConversations(hostId: string): AgentConversationMeta[] {
+  return listDir(hostId).sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** 读一个会话文件;不存在、损坏或 id 不合法时返回 null。 */
+export function loadConversation(hostId: string, convId: string): ConvFile | null {
+  // id 可能来自外部(MCP),拒绝任何路径分隔符,防止读到 agent-chats 之外。
+  if (/[\\/]|\.\./.test(hostId) || /[\\/]|\.\./.test(convId)) return null
+  const file = join(dirFor(hostId), `${convId}.json`)
+  if (!existsSync(file)) return null
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as ConvFile
+  } catch {
+    return null
+  }
+}
+
 export function registerAgentChatIpc(): void {
   ipcMain.handle('agentChat:list', (_e, hostId: string): AgentConversationMeta[] =>
-    listDir(hostId).sort((a, b) => b.updatedAt - a.updatedAt)
+    listHostConversations(hostId)
   )
 
-  // 跨目录列出所有会话。远程桌面智能体的会话也按 peerKey 存在这里,由渲染层按主机库过滤掉。
-  ipcMain.handle('agentChat:listAll', (): AgentConversationMeta[] => {
-    const root = join(app.getPath('userData'), 'agent-chats')
-    if (!existsSync(root)) return []
-    const all: AgentConversationMeta[] = []
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (entry.isDirectory()) all.push(...listDir(entry.name))
-    }
-    return all.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, LIST_ALL_CAP)
-  })
+  // 远程桌面智能体的会话由渲染层按主机库过滤掉。
+  ipcMain.handle('agentChat:listAll', (): AgentConversationMeta[] => listAllConversations())
 
   ipcMain.handle('agentChat:load', (_e, hostId: string, convId: string): ChatMessage[] => {
     const file = join(dirFor(hostId), `${convId}.json`)
