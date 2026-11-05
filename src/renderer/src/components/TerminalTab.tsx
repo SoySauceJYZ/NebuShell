@@ -13,6 +13,7 @@ import { extractCommandFromLine } from '../lib/parseCommandLine'
 import { getTheme, DEFAULT_THEME_ID } from '../lib/terminalThemes'
 import { consumeDetaching } from '../lib/detachRegistry'
 import { registerReconnect } from '../lib/reconnectRegistry'
+import { forgetConnection, reportConnection } from '../lib/connectionRegistry'
 import { releaseAgentFs } from '../lib/agentTransfer'
 import { WEB_RECONNECTED_EVENT } from '../lib/env'
 import { DEFAULT_FONT_SIZE } from '../store/useTerminalStore'
@@ -99,6 +100,12 @@ export function TerminalTab({
   const fontSize = useTerminalStore((s) => s.fontSizeBySession[sessionId] ?? DEFAULT_FONT_SIZE)
 
   statusRef.current = status
+
+  // 旁路上报连接状态(智能体后台新开终端时要 await「连上了没有」)。
+  useEffect(() => {
+    reportConnection(sessionId, status, status === 'error' ? errorMsg : undefined)
+  }, [sessionId, status, errorMsg])
+  useEffect(() => () => forgetConnection(sessionId), [sessionId])
 
   // (Re)establish the SSH connection for this session. Callable again to reconnect.
   // Returns a promise that settles with the connection outcome so external callers

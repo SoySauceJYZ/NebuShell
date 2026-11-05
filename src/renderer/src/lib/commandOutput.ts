@@ -244,3 +244,36 @@ export function clampCommandOutput({
   parts.push(meta)
   return parts.join('\n')
 }
+
+export type ToolOutcomeStatus = 'ok' | 'fail' | 'warn'
+
+export interface ToolOutcome {
+  status: ToolOutcomeStatus
+  exitCode?: number
+  /** 卡片标题上的状态文字,例如「执行失败 · 退出码 1」。 */
+  label: string
+}
+
+const HEAD_RE = /^\[终端: [^\]]*\] 退出码: (\S+?)( \((已自动中断并恢复终端|终端卡死,建议重连|超时)\))?(?:\s|$)/
+
+/**
+ * 反解 clampCommandOutput / executeCall 写出的结果头,判断这次命令是成功、失败还是被中断。
+ * 卡片据此换图标与配色;解析不了的(旧格式 / 其他工具)一律按成功展示,保持原样。
+ */
+export function parseToolOutcome(result: string): ToolOutcome {
+  if (/^(\[终端: [^\]]*\] )?执行出错/.test(result)) {
+    return { status: 'fail', label: '执行出错' }
+  }
+  const m = HEAD_RE.exec(result)
+  if (!m) return { status: 'ok', label: '执行结果' }
+  const rc = Number(m[1])
+  const exitCode = Number.isFinite(rc) ? rc : undefined
+  if (m[3]) {
+    const label =
+      m[3] === '超时' ? '执行超时' : m[3] === '终端卡死,建议重连' ? '终端卡死' : '已中断'
+    return { status: 'warn', exitCode, label }
+  }
+  if (exitCode === 0) return { status: 'ok', exitCode, label: '执行结果' }
+  if (exitCode === undefined) return { status: 'warn', label: '退出码未知' }
+  return { status: 'fail', exitCode, label: `执行失败 · 退出码 ${exitCode}` }
+}

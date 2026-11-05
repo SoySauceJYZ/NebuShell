@@ -22,6 +22,7 @@ import type {
   LlmSettings,
   LlmSettingsPublic,
   AgentConversationMeta,
+  LlmErrorInfo,
   CommandHistoryEntry,
   QuickCommand,
   ProxyEntry,
@@ -356,7 +357,9 @@ const api = {
     save: (hostId: string, convId: string, title: string, messages: ChatMessage[]): Promise<void> =>
       ipcRenderer.invoke('agentChat:save', hostId, convId, title, messages),
     remove: (hostId: string, convId: string): Promise<void> =>
-      ipcRenderer.invoke('agentChat:remove', hostId, convId)
+      ipcRenderer.invoke('agentChat:remove', hostId, convId),
+    /** 所有目录下的会话(新到旧,最多 200 条),供输入框 @ 引用历史会话。 */
+    listAll: (): Promise<AgentConversationMeta[]> => ipcRenderer.invoke('agentChat:listAll')
   },
   cmdHistory: {
     list: (hostId: string): Promise<CommandHistoryEntry[]> =>
@@ -450,9 +453,10 @@ const api = {
       ipcRenderer.on(channel, listener)
       return () => ipcRenderer.removeListener(channel, listener)
     },
-    onError: (runId: string, cb: (message: string) => void): (() => void) => {
+    onError: (runId: string, cb: (error: LlmErrorInfo) => void): (() => void) => {
       const channel = `llm:error:${runId}`
-      const listener = (_e: unknown, message: string): void => cb(message)
+      const listener = (_e: unknown, error: LlmErrorInfo | string): void =>
+        cb(typeof error === 'string' ? { message: error } : error)
       ipcRenderer.on(channel, listener)
       return () => ipcRenderer.removeListener(channel, listener)
     }

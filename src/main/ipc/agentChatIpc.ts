@@ -16,27 +16,45 @@ function dirFor(hostId: string): string {
   return join(app.getPath('userData'), 'agent-chats', hostId)
 }
 
-export function registerAgentChatIpc(): void {
-  ipcMain.handle('agentChat:list', (_e, hostId: string): AgentConversationMeta[] => {
-    const dir = dirFor(hostId)
-    if (!existsSync(dir)) return []
-    const metas: AgentConversationMeta[] = []
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith('.json')) continue
-      try {
-        const conv: ConvFile = JSON.parse(readFileSync(join(dir, f), 'utf8'))
-        metas.push({
-          id: conv.id,
-          hostId: conv.hostId,
-          title: conv.title,
-          updatedAt: conv.updatedAt,
-          messageCount: conv.messages.length
-        })
-      } catch {
-        // skip corrupted file
-      }
+function listDir(hostId: string): AgentConversationMeta[] {
+  const dir = dirFor(hostId)
+  if (!existsSync(dir)) return []
+  const metas: AgentConversationMeta[] = []
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const conv: ConvFile = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+      metas.push({
+        id: conv.id,
+        hostId: conv.hostId,
+        title: conv.title,
+        updatedAt: conv.updatedAt,
+        messageCount: conv.messages.length
+      })
+    } catch {
+      // skip corrupted file
     }
-    return metas.sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+  return metas
+}
+
+/** listAll 的上限:@ 菜单只需要最近的一批。 */
+const LIST_ALL_CAP = 200
+
+export function registerAgentChatIpc(): void {
+  ipcMain.handle('agentChat:list', (_e, hostId: string): AgentConversationMeta[] =>
+    listDir(hostId).sort((a, b) => b.updatedAt - a.updatedAt)
+  )
+
+  // 跨目录列出所有会话。远程桌面智能体的会话也按 peerKey 存在这里,由渲染层按主机库过滤掉。
+  ipcMain.handle('agentChat:listAll', (): AgentConversationMeta[] => {
+    const root = join(app.getPath('userData'), 'agent-chats')
+    if (!existsSync(root)) return []
+    const all: AgentConversationMeta[] = []
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isDirectory()) all.push(...listDir(entry.name))
+    }
+    return all.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, LIST_ALL_CAP)
   })
 
   ipcMain.handle('agentChat:load', (_e, hostId: string, convId: string): ChatMessage[] => {

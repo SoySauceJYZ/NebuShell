@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ChatMessage, ToolCall, RdInputEvent, AgentConversationMeta } from '@shared/types'
 import { type AgentMode, disposition, transferDisposition } from '../lib/agentPermissions'
+import { llmErrorText } from '../lib/agentErrors'
 import {
   buildRdAgentTools,
   buildRdSystemPrompt,
@@ -93,7 +94,7 @@ export const useRdAgentStore = create<State>((set, get) => {
       })
       const offErr = window.api.llm.onError(runId, (msg) => {
         offDelta(); offDone(); offErr()
-        patch(id, { error: msg })
+        patch(id, { error: llmErrorText(msg) })
         resolve({ role: 'assistant', content: '' })
       })
       window.api.llm.chat(runId, {

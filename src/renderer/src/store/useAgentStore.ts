@@ -2,11 +2,28 @@ import { create } from 'zustand'
 import type {
   Attachment,
   ChatMessage,
+  LlmErrorInfo,
   ProxyEntry,
   ToolCall,
   TransferPlan,
   TransferProgress
 } from '@shared/types'
+import {
+  judgeCheck,
+  MAX_CHECK_ERRORS,
+  parseWaitArgs,
+  runCheck,
+  waitResultText,
+  type WaitArgs,
+  type WaitOutcome,
+  type WaitState
+} from '../lib/agentWait'
+import {
+  computeAgentTargets,
+  findTargetCandidates,
+  type TargetCandidate
+} from '../lib/targetRequest'
+import { connectionStatus, waitForConnected } from '../lib/connectionRegistry'
 import {
   buildAgentTools,
   buildSystemPrompt,
@@ -50,7 +67,19 @@ import { requestReconnect } from '../lib/reconnectRegistry'
 import { useSessionStore } from './useSessionStore'
 import { useCommandHistoryStore } from './useCommandHistoryStore'
 
-export type AgentStatus = 'idle' | 'streaming' | 'awaiting' | 'running'
+/** waiting:wait_and_check 倒计时中 —— 模型不在跑,客户端按间隔做本地检查。 */
+export type AgentStatus = 'idle' | 'streaming' | 'awaiting' | 'running' | 'waiting'
+
+export type { WaitState } from '../lib/agentWait'
+
+/** request_target 卡片的状态,keyed by tool_call_id。 */
+export interface TargetRequestMeta {
+  query: string
+  reason: string
+  candidates: TargetCandidate[]
+  /** 正在附加 / 连接的候选(candidateKey),卡片显示进度。 */
+  connecting?: string
+}
 
 /**
  * Per-tool-call state for a `transfer_file` call, keyed by tool_call_id.
@@ -101,7 +130,11 @@ export interface AgentSession {
   runningIds: string[]
   transferMeta: Record<string, TransferMeta>
   proxyMeta: Record<string, ProxyMeta>
-  error: string
+  targetRequestMeta: Record<string, TargetRequestMeta>
+  /** 进行中的 wait_and_check;无等待时为 undefined。 */
+  wait?: WaitState
+  /** 最近一次 LLM 请求失败的信息;成功发起新一轮时清空。 */
+  error: LlmErrorInfo | null
 }
 
 // Stable empty reference so the selector doesn't loop when a session doesn't exist yet.
@@ -112,7 +145,8 @@ export const EMPTY_AGENT_SESSION: AgentSession = {
   runningIds: [],
   transferMeta: {},
   proxyMeta: {},
-  error: ''
+  targetRequestMeta: {},
+  error: null
 }
 
 /** 当前智能体代理上下文(策略 + 代理数),组装工具与系统提示时用。 */
@@ -162,6 +196,16 @@ interface AgentStore {
   answerQuestion: (sessionId: string, call: ToolCall, answer: string) => void
   /** Approve a presented plan: switch to a run mode and let the model execute it. */
   approvePlan: (sessionId: string, call: ToolCall, runMode: AgentMode) => void
+  /** 回答 request_target:choice 为 null 表示用户拒绝补充该目标。 */
+  resolveTargetRequest: (sessionId: string, call: ToolCall, choice: TargetCandidate | null) => void
+  /** 重新发起上一轮(LLM 请求失败后的「重试」)。 */
+  retry: (sessionId: string) => void
+  /** 等待中:立即执行一次检查。 */
+  checkNow: (sessionId: string) => void
+  /** 等待中:提前结束等待,把当前进度交给模型继续。 */
+  endWait: (sessionId: string) => void
+  /** 等待中:取消等待并停止本轮任务。 */
+  cancelWait: (sessionId: string) => void
   /** Interrupt the running turn: abort the LLM request and stop the agent loop. */
   stop: (sessionId: string) => void
   reset: (sessionId: string) => void
@@ -174,6 +218,10 @@ const stopped: Record<string, boolean> = {}
 const proxyChoice: Record<string, Record<string, string>> = {}
 /** 每个会话里、每个目标已经用过的代理,再次 use_proxy 时换一个。 */
 const proxyTried: Record<string, Record<string, string[]>> = {}
+/** 每个会话的等待计时器。 */
+const waitTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+/** 等待代数:每次开始 / 结束等待加一,用来丢弃已作废的检查结果(检查是异步的)。 */
+const waitGen: Record<string, number> = {}
 
 function parseProxyArgs(call: ToolCall): { target?: string; site?: string; reason?: string } {
   try {
@@ -281,14 +329,29 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     persist(id)
   }
 
-  // Resolve which terminal a tool call targets, falling back to the first (self).
+  /**
+   * 解析工具调用的 target。省略时回退到第一个目标(面板自己的终端);
+   * **指名了却对不上时返回 undefined** —— 以前这里也回退到 targets[0],
+   * 模型想在另一台机器上跑的命令会被悄悄下发到当前机器上。
+   * 宽容两种常见写法:带 @ 前缀、写的是主机标签而非目标名(唯一匹配时)。
+   */
   const resolveTarget = (agentId: string, targetName?: string): AgentTarget | undefined => {
     const targets = get().targetsBySession[agentId] ?? EMPTY_TARGETS
-    if (targetName) {
-      const found = targets.find((t) => t.name === targetName)
-      if (found) return found
-    }
-    return targets[0]
+    const name = targetName?.trim().replace(/^@/, '')
+    if (!name) return targets[0]
+    const exact = targets.find((t) => t.name === name)
+    if (exact) return exact
+    const byHost = targets.filter((t) => t.host === name)
+    return byHost.length === 1 ? byHost[0] : undefined
+  }
+
+  /** 指名的目标不在列表里时回给模型的说明。 */
+  const unknownTargetMessage = (agentId: string, targetName: string): string => {
+    const names = (get().targetsBySession[agentId] ?? EMPTY_TARGETS).map((t) => t.name)
+    return (
+      `未执行: 目标「${targetName}」不在当前目标列表中(可用: ${names.join('、') || '无'})。` +
+      '如需在该服务器上操作,请调用 request_target 请用户补充该目标;不要改在其他目标上执行。'
+    )
   }
 
   /**
@@ -321,7 +384,9 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       }
     }
     let content = ''
-    if (!resolved) {
+    if (!resolved && target?.trim()) {
+      content = unknownTargetMessage(id, target)
+    } else if (!resolved) {
       content = '执行出错: 没有可用的目标终端。请先在「目标终端」里附加一个已连接的终端。'
     } else if (proxyError) {
       content = proxyError
@@ -560,6 +625,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     }
     const args = parseProxyArgs(call)
     const target = resolveTarget(id, args.target)
+    if (!target && args.target?.trim()) return reply(unknownTargetMessage(id, args.target))
     if (!target) return reply('没有可用的目标,无法挑选代理。')
     const key = targetKeyOf(target)
     if (!key) return reply(`无法确定「${target.name}」对应的主机,不能为它检测代理。`)
@@ -617,9 +683,261 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     )
   }
 
+  // ---- wait_and_check ----
+
+  const patchWait = (id: string, p: Partial<WaitState>): void => {
+    const w = cur(id).wait
+    if (w) patch(id, { wait: { ...w, ...p } })
+  }
+
+  const clearWaitTimer = (id: string): void => {
+    if (waitTimers[id] !== undefined) {
+      clearTimeout(waitTimers[id])
+      delete waitTimers[id]
+    }
+  }
+
+  const scheduleTick = (id: string, delayMs: number): void => {
+    clearWaitTimer(id)
+    patchWait(id, { phase: 'counting', nextAt: Date.now() + delayMs })
+    waitTimers[id] = setTimeout(() => void runWaitTick(id), delayMs)
+  }
+
+  /**
+   * 结束等待并把结果作为 wait_and_check 的 tool 消息推回。
+   * `resume`:是否接着唤醒模型(用户取消 / 发新消息时不在这里续跑)。
+   */
+  const finishWait = (id: string, outcome: WaitOutcome, resume: boolean): void => {
+    const w = cur(id).wait
+    clearWaitTimer(id)
+    waitGen[id] = (waitGen[id] ?? 0) + 1
+    if (!w) return
+    patch(id, { wait: undefined, status: resume ? 'running' : 'idle' })
+    pushMsgs(id, [{ role: 'tool', tool_call_id: w.callId, content: waitResultText(w, outcome) }])
+    if (!resume) return
+    maybeContinue(id)
+    // runTurn 会同步切到 streaming;没续上(例如刚被停止)就回到空闲,别卡在 running。
+    if (cur(id).status === 'running' && cur(id).runningIds.length === 0) patch(id, { status: 'idle' })
+  }
+
+  const runWaitTick = async (id: string): Promise<void> => {
+    const w = cur(id).wait
+    if (!w || w.phase === 'checking') return
+    clearWaitTimer(id)
+    // 没有检查命令:单纯等待,时间到就唤醒模型。
+    if (!w.command) {
+      finishWait(id, 'slept', true)
+      return
+    }
+    const gen = waitGen[id]
+    patchWait(id, { phase: 'checking' })
+    const target = (get().targetsBySession[id] ?? EMPTY_TARGETS).find((t) => t.name === w.targetName)
+    let result: { output: string; exitCode: number | null } | null = null
+    let errMsg = ''
+    if (!target) {
+      errMsg = `目标「${w.targetName}」已不在目标列表中(终端可能已关闭)`
+    } else {
+      try {
+        result = await runCheck(target, w.command)
+      } catch (e) {
+        errMsg = e instanceof Error ? e.message : String(e)
+      }
+    }
+    // 检查期间等待被取消 / 结束 / 重新开始了:丢弃这次结果。
+    if (waitGen[id] !== gen || !cur(id).wait) return
+    const now = Date.now()
+    const cw = cur(id).wait!
+    if (!result) {
+      const errors = cw.errors + 1
+      patchWait(id, { errors, lastOutput: `检查失败: ${errMsg}`, lastExitCode: null, lastCheckedAt: now })
+      if (errors >= MAX_CHECK_ERRORS) return finishWait(id, 'error', true)
+    } else {
+      patchWait(id, {
+        ticks: cw.ticks + 1,
+        errors: 0,
+        lastOutput: result.output,
+        lastExitCode: result.exitCode,
+        lastCheckedAt: now
+      })
+      const verdict = judgeCheck(cw, result)
+      if (verdict === 'done') return finishWait(id, 'done', true)
+      if (verdict === 'failed') return finishWait(id, 'failed', true)
+    }
+    if (now >= cw.deadline) return finishWait(id, 'timeout', true)
+    scheduleTick(id, Math.min(cw.intervalSec * 1000, Math.max(1000, cw.deadline - now)))
+  }
+
+  const startWait = (id: string, call: ToolCall, args: WaitArgs, target: AgentTarget): void => {
+    clearWaitTimer(id)
+    waitGen[id] = (waitGen[id] ?? 0) + 1
+    const now = Date.now()
+    const wait: WaitState = {
+      callId: call.id,
+      reason: args.reason,
+      targetName: target.name,
+      command: args.command,
+      intervalSec: args.intervalSec,
+      startedAt: now,
+      deadline: now + args.maxWaitSec * 1000,
+      nextAt: now + args.intervalSec * 1000,
+      ticks: 0,
+      phase: 'counting',
+      lastOutput: '',
+      lastExitCode: null,
+      errors: 0,
+      doneExit: args.doneExit,
+      donePattern: args.donePattern,
+      failPattern: args.failPattern
+    }
+    if (args.command) {
+      const hostId = useSessionStore.getState().tabs.find((t) => t.id === target.sessionId)?.hostId
+      if (hostId) useCommandHistoryStore.getState().add(hostId, args.command, 'agent')
+    }
+    patch(id, { status: 'waiting', wait })
+    scheduleTick(id, args.intervalSec * 1000)
+  }
+
+  /** 校验 wait_and_check;不能开始时推说明性的 tool 消息并返回 null。 */
+  const prepareWait = (id: string, call: ToolCall): { args: WaitArgs; target: AgentTarget } | null => {
+    const reply = (content: string): null => {
+      pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content: `未开始等待: ${content}` }])
+      return null
+    }
+    const parsed = parseWaitArgs(call)
+    if (!parsed.ok) return reply(parsed.error)
+    const { args } = parsed
+    const target = resolveTarget(id, args.target)
+    if (!target) {
+      return reply(args.target ? unknownTargetMessage(id, args.target) : '没有可用的目标。')
+    }
+    if (args.command) {
+      const risky = isLocalTarget(target) ? isRiskyLocalCommand(args.command) : isRiskyCommand(args.command)
+      if (risky) {
+        return reply(
+          '检查命令必须是只读命令(查看日志、进程、文件是否存在等),不能包含写操作。请改成只读形式后重试。'
+        )
+      }
+    }
+    return { args, target }
+  }
+
+  // ---- request_target ----
+
+  const patchTargetMeta = (id: string, callId: string, p: Partial<TargetRequestMeta>): void => {
+    const s = cur(id)
+    const prev = s.targetRequestMeta[callId]
+    if (!prev) return
+    patch(id, { targetRequestMeta: { ...s.targetRequestMeta, [callId]: { ...prev, ...p } } })
+  }
+
+  /** 勾选后立刻重算目标(不等面板的 effect —— 面板可能没挂载),返回新目标。 */
+  const attachAndResolve = (id: string, termId: string): AgentTarget | undefined => {
+    get().attach(id, termId)
+    const { tabs } = useSessionStore.getState()
+    const targets = computeAgentTargets(
+      id,
+      get().attachedBySession[id] ?? [id],
+      tabs,
+      useVaultStore.getState().hosts
+    )
+    get().setTargets(id, targets)
+    return targets.find((t) => t.sessionId === termId)
+  }
+
+  const executeTargetRequest = async (
+    id: string,
+    call: ToolCall,
+    choice: TargetCandidate
+  ): Promise<void> => {
+    patch(id, { status: 'running', runningIds: [...cur(id).runningIds, call.id] })
+    patchTargetMeta(id, call.id, {
+      connecting: choice.kind === 'tab' ? `tab:${choice.tabId}` : `host:${choice.hostId}`
+    })
+    let content: string
+    if (choice.kind === 'tab') {
+      const t = attachAndResolve(id, choice.tabId)
+      const st = connectionStatus(choice.tabId)
+      content = t
+        ? `已将终端「${t.name}」(${t.host})加入目标。之后 run_command 请用 target="${t.name}"。` +
+          (st && st !== 'connected' && st !== 'connecting'
+            ? '注意:该终端当前未连接,先调用 reconnect_terminal 重连。'
+            : '')
+        : `加入目标失败: 终端「${choice.title}」已不存在(可能已被关闭)。`
+    } else {
+      const host = useVaultStore.getState().hosts.find((h) => h.id === choice.hostId)
+      if (!host) {
+        content = `加入目标失败: 主机库里已找不到「${choice.label}」。`
+      } else {
+        const tabId = `terminal-${host.id}-${Date.now()}`
+        // 后台打开,不抢用户当前的 tab;所有 tab 都常驻挂载,所以会在后台照常连接。
+        useSessionStore
+          .getState()
+          .openTab({ id: tabId, kind: 'terminal', title: host.label, hostId: host.id }, { activate: false })
+        const t = attachAndResolve(id, tabId)
+        const name = t?.name ?? host.label
+        try {
+          await waitForConnected(tabId, 45_000)
+          content = `已连接主机「${host.label}」(${host.username}@${host.address})并加入目标。之后 run_command 请用 target="${name}"。`
+        } catch (e) {
+          content =
+            `已为「${host.label}」新开终端并加入目标(target="${name}"),但连接失败: ` +
+            `${e instanceof Error ? e.message : String(e)}。请提示用户在该终端标签页处理后,再调用 reconnect_terminal 重试。`
+        }
+      }
+    }
+    patchTargetMeta(id, call.id, { connecting: undefined })
+    patch(id, { runningIds: cur(id).runningIds.filter((i) => i !== call.id) })
+    pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content }])
+  }
+
+  /**
+   * 登记 request_target:已在目标里 → 直接回答;完全访问 + 唯一候选 → 返回该候选自动执行;
+   * 其余情况登记卡片状态并返回 'ask'。
+   */
+  const prepareTargetRequest = (id: string, call: ToolCall): TargetCandidate | 'ask' | null => {
+    let a: { query?: unknown; reason?: unknown } = {}
+    try {
+      a = JSON.parse(call.function.arguments || '{}')
+    } catch {
+      // 当空参数处理
+    }
+    const query = typeof a.query === 'string' ? a.query.trim() : ''
+    const reason = typeof a.reason === 'string' ? a.reason.trim() : ''
+    if (!query) {
+      pushMsgs(id, [
+        { role: 'tool', tool_call_id: call.id, content: 'request_target 需要 query(主机标签 / IP / 域名)。' }
+      ])
+      return null
+    }
+    const search = findTargetCandidates(query, {
+      tabs: useSessionStore.getState().tabs,
+      hosts: useVaultStore.getState().hosts,
+      targets: get().targetsBySession[id] ?? EMPTY_TARGETS
+    })
+    if (search.already) {
+      pushMsgs(id, [
+        {
+          role: 'tool',
+          tool_call_id: call.id,
+          content: `「${search.already.name}」(${search.already.host})已经在目标中,run_command 时用 target="${search.already.name}" 即可。`
+        }
+      ])
+      return null
+    }
+    patch(id, {
+      targetRequestMeta: {
+        ...cur(id).targetRequestMeta,
+        [call.id]: { query, reason, candidates: search.candidates }
+      }
+    })
+    if (get().mode === 'full' && search.candidates.length === 1) return search.candidates[0]
+    return 'ask'
+  }
+
   const processToolCalls = async (id: string, calls: ToolCall[]): Promise<void> => {
     const mode = get().mode
     let anyAsk = false
+    let pendingWait: { call: ToolCall; args: WaitArgs; target: AgentTarget } | null = null
     for (const call of calls) {
       if (stopped[id]) {
         patch(id, { status: 'idle' })
@@ -680,6 +998,29 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         }
         continue
       }
+      // 等待长任务:只做本地只读检查,任何模式下都允许;等本批其余调用处理完再开始倒计时。
+      if (call.function.name === 'wait_and_check') {
+        if (pendingWait) {
+          pushMsgs(id, [
+            {
+              role: 'tool',
+              tool_call_id: call.id,
+              content: '未开始等待: 同一时间只能有一个 wait_and_check,请合并成一个检查命令。'
+            }
+          ])
+          continue
+        }
+        const prepared = prepareWait(id, call)
+        if (prepared) pendingWait = { call, ...prepared }
+        continue
+      }
+      // 补充目标:完全访问 + 唯一匹配时直接连接并勾选,其余出卡片让用户选。
+      if (call.function.name === 'request_target') {
+        const r = prepareTargetRequest(id, call)
+        if (r === 'ask') anyAsk = true
+        else if (r) await executeTargetRequest(id, call, r)
+        continue
+      }
       // 兜底:未知工具名。没有这一条会掉进下面的 run_command 分支,
       // 被解析成空命令后真的送到终端去执行。
       if (call.function.name !== 'run_command') {
@@ -695,6 +1036,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       // 风险判定按目标平台分派:本机(win32 → PowerShell 规则)vs SSH 远程(Unix 规则)。
       const { command, target } = parseArgs(call)
       const resolved = resolveTarget(id, target)
+      if (!resolved && target?.trim()) {
+        pushMsgs(id, [{ role: 'tool', tool_call_id: call.id, content: unknownTargetMessage(id, target) }])
+        continue
+      }
       const risky = isLocalTarget(resolved) ? isRiskyLocalCommand(command) : isRiskyCommand(command)
       const disp = disposition(mode, risky)
       if (disp === 'auto') {
@@ -712,6 +1057,21 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         anyAsk = true
       }
     }
+    if (pendingWait) {
+      if (anyAsk) {
+        // 还有卡片等用户确认:先别倒计时,让模型在确认之后再发起等待。
+        pushMsgs(id, [
+          {
+            role: 'tool',
+            tool_call_id: pendingWait.call.id,
+            content: '未开始等待: 本轮还有待用户确认的操作。请在用户确认、任务真正开始后再调用 wait_and_check。'
+          }
+        ])
+      } else if (!stopped[id]) {
+        startWait(id, pendingWait.call, pendingWait.args, pendingWait.target)
+        return
+      }
+    }
     if (anyAsk) {
       patch(id, { status: 'awaiting' })
     } else {
@@ -721,7 +1081,7 @@ export const useAgentStore = create<AgentStore>((set, get) => {
 
   const runTurn = async (id: string): Promise<void> => {
     if (stopped[id]) return
-    patch(id, { status: 'streaming', streamingText: '', error: '' })
+    patch(id, { status: 'streaming', streamingText: '', error: null })
     const runId = crypto.randomUUID()
     activeRunId[id] = runId
     let acc = ''
@@ -736,10 +1096,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
         offErr()
         resolve(m)
       })
-      const offErr = window.api.llm.onError(runId, (msg) => {
+      const offErr = window.api.llm.onError(runId, (info) => {
         offDone()
         offErr()
-        patch(id, { error: msg })
+        patch(id, { error: info })
         resolve({ role: 'assistant', content: '' })
       })
       const mode = get().mode
@@ -859,6 +1219,8 @@ export const useAgentStore = create<AgentStore>((set, get) => {
     },
 
     send: (id, text, images, attachments) => {
+      // 等待中允许发消息:先结束等待(补上 wait_and_check 的结果,保持消息顺序合法),再处理新消息。
+      if (cur(id).status === 'waiting') finishWait(id, 'interrupted', false)
       if (cur(id).status !== 'idle') return
       stopped[id] = false
       if (!get().convBySession[id]) {
@@ -931,9 +1293,54 @@ export const useAgentStore = create<AgentStore>((set, get) => {
       maybeContinue(id)
     },
 
+    resolveTargetRequest: async (id, call, choice) => {
+      stopped[id] = false
+      if (!choice) {
+        const meta = cur(id).targetRequestMeta[call.id]
+        pushMsgs(id, [
+          {
+            role: 'tool',
+            tool_call_id: call.id,
+            content:
+              `用户已拒绝补充目标「${meta?.query ?? ''}」。请改用现有目标完成任务,` +
+              '或向用户说明为什么需要那台服务器,不要在其他目标上替代执行。'
+          }
+        ])
+      } else {
+        await executeTargetRequest(id, call, choice)
+      }
+      maybeContinue(id)
+    },
+
+    retry: (id) => {
+      const s = cur(id)
+      if (s.status !== 'idle' || s.messages.length === 0) return
+      stopped[id] = false
+      void runTurn(id)
+    },
+
+    checkNow: (id) => {
+      const w = cur(id).wait
+      if (!w || w.phase === 'checking') return
+      void runWaitTick(id)
+    },
+
+    endWait: (id) => {
+      if (!cur(id).wait) return
+      stopped[id] = false
+      finishWait(id, 'user_continue', true)
+    },
+
+    cancelWait: (id) => {
+      if (!cur(id).wait) return
+      // 结果照常推回(模型下次被唤醒时知道等待被取消了),但本轮不再续跑。
+      finishWait(id, 'user_cancel', false)
+    },
+
     stop: (id) => {
       stopped[id] = true
       if (activeRunId[id]) void window.api.llm.abort(activeRunId[id])
+      if (cur(id).wait) finishWait(id, 'user_cancel', false)
       patch(id, { status: 'idle', streamingText: '' })
     },
 

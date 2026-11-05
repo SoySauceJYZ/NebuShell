@@ -343,17 +343,46 @@ export function readSavedAttachment(ref: string, opts: ReadOptions): string {
   return `#${ref} ${saved.name} 检索结果${desc ? `(${desc})` : ''} · 命中 ${hit}/${total} 行\n${text}`
 }
 
-/** 抽取一个文件并登记全文,返回随消息走的轻量 Attachment。 */
-export async function buildAttachment(file: File): Promise<Attachment> {
-  const { kind, text, pages } = await extractFile(file)
-
+function remember(name: string, text: string): string {
   const ref = shortRef()
-  store.set(ref, { name: file.name, text })
+  store.set(ref, { name, text })
   while (store.size > STORE_CAP) {
     const oldest = store.keys().next().value
     if (oldest === undefined) break
     store.delete(oldest)
   }
+  return ref
+}
+
+/**
+ * 把一段现成文本(例如 @ 引用的历史会话摘要)登记成附件。
+ * `preview` 可由调用方自定(会话记录取「开头 + 最近部分」,而不是只取开头);
+ * 未提供时与文件附件一样取前 PREVIEW_CHARS 字。
+ */
+export function attachmentFromText(
+  name: string,
+  text: string,
+  kind: Attachment['kind'],
+  preview?: string
+): Attachment {
+  const ref = remember(name, text)
+  const pv = preview ?? (text.length > PREVIEW_CHARS ? text.slice(0, PREVIEW_CHARS) : text)
+  return {
+    id: ref,
+    name,
+    kind,
+    size: new Blob([text]).size,
+    chars: text.length,
+    preview: pv,
+    truncated: pv.length < text.length
+  }
+}
+
+/** 抽取一个文件并登记全文,返回随消息走的轻量 Attachment。 */
+export async function buildAttachment(file: File): Promise<Attachment> {
+  const { kind, text, pages } = await extractFile(file)
+
+  const ref = remember(file.name, text)
 
   const truncated = text.length > PREVIEW_CHARS
   return {
