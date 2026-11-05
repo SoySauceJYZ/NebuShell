@@ -83,7 +83,8 @@ export function McpSettingsCard(): React.ReactElement {
           <div className="text-sm font-medium text-[var(--text-dark)]">MCP 服务</div>
           <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
             开启后,Claude Code、Cursor 等支持 MCP 的智能体可以连接
-            NebuShell,使用你已保存的服务器执行命令、 读写文件、查看 Docker。需先解锁保险库。
+            NebuShell,使用你已保存的服务器:执行命令(含容器内、走代理)、后台长任务与等待、
+            上传下载与主机间传输文件、查看 Docker 与监控指标、读取内置智能体的历史会话。需先解锁保险库。
           </p>
 
           <label className="mt-4 flex cursor-pointer items-center gap-2">

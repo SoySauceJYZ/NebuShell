@@ -514,9 +514,7 @@ class MonitorCenter {
     return 'ok'
   }
 
-  private dockerView(
-    r: Runtime
-  ): Record<string, unknown> & {
+  private dockerView(r: Runtime): Record<string, unknown> & {
     summary: Record<string, number>
     containers: { state: string }[]
   } {
@@ -703,6 +701,55 @@ class MonitorCenter {
       services: [],
       tags: r.host.tags || []
     }
+  }
+
+  /**
+   * 给 MCP 用的按需快照:数据足够新(监控页开着时每 2 秒刷新)就直接返回,
+   * 否则在没有租约的情况下也单独采集一次。返回值不含历史曲线。
+   */
+  async snapshot(
+    id: string,
+    maxAgeMs = 30_000,
+    timeoutMs = 20_000
+  ): Promise<Record<string, unknown>> {
+    this.ensureLoaded()
+    if (this.locked) this.reloadHosts(false)
+    if (this.locked) throw new Error('保险库未解锁')
+    const r = this.runtimes.get(id)
+    if (!r) throw new Error('监控中心里没有这台主机')
+    if (!r.pref.enabled) throw new Error('该主机在监控中心已停用,可在「监控中心 → 设备管理」里启用')
+    await this.refresh(r, maxAgeMs, timeoutMs)
+    const d = this.getDevice(id) ?? {}
+    delete d.hist
+    return { ...d, lastSeenAt: r.lastSeenAt, lastError: r.lastError }
+  }
+
+  /** 所有启用设备的快照(过期的并行刷新一次)。 */
+  async snapshotAll(maxAgeMs = 30_000, timeoutMs = 20_000): Promise<Record<string, unknown>[]> {
+    this.ensureLoaded()
+    if (this.locked) this.reloadHosts(false)
+    if (this.locked) throw new Error('保险库未解锁')
+    const list = this.enabledRuntimes()
+    await Promise.all(list.map((r) => this.refresh(r, maxAgeMs, timeoutMs).catch(() => {})))
+    return list.map((r) => ({
+      ...this.summary(r),
+      lastSeenAt: r.lastSeenAt,
+      lastError: r.lastError
+    }))
+  }
+
+  private async refresh(r: Runtime, maxAgeMs: number, timeoutMs: number): Promise<void> {
+    if (r.lastSeenAt && Date.now() - r.lastSeenAt <= maxAgeMs) return
+    const deadline = Date.now() + timeoutMs
+    while (r.busy && Date.now() < deadline) await new Promise((res) => setTimeout(res, 100))
+    if (r.busy) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      this.collect(r, true),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('采集超时')), timeoutMs)
+      })
+    ]).finally(() => clearTimeout(timer))
   }
 
   getEvents(limit = 50): McEvent[] {
