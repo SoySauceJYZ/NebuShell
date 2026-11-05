@@ -87,18 +87,21 @@ export function addTabToPane(
   node: LayoutNode,
   paneId: string,
   tabId: string,
-  position: 'end' | 'afterActive' = 'end'
+  position: 'end' | 'afterActive' = 'end',
+  /** false:只插入、不切换该 pane 的活动 tab(后台打开)。空 pane 仍会激活它。 */
+  activate = true
 ): LayoutNode {
   return mapPanes(node, (p) => {
     if (p.id !== paneId) return p
-    if (p.tabIds.includes(tabId)) return { ...p, activeTabId: tabId }
+    const keepActive = !activate && p.tabIds.length > 0
+    if (p.tabIds.includes(tabId)) return keepActive ? p : { ...p, activeTabId: tabId }
     const at = position === 'afterActive' ? p.tabIds.indexOf(p.activeTabId) : -1
     // 活动 tab 不在本 pane 里(空 pane 或状态不同步)时退回末尾追加。
     const tabIds =
       at < 0
         ? [...p.tabIds, tabId]
         : [...p.tabIds.slice(0, at + 1), tabId, ...p.tabIds.slice(at + 1)]
-    return { ...p, tabIds, activeTabId: tabId }
+    return { ...p, tabIds, activeTabId: keepActive ? p.activeTabId : tabId }
   })
 }
 

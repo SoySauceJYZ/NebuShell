@@ -107,7 +107,8 @@ interface SessionState {
   /** Id of the tab currently being dragged (for split drop targets), if any. */
   draggingTabId?: string
 
-  openTab: (tab: Tab) => void
+  /** opts.activate=false:后台打开(不抢焦点,例如智能体为补充目标而新开的终端)。 */
+  openTab: (tab: Tab, opts?: { activate?: boolean }) => void
   closeTab: (id: string) => void
   /** Insert a tab torn off from another window into the active pane (marks it adopted). */
   adoptTab: (tab: Tab) => void
@@ -140,9 +141,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   lastActiveTerminalId: undefined,
   draggingTabId: undefined,
 
-  openTab: (tab) => {
+  openTab: (tab, opts) => {
     const { tabs, layout, activePaneId } = get()
     const existing = tabs.find((t) => t.id === tab.id)
+    if (opts?.activate === false) {
+      if (existing) return
+      const paneId = findPane(layout, activePaneId) ? activePaneId : firstPane(layout).id
+      set((state) => ({
+        tabs: [...state.tabs, tab],
+        layout: addTabToPane(layout, paneId, tab.id, 'end', false)
+      }))
+      return
+    }
     if (existing) {
       const pane = paneOfTab(layout, tab.id)
       set({

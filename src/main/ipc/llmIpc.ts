@@ -91,10 +91,10 @@ export function registerLlmIpc(): void {
       const settings = vaultManager.getLlmSettings()
       const provider = settings.providers.find((p) => p.id === payload.providerId)
       if (!provider) {
-        win.webContents.send(
-          `llm:error:${runId}`,
-          '未选择模型或供应商,请在设置中添加并在输入框选择。'
-        )
+        win.webContents.send(`llm:error:${runId}`, {
+          message: '未选择模型或供应商,请在设置中添加并在输入框选择。',
+          code: 'NO_PROVIDER'
+        })
         return
       }
       const model =

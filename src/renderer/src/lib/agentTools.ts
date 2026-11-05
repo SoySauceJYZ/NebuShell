@@ -247,6 +247,106 @@ export const PRESENT_PLAN_TOOL: ChatTool = {
   }
 }
 
+/** wait_and_check 的轮询间隔 / 最长等待的上下限(秒)。 */
+export const WAIT_LIMITS = {
+  minInterval: 10,
+  maxInterval: 1800,
+  defaultInterval: 60,
+  defaultMaxWait: 3600,
+  maxWait: 6 * 3600
+} as const
+
+/**
+ * 长任务等待:由客户端按间隔在本地跑只读检查命令,满足完成/失败条件或超时才唤醒模型。
+ * 等待期间不调用模型 —— 这就是它比反复 run_command + sleep 省 token 的地方。
+ */
+export function buildWaitAndCheckTool(targets: AgentTarget[]): ChatTool {
+  const multi = targets.length > 1
+  const properties: Record<string, unknown> = {
+    reason: {
+      type: 'string',
+      description: '正在等待什么(简短,会显示在倒计时条上),例如 "等待镜像构建完成"'
+    },
+    check_command: {
+      type: 'string',
+      description:
+        '每次倒计时结束后执行的【只读、快速】检查命令(30 秒内必须结束,不能有写操作),用来判断进度。' +
+        '例如 "tail -n 5 /tmp/agent-build.log; pgrep -f \'docker build\' >/dev/null && echo RUNNING || echo FINISHED"。' +
+        '省略则只是单纯等待 interval_seconds 秒后唤醒你。'
+    },
+    interval_seconds: {
+      type: 'number',
+      description: `两次检查之间的间隔秒数(${WAIT_LIMITS.minInterval}~${WAIT_LIMITS.maxInterval},默认 ${WAIT_LIMITS.defaultInterval})。按任务预计时长选:几分钟的任务 30~60,半小时以上的 120~300。`
+    },
+    max_wait_seconds: {
+      type: 'number',
+      description: `最长等待秒数(默认 ${WAIT_LIMITS.defaultMaxWait},上限 ${WAIT_LIMITS.maxWait}),超时也会唤醒你。`
+    },
+    done_when: {
+      type: 'object',
+      description:
+        '完成条件(满足任一即结束等待并唤醒你)。省略时默认「check_command 退出码为 0」即完成。',
+      properties: {
+        exit_code: { type: 'number', description: 'check_command 退出码等于该值即完成' },
+        output_matches: {
+          type: 'string',
+          description: '输出匹配该正则(JavaScript 语法,忽略大小写)即完成,例如 "FINISHED|Successfully built"'
+        }
+      }
+    },
+    fail_when: {
+      type: 'object',
+      description: '失败条件:输出匹配该正则即提前结束等待并唤醒你,例如 "error|failed|Traceback"。',
+      properties: {
+        output_matches: { type: 'string', description: '失败特征正则(JavaScript 语法,忽略大小写)' }
+      }
+    }
+  }
+  const required = ['reason']
+  if (targets.length > 0) {
+    properties.target = {
+      type: 'string',
+      enum: targets.map((t) => t.name),
+      description: multi ? '在哪个目标上执行检查命令。' : `目标(当前只有 ${targets[0].name})。`
+    }
+    if (multi) required.push('target')
+  }
+  return {
+    type: 'function',
+    function: {
+      name: 'wait_and_check',
+      description:
+        '等待一个已在后台运行的长任务(下载、编译、打包、镜像构建/拉取、数据同步等)。' +
+        '客户端会显示倒计时,每隔 interval_seconds 在本地执行一次 check_command,' +
+        '直到满足 done_when / fail_when 或达到 max_wait_seconds 才把最后一次检查结果交还给你。' +
+        '等待期间不会调用你,所以不要用 run_command + sleep 反复轮询。检查命令在独立通道执行,不会打断终端。',
+      parameters: { type: 'object', properties, required }
+    }
+  }
+}
+
+export const REQUEST_TARGET_TOOL: ChatTool = {
+  type: 'function',
+  function: {
+    name: 'request_target',
+    description:
+      '当任务需要在一台「不在当前目标列表里」的服务器上操作时调用:按主机名/标签/IP 在用户已打开的终端与主机库里查找,' +
+      '请用户确认后(完全访问模式下唯一匹配时自动)打开连接并加入目标。成功后下一步即可用 run_command 的 target 指定它。' +
+      '不要试图从一个目标上 ssh 到另一台机器。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '要找的服务器:主机库里的标签、IP/域名,或 user@host,例如 "DGX-2" 或 "10.0.0.12"'
+        },
+        reason: { type: 'string', description: '为什么需要这台服务器(一句话,会展示给用户)' }
+      },
+      required: ['query', 'reason']
+    }
+  }
+}
+
 /** 智能体可用代理的情况:策略 + 已配置的代理数。 */
 export interface ProxyContext {
   mode: AgentProxyMode
@@ -331,7 +431,9 @@ export function buildAgentTools(
     buildTransferFileTool(targets),
     READ_COMMAND_OUTPUT_TOOL,
     READ_ATTACHMENT_TOOL,
-    ASK_USER_TOOL
+    ASK_USER_TOOL,
+    buildWaitAndCheckTool(targets),
+    REQUEST_TARGET_TOOL
   ]
   // reconnect_terminal 只有在存在 SSH 终端目标时才有意义(本机目标无法重连)。
   if (targets.some((t) => !isLocalTarget(t))) tools.push(buildReconnectTerminalTool(targets))
@@ -412,8 +514,11 @@ export function buildSystemPrompt(
     '2. 不要执行会长期占用终端或持续输出的命令(会把终端卡住)。必须改成有界/非交互形式:' +
       'tail -f→tail -n 200;journalctl -f→journalctl --no-pager -n 200;top→top -bn1;' +
       'ping→ping -c 4;watch X→直接跑 X;交互式安装加 -y(如 apt-get install -y)或 yes | 前置;' +
-      '耗时不确定的命令用 timeout 包一层(如 timeout 30 <cmd>)。确需长时间运行的任务,用 ' +
-      'nohup <cmd> >/tmp/agent.log 2>&1 & 转后台,再按需 tail -n 查看日志。',
+      '耗时不确定的命令用 timeout 包一层(如 timeout 30 <cmd>)。' +
+      '下载、编译、打包、镜像构建/拉取等可能超过 1 分钟的长任务:先用 ' +
+      'nohup <cmd> >/tmp/agent-<任务名>.log 2>&1 & 转后台,然后调用 wait_and_check' +
+      '(check_command 看日志尾部与进程是否还在,配好 done_when / fail_when),由客户端倒计时等待;' +
+      '严禁用 run_command 反复 sleep / 轮询。',
     '3. 破坏性或有风险的命令(删除、覆盖、重启服务、改配置等)务必先说明其作用与影响。',
     '4. 遇到关键决策或信息不足时,调用 ask_user 向用户提问(尽量带选项),得到回答后再继续。',
     '5. 若命令被拒绝或被拦截,请据此调整方案,不要重复强推。',
@@ -441,9 +546,15 @@ export function buildSystemPrompt(
       '遇到时就把它当作本次 run_command / transfer_file 的 target,不要自行换一台;' +
       '一条消息里点了多个目标,就按点到的目标分别下发。',
     '13. 回答使用 Markdown。',
-    ...(hasLocal ? [`14. ${localTargetRule()}`] : []),
-    ...(proxyEnabled(proxy) && targets.length > 0
-      ? [`${hasLocal ? 15 : 14}. ${proxyRule(proxy)}`]
-      : [])
+    ...[
+      '需要操作一台不在上面目标列表里的服务器时,调用 request_target(query 填主机标签/IP),' +
+        '由用户确认后加入目标;不要从某个目标上再 ssh 过去,也不要把命令下发到别的目标上凑合。',
+      'wait_and_check 返回「[等待结束: …]」后,根据结论继续:条件满足就验证结果并进入下一步;' +
+        '超时说明任务可能仍在跑,先看日志再决定是否再次等待;失败就排查日志。',
+      '用户可能用 @ 引用历史会话,它以 type="conversation" 的 <attachment> 出现,是之前任务的记录,' +
+        '用作背景(例如「继续上次的部署」)。其中的命令和结论可能已过时:不要照搬重放,先在目标上确认当前状态再行动。',
+      ...(hasLocal ? [localTargetRule()] : []),
+      ...(proxyEnabled(proxy) && targets.length > 0 ? [proxyRule(proxy)] : [])
+    ].map((rule, i) => `${14 + i}. ${rule}`)
   ].join('\n')
 }

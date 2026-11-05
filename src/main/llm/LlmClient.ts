@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { Attachment, ChatMessage, ChatTool, ToolCall } from '../../shared/types'
+import type { Attachment, ChatMessage, ChatTool, LlmErrorInfo, ToolCall } from '../../shared/types'
 
 export interface ResolvedLlm {
   baseUrl: string
@@ -41,10 +41,13 @@ function envelope(a: Attachment): string {
     `chars="${a.chars}"`,
     ...(a.truncated ? [`ref="${a.id}"`, 'truncated="true"'] : [])
   ].join(' ')
-  const tail = a.truncated
-    ? `\n…(内容过长,以上仅为前 ${a.preview.length} 字,共 ${a.chars} 字。` +
-      `需要其余部分时用 read_attachment 检索 #${a.id},可 grep 关键字或取行号区间。)`
-    : ''
+  const tail = !a.truncated
+    ? ''
+    : a.kind === 'conversation'
+      ? `\n…(会话记录较长,以上为最初需求与最近部分的摘录,共 ${a.chars} 字。` +
+        `需要中间部分时用 read_attachment 检索 #${a.id},可 grep 关键字或取行号区间。)`
+      : `\n…(内容过长,以上仅为前 ${a.preview.length} 字,共 ${a.chars} 字。` +
+        `需要其余部分时用 read_attachment 检索 #${a.id},可 grep 关键字或取行号区间。)`
   return `<attachment ${attrs}>\n${a.preview}${tail}\n</attachment>`
 }
 
@@ -73,6 +76,21 @@ function toApiMessages(messages: ChatMessage[]): ApiMessage[] {
   })
 }
 
+/** 把 fetch 抛出的异常摊平成 LlmErrorInfo —— undici 的真正原因(ECONNREFUSED…)藏在 cause 里。 */
+function errorInfoOf(err: unknown): LlmErrorInfo {
+  if (!(err instanceof Error)) return { message: String(err) }
+  const raw = (err as Error & { cause?: unknown }).cause
+  const cause = raw && typeof raw === 'object' ? (raw as { code?: unknown; message?: unknown }) : null
+  const ownCode = (err as Error & { code?: unknown }).code
+  const code =
+    typeof cause?.code === 'string' ? cause.code : typeof ownCode === 'string' ? ownCode : undefined
+  const causeMsg = typeof cause?.message === 'string' ? cause.message : ''
+  return {
+    message: causeMsg && !err.message.includes(causeMsg) ? `${err.message}: ${causeMsg}` : err.message,
+    ...(code ? { code } : {})
+  }
+}
+
 /**
  * Performs one streaming OpenAI-compatible chat completion. Text deltas are forwarded
  * to the renderer as they arrive; on completion the assembled assistant message
@@ -89,9 +107,10 @@ export async function streamChat(
   const send = (suffix: string, payload?: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(`llm:${suffix}:${runId}`, payload)
   }
+  const fail = (info: LlmErrorInfo): void => send('error', info)
 
   if (!cfg.baseUrl || !cfg.apiKey || !cfg.model) {
-    send('error', '当前模型未配置完整(base URL / key / model)')
+    fail({ message: '当前模型未配置完整(base URL / key / model)', code: 'BAD_CONFIG' })
     return
   }
 
@@ -132,7 +151,7 @@ export async function streamChat(
 
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '')
-      send('error', `请求失败 (${res.status}) ${text.slice(0, 500)}`)
+      fail({ message: `请求失败 (${res.status})`, status: res.status, body: text.slice(0, 4000) })
       return
     }
 
@@ -193,6 +212,6 @@ export async function streamChat(
       send('done', buildMessage())
       return
     }
-    send('error', err instanceof Error ? err.message : String(err))
+    fail(errorInfoOf(err))
   }
 }

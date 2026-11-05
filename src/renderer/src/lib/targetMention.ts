@@ -1,4 +1,10 @@
+import type { AgentConversationMeta } from '@shared/types'
 import type { AgentTarget } from './agentTools'
+
+/** @ 菜单里的一项:目标(插入名字)或历史会话(作为引用附件)。 */
+export type MentionItem =
+  | { kind: 'target'; target: AgentTarget }
+  | { kind: 'conv'; conv: AgentConversationMeta }
 
 /**
  * 输入框里「@ 引用目标」的纯逻辑部分(菜单本身在 components/agent/TargetMention.tsx)。
@@ -39,4 +45,45 @@ export function matchTargets(targets: AgentTarget[], query: string): AgentTarget
   const q = query.trim().toLowerCase()
   if (!q) return targets
   return targets.filter((t) => t.name.toLowerCase().includes(q) || t.host.toLowerCase().includes(q))
+}
+
+/**
+ * 按过滤词挑历史会话:标题或来源主机名匹配。当前主机的排前面,其余按时间新到旧;
+ * 排除正在进行的会话与已经引用过的。
+ */
+export function matchConversations(
+  convs: AgentConversationMeta[],
+  query: string,
+  opts: {
+    currentHostId: string
+    excludeIds: string[]
+    hostLabel: (hostId: string) => string
+    limit?: number
+  }
+): AgentConversationMeta[] {
+  const q = query.trim().toLowerCase()
+  const hit = convs.filter(
+    (c) =>
+      !opts.excludeIds.includes(c.id) &&
+      (!q ||
+        c.title.toLowerCase().includes(q) ||
+        opts.hostLabel(c.hostId).toLowerCase().includes(q))
+  )
+  const mine = hit.filter((c) => c.hostId === opts.currentHostId)
+  const rest = hit.filter((c) => c.hostId !== opts.currentHostId)
+  return [...mine, ...rest].slice(0, opts.limit ?? 8)
+}
+
+/** 「3 分钟前 / 昨天 / 11-02」这样的相对时间。 */
+export function relativeTime(ts: number, now = Date.now()): string {
+  const diff = Math.max(0, now - ts)
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return '刚刚'
+  if (min < 60) return `${min} 分钟前`
+  const hour = Math.floor(min / 60)
+  if (hour < 24) return `${hour} 小时前`
+  const day = Math.floor(hour / 24)
+  if (day < 7) return day === 1 ? '昨天' : `${day} 天前`
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
 }

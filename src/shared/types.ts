@@ -148,7 +148,7 @@ export interface ToolCall {
   function: { name: string; arguments: string }
 }
 
-export type AttachmentKind = 'text' | 'pdf' | 'docx'
+export type AttachmentKind = 'text' | 'pdf' | 'docx' | 'conversation'
 
 /**
  * A document the user attached to a message, already extracted to text.
@@ -198,6 +198,20 @@ export interface ChatTool {
     description: string
     parameters: Record<string, unknown>
   }
+}
+
+/**
+ * LLM 请求失败的结构化信息(main → renderer 的 `llm:error:<runId>`)。
+ * 渲染层据 status / code / body 分类成「鉴权 / 限流 / 上下文超限 / 网络…」再展示。
+ */
+export interface LlmErrorInfo {
+  message: string
+  /** HTTP 状态码(请求已到达服务端时)。 */
+  status?: number
+  /** 响应体原文(截断)。 */
+  body?: string
+  /** 错误码:Node 网络错误码(ECONNREFUSED…)或内部码(NO_PROVIDER / BAD_CONFIG)。 */
+  code?: string
 }
 
 export interface AgentConversationMeta {

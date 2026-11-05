@@ -28,7 +28,8 @@ import {
   ArrowRightLeft,
   ArrowDown,
   AlertCircle,
-  Globe
+  Globe,
+  MessagesSquare
 } from 'lucide-react'
 import { useVaultStore } from '../store/useVaultStore'
 import { useSessionStore } from '../store/useSessionStore'
@@ -38,6 +39,7 @@ import {
   currentProxyContext,
   type AgentStatus,
   type ProxyMeta,
+  type TargetRequestMeta,
   type TransferMeta
 } from '../store/useAgentStore'
 import { useProxyUiStore } from '../lib/proxies'
@@ -46,12 +48,25 @@ import { AGENT_MODES, type AgentMode } from '../lib/agentPermissions'
 import {
   buildSystemPrompt,
   buildAgentTools,
-  buildLocalTarget,
   localTargetName,
   PROXY_PLACEHOLDER,
   type AgentTarget
 } from '../lib/agentTools'
-import { detectMention, matchTargets, type MentionState } from '../lib/targetMention'
+import {
+  detectMention,
+  matchConversations,
+  matchTargets,
+  relativeTime,
+  type MentionItem,
+  type MentionState
+} from '../lib/targetMention'
+import { computeAgentTargets } from '../lib/targetRequest'
+import { parseToolOutcome } from '../lib/commandOutput'
+import { conversationAttachment, type ConversationRef } from '../lib/conversationRef'
+import { ErrorCard } from './agent/ErrorCard'
+import { WaitBanner } from './agent/WaitBanner'
+import { WaitCard } from './agent/WaitCard'
+import { TargetRequestCard } from './agent/TargetRequestCard'
 import {
   estimateMessagesTokens,
   estimateTokens,
@@ -105,7 +120,11 @@ function DocChip({
         title="查看提取出的文本"
         className="flex max-w-[220px] items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[var(--nav-bg-hover)] px-2 py-1.5 text-left hover:border-[var(--accent)]"
       >
-        <FileText size={16} className="shrink-0 text-[var(--accent)]" />
+        {a.kind === 'conversation' ? (
+          <MessagesSquare size={16} className="shrink-0 text-[var(--accent)]" />
+        ) : (
+          <FileText size={16} className="shrink-0 text-[var(--accent)]" />
+        )}
         <div className="min-w-0">
           <div className="truncate text-xs text-[var(--text-dark)]">{a.name}</div>
           <div className="truncate text-[10px] text-[var(--text-muted)]">
@@ -180,6 +199,7 @@ export function AgentPanel({
   const setTargets = useAgentStore((s) => s.setTargets)
   const newConversation = useAgentStore((s) => s.newConversation)
   const openConversation = useAgentStore((s) => s.openConversation)
+  const retry = useAgentStore((s) => s.retry)
 
   // All open terminal tabs are candidate targets.
   const terminalTabs = tabs.filter((t) => t.kind === 'terminal')
@@ -191,30 +211,8 @@ export function AgentPanel({
   }, [ensureSelf, sessionId])
 
   useEffect(() => {
-    const ordered = [sessionId, ...attachedIds.filter((x) => x !== sessionId)]
-    const seen = new Map<string, number>()
-    // 本机(宿主机)目标始终可用,排在末尾;先预占其名字,同名终端 tab 自动去重为 #2。
-    const local = buildLocalTarget()
-    seen.set(local.name, 1)
-    const resolved: AgentTarget[] = []
-    for (const tid of ordered) {
-      const tab = terminalTabs.find((t) => t.id === tid)
-      if (!tab) continue
-      const base = tab.title
-      const n = (seen.get(base) ?? 0) + 1
-      seen.set(base, n)
-      resolved.push({
-        sessionId: tid,
-        name: n === 1 ? base : `${base} #${n}`,
-        host: hosts.find((h) => h.id === tab.hostId)?.label ?? tab.title,
-        // 文件传输要用这些字段建自己的 SFTP / containerFs 会话。
-        hostId: tab.hostId,
-        containerId: tab.containerId,
-        dockerCmd: tab.dockerCmd
-      })
-    }
-    resolved.push(local)
-    setTargets(sessionId, resolved)
+    // 本机(宿主机)目标始终可用,排在末尾;同名终端 tab 自动去重为 #2。
+    setTargets(sessionId, computeAgentTargets(sessionId, attachedIds, terminalTabs, hosts))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     sessionId,
@@ -502,6 +500,16 @@ export function AgentPanel({
                       ? session.proxyMeta
                       : undefined
                   }
+                  targetRequestMeta={
+                    m.tool_calls?.some((tc) => tc.function.name === 'request_target')
+                      ? session.targetRequestMeta
+                      : undefined
+                  }
+                  activeWaitId={
+                    session.wait && m.tool_calls?.some((tc) => tc.id === session.wait?.callId)
+                      ? session.wait.callId
+                      : undefined
+                  }
                   fallbackTarget={currentTargets[0]?.name}
                   showTarget={currentTargets.length > 1}
                   interactive={interactive}
@@ -519,7 +527,16 @@ export function AgentPanel({
             </div>
           )}
           {session.error && (
-            <div className="text-xs text-[var(--danger)]">错误: {session.error}</div>
+            <ErrorCard
+              error={session.error}
+              canRetry={session.status === 'idle'}
+              onRetry={() => {
+                stickNow()
+                retry(sessionId)
+              }}
+              onManageProviders={() => setShowSettings(true)}
+              onNewConversation={() => newConversation(sessionId)}
+            />
           )}
         </div>
       </div>
@@ -531,6 +548,7 @@ export function AgentPanel({
       */}
       <Composer
         sessionId={sessionId}
+        hostId={hostId}
         status={session.status}
         configured={configured}
         usage={usage}
@@ -607,6 +625,43 @@ export function AgentPanel({
 
 /** 订阅 store 时的空目标常量:每次返回同一个引用,免得白白触发重渲染。 */
 const NO_TARGETS: AgentTarget[] = []
+/** 一条消息最多引用几段历史会话(每段预览约 2k token)。 */
+const MAX_CONV_REFS = 3
+
+/** 输入框里一枚「引用的历史会话」chip(发送时才载入整理成附件)。 */
+function ConvRefChip({
+  r,
+  current,
+  onRemove
+}: {
+  r: ConversationRef
+  current: boolean
+  onRemove: () => void
+}): React.ReactElement {
+  return (
+    <div className="group/doc relative">
+      <div
+        title="发送时会把该会话的记录作为背景交给智能体"
+        className="flex max-w-[240px] items-center gap-2 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-soft)]/50 px-2 py-1.5"
+      >
+        <MessagesSquare size={15} className="shrink-0 text-[var(--accent)]" />
+        <div className="min-w-0">
+          <div className="truncate text-xs text-[var(--text-dark)]">{r.title}</div>
+          <div className="truncate text-[10px] text-[var(--text-muted)]">
+            引用会话 · {current ? '本主机' : r.hostLabel} · {relativeTime(r.updatedAt)}
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        title="移除"
+        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--danger)] text-white opacity-0 transition group-hover/doc:opacity-100"
+      >
+        <X size={10} />
+      </button>
+    </div>
+  )
+}
 
 interface ContextUsage {
   used: number
@@ -623,6 +678,7 @@ interface ContextUsage {
  */
 function Composer({
   sessionId,
+  hostId,
   status,
   configured,
   usage,
@@ -641,6 +697,8 @@ function Composer({
   onSubmit
 }: {
   sessionId: string
+  /** 面板所属主机:@ 菜单里本主机的历史会话排在前面。 */
+  hostId: string
   status: AgentStatus
   configured: boolean
   usage: ContextUsage
@@ -674,12 +732,46 @@ function Composer({
   // 目标清单直接从 store 订阅,不走 props:面板那边已经把「终端标题 + 去重 + 本机」
   // 算成了最终的 target 名字,而那串名字正是模型 run_command 的 target 枚举值。
   const targets = useAgentStore((s) => s.targetsBySession[sessionId] ?? NO_TARGETS)
+  const currentConvId = useAgentStore((s) => s.convBySession[sessionId])
+  const hosts = useVaultStore((s) => s.hosts)
   const [mention, setMention] = useState<MentionState | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
-  const matches = useMemo(
-    () => (mention ? matchTargets(targets, mention.query) : []),
-    [mention, targets]
+
+  // ---- @ 引用历史会话 ----
+  // 会话清单第一次敲 @ 时才拉(跨所有主机),发送后作废重拉,拿到新写入的会话。
+  const [allConvs, setAllConvs] = useState<AgentConversationMeta[] | null>(null)
+  const [convRefs, setConvRefs] = useState<ConversationRef[]>([])
+  const [preparing, setPreparing] = useState(false)
+  useEffect(() => {
+    if (!mention || allConvs) return
+    let alive = true
+    void window.api.agentChat
+      .listAll()
+      .then((list) => alive && setAllConvs(list))
+      .catch(() => alive && setAllConvs([]))
+    return () => {
+      alive = false
+    }
+  }, [mention, allConvs])
+  const hostLabel = useCallback(
+    (id: string): string => hosts.find((h) => h.id === id)?.label ?? '已删除的主机',
+    [hosts]
   )
+  const matches = useMemo<MentionItem[]>(() => {
+    if (!mention) return []
+    const ts = matchTargets(targets, mention.query).map(
+      (target): MentionItem => ({ kind: 'target', target })
+    )
+    // 只列 SSH 智能体的会话:远程桌面智能体也存在同一目录(按 peerKey),主机库里查不到的就是它们。
+    const known = (allConvs ?? []).filter((c) => hosts.some((h) => h.id === c.hostId))
+    const cs = matchConversations(known, mention.query, {
+      currentHostId: hostId,
+      excludeIds: [...(currentConvId ? [currentConvId] : []), ...convRefs.map((r) => r.convId)],
+      hostLabel,
+      limit: convRefs.length >= MAX_CONV_REFS ? 0 : 8
+    }).map((conv): MentionItem => ({ kind: 'conv', conv }))
+    return [...ts, ...cs]
+  }, [mention, targets, allConvs, hosts, hostId, currentConvId, convRefs, hostLabel])
   // 一个命中都没有时收起菜单 —— 正文里出现的 "@" 不该一直挂着一个空框。
   const mentionOpen = matches.length > 0
   const activeIdx = Math.min(mentionIdx, matches.length - 1)
@@ -690,16 +782,36 @@ function Composer({
     setMentionIdx(0)
   }
 
-  /** 把 `@过滤词` 整段换成 `@目标名 `,光标落到空格之后。 */
-  const applyMention = (t: AgentTarget): void => {
+  /**
+   * 目标:把 `@过滤词` 整段换成 `@目标名 `;会话:删掉 `@过滤词`,改挂一枚引用 chip。
+   * 光标落到替换处之后。
+   */
+  const applyMention = (it: MentionItem): void => {
     if (!mention) return
     const el = textRef.current
     const value = el?.value ?? input
     const caret = el?.selectionStart ?? mention.start + 1 + mention.query.length
     const head = value.slice(0, mention.start)
-    const inserted = `@${t.name} `
+    const inserted = it.kind === 'target' ? `@${it.target.name} ` : ''
     setInput(head + inserted + value.slice(caret))
     setMention(null)
+    if (it.kind === 'conv') {
+      const c = it.conv
+      setConvRefs((prev) =>
+        prev.some((r) => r.convId === c.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                hostId: c.hostId,
+                convId: c.id,
+                title: c.title,
+                hostLabel: hostLabel(c.hostId),
+                updatedAt: c.updatedAt
+              }
+            ]
+      )
+    }
     const pos = head.length + inserted.length
     // 等 React 把新值写进 DOM 再摆光标,否则 setSelectionRange 作用在旧文本上。
     requestAnimationFrame(() => {
@@ -755,25 +867,50 @@ function Composer({
     void addDocs(files.filter((f) => !f.type.startsWith('image/')))
   }
 
-  const handleSend = (): void => {
+  // 等待中也能发:store 会先结束等待(把进度交回模型),再处理这条新消息。
+  const canCompose = status === 'idle' || status === 'waiting'
+  const hasDraft =
+    input.trim().length > 0 || images.length > 0 || docs.length > 0 || convRefs.length > 0
+
+  const handleSend = async (): Promise<void> => {
     const text = input.trim()
-    if ((!text && images.length === 0 && docs.length === 0) || status !== 'idle') return
+    if (!hasDraft || !canCompose || preparing) return
     if (!configured) {
       onManageProviders()
       return
     }
+    // 被引用的会话在发送时才载入并整理成附件 —— 拿到的是那一刻的最新记录。
+    let refs: Attachment[] = []
+    if (convRefs.length) {
+      setPreparing(true)
+      try {
+        const built = await Promise.all(convRefs.map((r) => conversationAttachment(r)))
+        refs = built.filter((a): a is Attachment => a !== null)
+      } catch (err) {
+        setAttachError(`载入引用的会话失败: ${err instanceof Error ? err.message : String(err)}`)
+        setPreparing(false)
+        return
+      }
+      setPreparing(false)
+      if (refs.length < convRefs.length) setAttachError('部分引用的会话为空或已被删除,已忽略。')
+    }
+    const attachments = [...docs, ...refs]
+    if (!text && images.length === 0 && attachments.length === 0) return
     setInput('')
     setImages([])
     setDocs([])
-    setAttachError('')
+    setConvRefs([])
+    if (!convRefs.length || refs.length === convRefs.length) setAttachError('')
     setMention(null)
+    setAllConvs(null)
     onSubmit()
-    send(sessionId, text, images, docs)
+    send(sessionId, text, images, attachments)
   }
 
   return (
     /* Claude-style input box: textarea + bottom toolbar (mode + model + send) */
     <div className="shrink-0 p-2">
+      <WaitBanner sessionId={sessionId} />
       <div
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('Files')) {
@@ -834,13 +971,33 @@ function Composer({
             )}
           </div>
         )}
+        {convRefs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-2 pt-2">
+            {convRefs.map((r) => (
+              <ConvRefChip
+                key={r.convId}
+                r={r}
+                current={r.hostId === hostId}
+                onRemove={() => setConvRefs((prev) => prev.filter((x) => x.convId !== r.convId))}
+              />
+            ))}
+            {preparing && (
+              <div className="flex items-center gap-1.5 px-1 text-xs text-[var(--text-muted)]">
+                <Loader2 size={13} className="animate-spin" />
+                正在载入会话记录…
+              </div>
+            )}
+          </div>
+        )}
         {attachError && <div className="px-3 pt-2 text-xs text-[var(--danger)]">{attachError}</div>}
         {mentionOpen && (
           <MentionPopup
-            targets={matches}
+            items={matches}
             activeIndex={activeIdx}
             onPick={applyMention}
             onHover={setMentionIdx}
+            hostLabel={hostLabel}
+            currentHostId={hostId}
           />
         )}
         <textarea
@@ -892,14 +1049,18 @@ function Composer({
             }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
-              handleSend()
+              void handleSend()
             }
           }}
           rows={2}
           placeholder={
-            status === 'idle' ? '输入消息…(@ 引用目标,可粘贴 / 拖入图片、文档)' : '处理中…'
+            status === 'idle'
+              ? '输入消息…(@ 引用目标或历史会话,可粘贴 / 拖入图片、文档)'
+              : status === 'waiting'
+                ? '等待中…发送新消息会结束等待'
+                : '处理中…'
           }
-          disabled={status !== 'idle'}
+          disabled={!canCompose}
           className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none"
         />
         <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
@@ -916,7 +1077,7 @@ function Composer({
           />
           <button
             onClick={() => fileRef.current?.click()}
-            disabled={status !== 'idle'}
+            disabled={!canCompose}
             title="添加图片或文档(PDF / docx / 文本)"
             className="flex items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text-dark)] hover:bg-[var(--nav-bg-hover)] disabled:opacity-40"
           >
@@ -949,16 +1110,12 @@ function Composer({
             </button>
           ) : (
             <button
-              onClick={handleSend}
-              disabled={
-                status !== 'idle' ||
-                extracting > 0 ||
-                (!input.trim() && images.length === 0 && docs.length === 0)
-              }
+              onClick={() => void handleSend()}
+              disabled={!canCompose || extracting > 0 || preparing || !hasDraft}
               className="btn-primary h-8 w-8 shrink-0 !p-0 disabled:opacity-40"
-              title="发送"
+              title={status === 'waiting' ? '发送(会结束当前等待)' : '发送'}
             >
-              <Send size={15} />
+              {preparing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
             </button>
           )}
         </div>
@@ -1689,9 +1846,23 @@ const ToolCard = memo(function ToolCard({
     resolveCall(sessionId, tc, false)
   }
   const isNote =
-    result !== undefined && (result.startsWith('用户已拒绝') || result.startsWith('【计划模式】'))
+    result !== undefined &&
+    (result.startsWith('用户已拒绝') || result.startsWith('【计划模式】') || result.startsWith('未执行'))
+  const outcome = useMemo(
+    () => (result !== undefined && !isNote ? parseToolOutcome(result) : null),
+    [result, isNote]
+  )
+  const tone = outcome?.status ?? 'ok'
   return (
-    <div className="self-start w-[92%] overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)]">
+    <div
+      className={`self-start w-[92%] overflow-hidden rounded-xl border bg-[var(--panel-bg)] ${
+        tone === 'fail'
+          ? 'border-[var(--danger)]/45'
+          : tone === 'warn'
+            ? 'border-amber-500/45'
+            : 'border-[var(--panel-border)]'
+      }`}
+    >
       <div className="flex items-center gap-1.5 border-b border-[var(--panel-border)] px-2.5 py-1.5">
         <Terminal size={13} className="text-[var(--accent)]" />
         <span className="text-xs font-medium text-[var(--text-muted)]">建议执行命令</span>
@@ -1743,11 +1914,33 @@ const ToolCard = memo(function ToolCard({
             <div className="px-2.5 py-2 text-xs text-[var(--text-muted)]">{result}</div>
           ) : (
             <>
-              <div className="flex items-center gap-1.5 px-2.5 pt-1.5 text-xs text-[var(--text-muted)]">
-                <Check size={12} className="text-green-600" />
-                执行结果
+              <div
+                className={`flex items-center gap-1.5 px-2.5 pt-1.5 text-xs ${
+                  tone === 'fail'
+                    ? 'font-medium text-[var(--danger)]'
+                    : tone === 'warn'
+                      ? 'font-medium text-amber-600'
+                      : 'text-[var(--text-muted)]'
+                }`}
+              >
+                {tone === 'fail' ? (
+                  <X size={12} />
+                ) : tone === 'warn' ? (
+                  <AlertCircle size={12} />
+                ) : (
+                  <Check size={12} className="text-green-600" />
+                )}
+                {outcome?.label ?? '执行结果'}
               </div>
-              <pre className="selectable max-h-56 overflow-auto px-2.5 py-2 font-mono text-xs text-[var(--text-dark)]">
+              <pre
+                className={`selectable max-h-56 overflow-auto px-2.5 py-2 font-mono text-xs text-[var(--text-dark)] ${
+                  tone === 'fail'
+                    ? 'bg-[var(--danger)]/[0.05]'
+                    : tone === 'warn'
+                      ? 'bg-amber-500/[0.06]'
+                      : ''
+                }`}
+              >
                 {result}
               </pre>
             </>
@@ -1837,6 +2030,8 @@ const AssistantRow = memo(function AssistantRow({
   runningIds,
   transferMeta,
   proxyMeta,
+  targetRequestMeta,
+  activeWaitId,
   fallbackTarget,
   showTarget,
   interactive
@@ -1847,6 +2042,9 @@ const AssistantRow = memo(function AssistantRow({
   runningIds?: string[]
   transferMeta?: Record<string, TransferMeta>
   proxyMeta?: Record<string, ProxyMeta>
+  targetRequestMeta?: Record<string, TargetRequestMeta>
+  /** 这一行里正在倒计时的 wait_and_check 调用 id。 */
+  activeWaitId?: string
   fallbackTarget?: string
   showTarget: boolean
   interactive: boolean
@@ -1899,6 +2097,22 @@ const AssistantRow = memo(function AssistantRow({
               sessionId={sessionId}
               tc={tc}
               meta={proxyMeta?.[tc.id]}
+              result={result}
+              running={running}
+              disabled={!interactive}
+            />
+          )
+        }
+        if (tc.function.name === 'wait_and_check') {
+          return <WaitCard key={tc.id} tc={tc} result={result} active={activeWaitId === tc.id} />
+        }
+        if (tc.function.name === 'request_target') {
+          return (
+            <TargetRequestCard
+              key={tc.id}
+              sessionId={sessionId}
+              tc={tc}
+              meta={targetRequestMeta?.[tc.id]}
               result={result}
               running={running}
               disabled={!interactive}
