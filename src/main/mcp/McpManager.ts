@@ -1,7 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { randomBytes, timingSafeEqual } from 'crypto'
 import { networkInterfaces } from 'os'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { McpStatus } from '../../shared/types'
 import { settingsManager } from '../settings/SettingsManager'
 import { createMcpServer } from './tools'
@@ -90,6 +89,10 @@ export class McpManager {
       })
     }
 
+    // The transport captures Fetch classes on import. Electron 22 installs them at startup.
+    const { StreamableHTTPServerTransport } = await import(
+      '@modelcontextprotocol/sdk/server/streamableHttp.js'
+    )
     const mcp = createMcpServer(req.socket.remoteAddress ?? 'unknown')
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

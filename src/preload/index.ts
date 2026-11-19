@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, clipboard, webUtils } from 'electron'
+import { contextBridge, ipcRenderer, clipboard } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   Host,
@@ -47,11 +47,6 @@ const api = {
     // The web edition can only read the clipboard asynchronously (navigator.clipboard),
     // so paste paths use this form.
     readTextAsync: (): Promise<string> => Promise.resolve(clipboard.readText())
-  },
-  os: {
-    // Electron 39 removed File.path; webUtils is the only way to resolve a dropped
-    // File to an absolute disk path. Returns '' for non-disk (synthetic) files.
-    getPathForFile: (file: File): string => webUtils.getPathForFile(file)
   },
   file: {
     saveText: (defaultName: string, content: string): Promise<string | null> =>

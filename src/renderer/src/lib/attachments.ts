@@ -10,8 +10,8 @@
  */
 
 import type { Attachment, AttachmentKind } from '@shared/types'
-import * as pdfjs from 'pdfjs-dist'
-import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker'
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
+import PdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker'
 import mammoth from 'mammoth/mammoth.browser'
 import { sliceLines, type ReadOptions } from './commandOutput'
 

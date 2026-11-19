@@ -192,19 +192,16 @@ npm run dev
 
 ### Build
 
+This compatibility branch uses Electron 22.3.27. Build on a modern Windows x64 machine with Node.js 22.12+ and test the installer on Windows 7 SP1 x64. Electron 22 is no longer maintained.
+
 ```bash
-# Windows  →  dist/NebuShell-<version>-setup.exe
-npm run build:win
-
-# macOS    →  dist/NebuShell-<version>.dmg   (must be built on macOS)
-npm run build:mac
-
-# Linux    →  dist/NebuShell-<version>.AppImage (+ snap / deb)
-npm run build:linux
-
-# Unpacked directory (quick smoke test, no installer)
-npm run build:unpack
+npm ci
+npm run build:win -- --x64 --publish never
 ```
+
+The installer is `dist-win7/NebuShell-<version>-win7-x64-setup.exe`. The unpacked application is in `dist-win7/win-unpacked/`.
+
+Verify SSH login and SFTP on the target machine. The remote desktop controller remains available. The controlled-host feature requires a keyboard and mouse addon that imports a Windows 10 API.
 
 ### Web Edition (headless Linux server)
 
@@ -404,19 +401,16 @@ npm run dev
 
 ### 打包构建
 
-```bash
-# Windows  →  dist/NebuShell-<版本号>-setup.exe
-npm run build:win
+本分支使用 Electron 22.3.27。请在装有 Node.js 22.12+ 的现代 Windows x64 开发机上打包，并在 Windows 7 SP1 x64 上验证。Electron 22 已停止维护。
 
-# macOS    →  dist/NebuShell-<版本号>.dmg   (需在 macOS 上打包)
-npm run build:mac
-
-# Linux    →  dist/NebuShell-<版本号>.AppImage(以及 snap / deb)
-npm run build:linux
-
-# 仅解压目录(快速验证,不生成安装包)
-npm run build:unpack
+```powershell
+npm ci
+npm run build:win -- --x64 --publish never
 ```
+
+安装包位于 `dist-win7/NebuShell-<版本号>-win7-x64-setup.exe`，解包目录位于 `dist-win7/win-unpacked/`。
+
+请在目标机上验证 SSH 登录和 SFTP。远程桌面被控端所需的键鼠模块依赖 Windows 10 API，Win7 版无法启动被控端。连接另一台被控端的功能仍保留。
 
 ### Web 版(无桌面 Linux 服务器)
 

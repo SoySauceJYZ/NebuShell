@@ -3,13 +3,13 @@ import { promises as fsp } from 'fs'
 import { existsSync } from 'fs'
 import { join, basename, extname } from 'path'
 import { remoteDesktopManager } from '../remoteDesktop/RemoteDesktopManager'
-import { inputInjector } from '../remoteDesktop/InputInjector'
+import type { inputInjector as desktopInput } from '../remoteDesktop/InputInjector'
 import { remoteShell } from '../remoteDesktop/RemoteShell'
 import { broadcast } from '../broadcast'
 import type { RdSignal, RdInputEvent, RdScreen, RdShellOpts } from '../../shared/types'
 
 /** 把一块 Electron display 的边界换算成物理像素,配置给注入器。 */
-function applyDisplayToInjector(d: Display): void {
+function applyDisplayToInjector(inputInjector: typeof desktopInput, d: Display): void {
   const sf = d.scaleFactor
   inputInjector.setActiveDisplay({
     x: Math.round(d.bounds.x * sf),
@@ -20,6 +20,7 @@ function applyDisplayToInjector(d: Display): void {
 }
 
 export function registerRemoteDesktopIpc(): void {
+  let inputInjector: typeof desktopInput | undefined
   // 管理器事件 → 广播到渲染层。信令按 rdSessionId 走独立频道;控制端/被控端各自订阅。
   remoteDesktopManager.onSignal = (rdSessionId: string, signal: RdSignal): void => {
     broadcast(`rd:signal:${rdSessionId}`, signal)
@@ -34,11 +35,15 @@ export function registerRemoteDesktopIpc(): void {
 
   // ---- 被控端(agent) -------------------------------------------------------
   ipcMain.handle('rd:startAgent', async () => {
-    const result = await remoteDesktopManager.startAgent()
+    // Load the native addon only when the user starts the controlled host.
+    const { inputInjector: injector } = await import('../remoteDesktop/InputInjector').catch(() => {
+      throw new Error('无法加载本机键鼠模块，当前系统无法启动远程桌面被控端。')
+    })
     // 默认注入主屏;量一次分辨率兜底。
-    applyDisplayToInjector(screen.getPrimaryDisplay())
-    await inputInjector.refreshScreenSize()
-    return result
+    applyDisplayToInjector(injector, screen.getPrimaryDisplay())
+    await injector.refreshScreenSize()
+    inputInjector = injector
+    return remoteDesktopManager.startAgent()
   })
   ipcMain.handle('rd:stopAgent', () => {
     remoteShell.killAll()
@@ -70,15 +75,16 @@ export function registerRemoteDesktopIpc(): void {
 
   // 切换被控显示器时同步注入坐标的目标显示器。
   ipcMain.handle('rd:setActiveDisplay', (_e, displayId: string) => {
+    if (!inputInjector) return
     const d =
       screen.getAllDisplays().find((x) => String(x.id) === displayId) ??
       screen.getPrimaryDisplay()
-    applyDisplayToInjector(d)
+    applyDisplayToInjector(inputInjector, d)
   })
 
   // 输入注入:高频事件(鼠标移动),用 send/on 单向直投,避免 invoke 往返延迟。
   ipcMain.on('rd:injectInput', (_e, ev: RdInputEvent) => {
-    inputInjector.enqueue(ev)
+    inputInjector?.enqueue(ev)
   })
 
   // 远程命令行:被控端起一个真实终端(node-pty / ConPTY),输出/退出经 sender 定向回该

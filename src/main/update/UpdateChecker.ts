@@ -124,15 +124,23 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   const latestVersion = normalizeVersion(release.tag_name ?? '')
   if (!latestVersion) throw new Error('GitHub 返回的发布信息里没有版本号')
 
+  const assets = release.assets ?? []
+  const isWindows = process.platform === 'win32'
+  const asset = pickAsset(
+    isWindows ? assets.filter((item) => /-win7-x64-setup\.exe$/i.test(item.name)) : assets,
+    process.platform,
+    process.arch
+  )
+
   const info: UpdateInfo = {
     currentVersion,
     latestVersion,
-    hasUpdate: compareVersions(latestVersion, currentVersion) > 0,
+    hasUpdate: compareVersions(latestVersion, currentVersion) > 0 && (!isWindows || asset !== null),
     releaseUrl: release.html_url || RELEASES_PAGE,
     releaseName: release.name || release.tag_name,
     notes: release.body ?? '',
     publishedAt: release.published_at ?? '',
-    asset: pickAsset(release.assets ?? [], process.platform, process.arch),
+    asset,
     checkedAt: Date.now()
   }
   lastResult = info

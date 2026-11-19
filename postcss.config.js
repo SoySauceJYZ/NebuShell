@@ -1,5 +1,8 @@
 export default {
   plugins: {
-    '@tailwindcss/postcss': {}
+    tailwindcss: {
+      content: ['./src/{renderer,web/client}/**/*.{html,ts,tsx}']
+    },
+    autoprefixer: {}
   }
 }

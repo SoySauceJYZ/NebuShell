@@ -18,6 +18,7 @@ logs/
 # node
 node_modules/
 dist/
+dist-win7/
 
 # java
 target/

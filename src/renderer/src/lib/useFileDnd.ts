@@ -105,7 +105,8 @@ export function useFileDnd(ctx: PaneDndContext): FileDnd {
       }
       startOsDrop(
         Array.from(e.dataTransfer.files)
-          .map((f) => window.api.os.getPathForFile(f))
+          // Electron 22 exposes the local path directly on the renderer's File object.
+          .map((file: File & { path?: string }) => file.path ?? '')
           .filter(Boolean)
       )
       return

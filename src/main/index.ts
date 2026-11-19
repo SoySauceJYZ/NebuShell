@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import './compat/node16WebGlobals'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createAppWindow } from './windows'
 import { registerVaultIpc } from './ipc/vaultIpc'
